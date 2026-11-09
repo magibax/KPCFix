@@ -14,7 +14,6 @@ KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high f
 - Cinematic aspect ratio: Restore the intended 4:3 aspect ratio of cinematics when displayed on modern widescreen monitors.
 - Engine performance optimisation: Inspect the engine for opportunities to improve FPS, reduce rendering overhead and optimise performance without introducing instability.
 - Graphics fidelity improvements: Investigate engine-level methods to improve rendering quality, texture filtering, model detail, draw distances and other visual effects.
-- Modern hardware defaults: Establish recommended graphics settings for modern PCs, prioritising maximum visual fidelity while maintaining stability and compatibility.
 
 ## Install
 
