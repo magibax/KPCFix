@@ -7,6 +7,8 @@ KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high f
 - **Play above 60 FPS.** Timing and movement fixes address slow-motion animations and excess sliding after releasing a movement key. In playtesting, the game has generally been stable with FPS unlocked, and narration, camera pans and animations have typically kept their expected pace. Some scripted sequences may still be unstable and need more playtesting.
 - **Readable HUD at native resolution.** The HUD, menu cursor and tooltips scale together. The default HUD scale is 150% at 1080p. For 1440p, select 2560×1440 in game and set `ScalePercent=200` under `[HUD]` in `KPCFix.ini`.
 
+**Known HUD issue:** Enemy health bars stay at their original size when the rest of the HUD is enlarged.
+
 ## Install
 
 1. Update your edition of the game to **1.13** and close it. Back up any existing local DLLs or INIs you are replacing.
