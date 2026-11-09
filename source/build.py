@@ -103,7 +103,7 @@ def main():
         '-mpreferred-stack-boundary=2','-mincoming-stack-boundary=2','-Wall','-Wextra',
         '-Wno-misleading-indentation','-I',str(ROOT/'src')]
     conversions=[];objects=[]
-    for name in ('kpcfix.c','sha256.c','hud.c','ui.c','configs.c','timing.S','ground.S','input_interval.S','hud_hooks.S','ui_hooks.S'):
+    for name in ('kpcfix.c','sha256.c','hud.c','ui.c','configs.c','cinematic.c','cinematic_hook.S','timing.S','ground.S','input_interval.S','hud_hooks.S','ui_hooks.S'):
         source=ROOT/'src'/name;obj=work/(source.stem+'.obj');elf=work/(source.stem+'.elf.o')
         if source.suffix=='.c':run(['gcc',*cflags,'-c',source,'-o',elf])
         else:run(['as','--32','-o',elf,source])

@@ -8,4 +8,6 @@ extern void hud_solid_ecx(void),hud_scale_eax(void),hud_scale_edx(void);
 extern void hud_cross_ecx(void),hud_cross_eax(void);
 extern void hud_carousel_entry(void);
 void CDECL kpc_hud_observe(U32 width,U32 height,U32 screen);
+void CDECL kpc_enemy_draw(void);
+U32 CDECL kpc_enemy_blit(void *,void *,const void *,const void *);
 #endif

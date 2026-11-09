@@ -5,11 +5,10 @@ KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high f
 - **Smooth mouse input.** Turning the camera and moving the menu cursor feel smoother, especially on a high-refresh display. The sensitivity slider gives finer control at low settings. To restore the original mouse behaviour and Input Rate slider, set `StockMouse=1` in `KPCFix.ini` and restart.
 - **Multiplayer from the main menu.** Direct IP now lets you query and join a server immediately after launching the game. This fixes the “No Response” that previously meant loading a local map before you could connect.
 - **Play above 60 FPS.** Timing and movement fixes address slow-motion animations and excess sliding after releasing a movement key. In playtesting, the game has generally been stable with FPS unlocked, and narration, camera pans and animations have typically kept their expected pace. Some scripted sequences may still be unstable and need more playtesting.
-- **Readable HUD at native resolution.** The HUD, menu cursor and tooltips scale together. The default HUD scale is 150% at 1080p. For 1440p, select 2560×1440 in game and set `ScalePercent=200` under `[HUD]` in `KPCFix.ini`.
+- **Readable HUD at native resolution.** Enemy health bars, their centred name labels, the menu cursor and tooltips follow the HUD scale. The default HUD scale is 150% at 1080p. For 1440p, select 2560×1440 in game and set `ScalePercent=200` under `[HUD]` in `KPCFix.ini`.
+- **4:3 cinematics.** Fullscreen movies are centred on widescreen displays. Movie smoothing is enabled by default. The HUD and cursor use point filtering to keep their pixel edges sharp. In the `[AspectRatio]` section of `KPCFix.ini`, set `CinematicFilter=0` for sharper movies or `Cinematics4x3=0` for the original stretched playback.
 
 **TO DO:** 
-- Enemy health bar scaling: Fix enemy health bars not respecting the HUD ScalePercent setting.
-- Cinematic aspect ratio: Restore the intended 4:3 aspect ratio of cinematics when displayed on modern widescreen monitors.
 - Engine performance optimisation: Inspect the engine for opportunities to improve FPS, reduce rendering overhead and optimise performance without introducing instability.
 - Anisotropic filtering & antialiasing: Investigate enabling or improving anisotropic filtering and antialiasing, including within the game's menus.
 - Graphics configuration: Investigate c_GlobalDetail, GibDetail, LodOffset and other graphics settings to understand their behaviour, performance impact and sensible defaults for modern hardware.
@@ -18,7 +17,7 @@ KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high f
 ## Install
 
 1. Update your edition of the game to **1.13** and close it. Back up any existing local DLLs or INIs you are replacing.
-2. [Download the Windows release ZIP](https://github.com/magibax/KPCFix/releases/download/regional-1.13-r1/KPCFix-1.13-Regional-Windows.zip). Extract its contents beside `Psycho.exe`, usually in `C:\Games\Psycho\`.
+2. [Download the Windows release ZIP](https://github.com/magibax/KPCFix/releases/download/regional-1.13-r2/KPCFix-1.13-Regional-Windows.zip). Extract its contents beside `Psycho.exe`, usually in `C:\Games\Psycho\`.
 3. Run `Launch-KPCFix.cmd`. On a fresh install, click **Display** in the game launcher to enumerate devices. The default is **1920×1080, 60 FPS, VSync on**. Keyboard bindings are yours to configure in the game.
 
 ## Unlock FPS

@@ -19,3 +19,5 @@ python3 source/verify.py --archive KPCFix-region-research-final.tar.gz --output 
 ```
 
 The checked DLL is the package-root `dinput.dll`; the matching symbol map is `source/SYMBOLS.json`. To check a new build, copy both of those files from that build before running verification. The disassembly audit additionally requires `objdump`. Checks execute the proxy and original game code in an x86 emulator; Windows I/O, presentation, and socket services are simulated.
+
+The R2 client hook fits fullscreen Smacker playback to 4:3 and optionally smooths the movie. The regional shell hooks scale the enemy frame, fill and label. At HUD scales other than 100%, the label uses the row midpoint and font height.

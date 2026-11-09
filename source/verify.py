@@ -37,6 +37,14 @@ def main():
                 if suite in ('hud_loop','carousel'):
                     options+=['--expect','fixed','--package',ROOT.parent]
                 run('test_'+suite+'.py',suite,options)
+            for suite in ('enemy_hud','enemy_label','cinematic','movie_filter'):
+                options = list(common)
+                if suite == 'enemy_hud':
+                    options.append('--expose-hud-rig')
+                with (args.output/f'{region}_{suite}.log').open('w') as log:
+                    subprocess.run([sys.executable, ROOT/f'test_{suite}.py', *options,
+                                    '--output', args.output/f'{region}_{suite}.json'],
+                                   stdout=log, stderr=subprocess.STDOUT, check=True)
             run('audit_sites.py','audit',['--fixtures',directory])
             run('test_file_gate.py','filegate',common)
             if region=='Germany':

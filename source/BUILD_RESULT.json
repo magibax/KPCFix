@@ -1,8 +1,8 @@
 {
   "output": "dinput.dll",
   "platform": "windows",
-  "sha256": "7b15e046efb33b64134fbace312873ac7e7dee15281f50696f832abf12a4e920",
-  "bytes": 39936,
+  "sha256": "c383ff2056b351f5de35908245fef54d74893d83f210deb7ef0deafebac9be50",
+  "bytes": 42496,
   "exports": [
     "DirectInputCreateA",
     "DirectInputCreateW",
@@ -17,8 +17,8 @@
   "elf_to_coff": [
     {
       "object": "kpcfix.obj",
-      "dir32": 663,
-      "rel32": 175
+      "dir32": 683,
+      "rel32": 178
     },
     {
       "object": "sha256.obj",
@@ -27,8 +27,8 @@
     },
     {
       "object": "hud.obj",
-      "dir32": 34,
-      "rel32": 6
+      "dir32": 46,
+      "rel32": 8
     },
     {
       "object": "ui.obj",
@@ -39,6 +39,16 @@
       "object": "configs.obj",
       "dir32": 27,
       "rel32": 22
+    },
+    {
+      "object": "cinematic.obj",
+      "dir32": 18,
+      "rel32": 5
+    },
+    {
+      "object": "cinematic_hook.obj",
+      "dir32": 1,
+      "rel32": 1
     },
     {
       "object": "timing.obj",

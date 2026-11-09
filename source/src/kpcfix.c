@@ -306,11 +306,11 @@ static int valid_image(const U8 *base,U32 image_size,U32 preferred){
 }
 
 typedef struct {U8 *address;U32 length;U8 before[40],after[40];DWORD protection;int touched;} Edit;
-static int add_edit(Edit edits[32],U32 *count,U8 *address,const U8 *before,const U8 *after,U32 length){
+static int add_edit(Edit edits[48],U32 *count,U8 *address,const U8 *before,const U8 *after,U32 length){
     Edit *e;
     if(length>40||!equal_bytes(address,before,length))return 0;
     if(equal_bytes(before,after,length))return 1;
-    if(*count>=32)return 0;
+    if(*count>=48)return 0;
     e=&edits[(*count)++];e->address=address;e->length=length;e->protection=0;e->touched=0;copy_bytes(e->before,before,length);copy_bytes(e->after,after,length);return 1;
 }
 static int apply_edit(Edit *e){
@@ -333,7 +333,7 @@ static int undo_edit(Edit *e){
     flushed=FlushInstructionCache(GetCurrentProcess(),e->address,e->length);
     return restored&&flushed;
 }
-static int commit_edits(Edit edits[32],U32 count){
+static int commit_edits(Edit edits[48],U32 count){
     U32 i,j;
     for(i=0;i<count;i++)if(!equal_bytes(edits[i].address,edits[i].before,edits[i].length))return 0;
     for(i=0;i<count;i++){
@@ -356,7 +356,7 @@ __attribute__((noipa)) U32 WINAPI kpc_bind_ip(const char *ip){
     if(!ip||!*ip)return 0;
     return original_bind_inet_addr(ip);
 }
-static int queue_bind_fix(Edit edits[32],U32 *count,U8 *base){
+static int queue_bind_fix(Edit edits[48],U32 *count,U8 *base){
     U8 before[6]={0xff,0x15,0,0,0,0},after[6];
     if(!GetPrivateProfileIntW(L"Multiplayer",L"EmptyBindIPFix",1,ini_path))return 1;
     original_bind_inet_addr=(void *)dword(base+0x97288);
@@ -368,7 +368,7 @@ static int queue_bind_fix(Edit edits[32],U32 *count,U8 *base){
     return 1;
 }
 
-static int queue_net_trace(Edit edits[32],U32 *count,U8 *base){
+static int queue_net_trace(Edit edits[48],U32 *count,U8 *base){
     static const U32 sites[7]={0x97284,0x972a0,0x972a8,0x9728c,0x972a4,0x97290,0x9729c};
     void *targets[7]={(void *)kpc_net_startup,(void *)kpc_net_cleanup,(void *)kpc_net_socket,(void *)kpc_net_close,(void *)kpc_net_bind,(void *)kpc_net_send,(void *)kpc_net_receive};
     U8 before[4],after[4];U32 i,values[7];
@@ -386,7 +386,7 @@ static int queue_net_trace(Edit edits[32],U32 *count,U8 *base){
 }
 
 /* Redirect only the menu's sensitivity operands; shared constants have other users. */
-static int queue_sensitivity(Edit edits[32],U32 *count,U8 *base){
+static int queue_sensitivity(Edit edits[48],U32 *count,U8 *base){
     const U32 *sites=g_shell_layout->sensitivity_sites;
     const U32 *values=g_shell_layout->sensitivity_constants;
     const float *targets[3]={&sensitivity_maximum,&sensitivity_minimum,&sensitivity_inverse};
@@ -405,7 +405,7 @@ static int queue_sensitivity(Edit edits[32],U32 *count,U8 *base){
 
 /* Limit scaling to the HUD's own panel draws, glyphs and crosshair calls.
  * No renderer surfaces, global resolution values or menu draw calls change. */
-static int queue_hud(Edit edits[32],U32 *count,U8 *base){
+static int queue_hud(Edit edits[48],U32 *count,U8 *base){
     typedef struct {U32 length;U8 before[7];void (*entry)(void);} HudSite;
     static const HudSite sites[]={
         {5,{0xff,0x50,0x04,0x8b,0x16},hud_panel_entry},
@@ -440,12 +440,33 @@ static int queue_hud(Edit edits[32],U32 *count,U8 *base){
         if(!equal_bytes(address,after,site->length)&&
            !add_edit(edits,count,address,expected,after,site->length))return 0;
     }
+    /* The monster-health pass draws six opaque rectangles, then uses
+     * the same bitmap font as the ordinary HUD. Scope that font too. */
+    const U32 offsets[]={0x178,0x1f5,0x27b,0x2ff,0x3fb,0x496};
+    const U8 registers[]={0x91,0x91,0x91,0x90,0x92,0x92};
+    U8 *draw=base+g_shell_layout->enemy_draw;
+    U8 *caller=base+g_shell_layout->enemy_call;
+    near_call(call,caller,draw);
+    near_call(after,caller,kpc_enemy_draw);
+    if(!add_edit(edits,count,caller,call,after,5))return 0;
+    for(i=0;i<ARRAY_COUNT(offsets);i++){
+        U8 original[]={0xff,registers[i],0x8c,1,0,0};
+        U8 *site=draw+offsets[i];
+        near_call(after,site,kpc_enemy_blit);
+        after[5]=0x90;
+        if(!add_edit(edits,count,site,original,after,6))return 0;
+    }
+    /* EDI already holds (bar height - font height) / 2. Skip only the
+     * screen-height bias; the next instruction adds this row's top. */
+    static const U8 bias[2]={0x2b,0xf8}; /* sub edi,eax */
+    static const U8 centered[2]={0x90,0x90};
+    if(!add_edit(edits,count,base+g_shell_layout->enemy_label_y_bias,bias,centered,2))return 0;
     return 1;
 }
 
 /* Additional reviewed UI paths. Each option queues into the SAME cshell
  * transaction as the established ground/sensitivity/HUD changes. */
-static int queue_ui(Edit edits[32],U32 *count,U8 *base){
+static int queue_ui(Edit edits[48],U32 *count,U8 *base){
     U8 before[7],after[7];U32 i;
     if(g_cursor_percent!=100){
         static const U8 dims[6]={0xff,0x92,0x74,0x01,0x00,0x00};
@@ -497,7 +518,7 @@ static int queue_ui(Edit edits[32],U32 *count,U8 *base){
 static int patch_shell(HMODULE module){
     WCHAR path[PATH_CAP];U8 digest[32],movement_call[7],guard_call[5];
     static const U8 original_move[7]={0x8b,0x46,0x38,0x50,0xff,0x52,0x40};U32 file_size,count=0,n;U8 *base=(U8 *)module;
-    const ShellProfile *profile;Edit edits[32];int result=0;
+    const ShellProfile *profile;Edit edits[48];int result=0;
     n=GetModuleFileNameW(module,path,PATH_CAP);
     if(!n||n>=PATH_CAP||!basename_is(path,L"cshell.dll"))return 1;
     if(__sync_val_compare_and_swap(&movement_lock,0,1)!=0){report_error("Concurrent cshell loading prevented safe movement-patch installation. Restart with the tested V3/V5 setup.");return 0;}
@@ -525,7 +546,7 @@ static int patch_shell(HMODULE module){
     log_text("Sensitivity range: percent of original=");log_hex(sensitivity_range_percent);
     log_text(sensitivity_range_percent==100?"; original menu instructions retained.\r\n":"; matching slider write/read/minimum adjusted.\r\n");
     log_text("HUD scale: percent=");log_hex(g_hud_percent);
-    log_text(g_hud_percent==100?"; original HUD instructions retained.\r\n":"; 13 checked HUD call sites installed in memory.\r\n");
+    log_text(g_hud_percent==100?"; original HUD instructions retained.\r\n":"; 13 panel and 7 enemy health HUD sites installed in memory.\r\n");
     log_text("Menu cursor scale percent=");log_hex(g_cursor_percent);log_text(". InputRate lock=");log_hex(g_lock_input_rate);
     log_text("; hidden/reflowed menu section=");log_hex(g_hide_input_rate);log_text(".\r\n");result=1;
     log_text("Tooltip font scale percent=");log_hex(g_tooltip_percent);log_text("; cursor keeps original bitmap sources and uses screen scaling.\r\n");
@@ -538,9 +559,12 @@ static HMODULE WINAPI kpc_load_library_a(const char *name){
     SetLastError(saved);return module;
 }
 
+extern void movie_aspect_entry(void);
+extern void *g_movie_tail;
+extern U32 g_movie_filter;
 static int install_game_fixes(void){
     U8 digest[32],replacement[16],before_iat[4],after_iat[4];U32 size,i,count=0,n;
-    U8 *base=(U8 *)GetModuleHandleW(NULL);Edit edits[32];HMODULE pinned,loaded;
+    U8 *base=(U8 *)GetModuleHandleW(NULL);Edit edits[48];HMODULE pinned,loaded;
     if(!paths_ready){report_error("Game path is unavailable or too long. No game fixes were applied.");return 0;}
     if(!basename_is(main_path,L"client.exe")){log_text("Non-game host: input forwarding only.\r\n");return 1;}
     if(!GetPrivateProfileIntW(L"KPCFix",L"Enabled",1,ini_path)){
@@ -562,6 +586,18 @@ static int install_game_fixes(void){
     }
     for(i=0;i<8;i++)if(!equal_bytes(base+animation_sites[i],client_profile->animation[i],5)){
         report_error("An animation timing call was modified at runtime. No portable timing changes were applied.");return 0;
+    }
+    if(GetPrivateProfileIntW(L"AspectRatio",L"Cinematics4x3",1,ini_path)){
+        static const U8 expected[9]={0x55,0xff,0x50,0x14,0xe9,0xd9,0,0,0};
+        g_movie_filter=GetPrivateProfileIntW(L"AspectRatio",L"CinematicFilter",1,ini_path)!=0;
+        g_movie_tail=base+0x7b16d;
+        near_call(replacement,base+0x7b08b,movie_aspect_entry);
+        replacement[0]=0xe9;
+        for(i=5;i<9;i++)replacement[i]=0x90;
+        if(!add_edit(edits,&count,base+0x7b08b,expected,replacement,9)){
+            report_error("Fullscreen movie Blt instructions differ.");return 0;
+        }
+        log_text("Cinematics4x3=1: queued fullscreen movie correction.\r\n");
     }
     g_original_ftol=base+0x81028;
     stock_mouse=GetPrivateProfileIntW(L"KPCFix",L"StockMouse",0,ini_path)!=0;

@@ -7,6 +7,7 @@
 typedef struct {
     U32 ground_move, ground_guard, ground_guard_target;
     U32 sensitivity_sites[3], sensitivity_constants[3], sensitivity_min_store;
+    U32 enemy_draw, enemy_call, enemy_api, enemy_label_y_bias;
     U32 hud_sites[13], panel_position, panel_number;
     U32 crosshair_flag, crosshair_x, crosshair_y;
     U32 cursor_dims, cursor_draw, tooltip_font, tooltip_lift[3];

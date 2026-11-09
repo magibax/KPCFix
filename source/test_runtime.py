@@ -151,7 +151,7 @@ def main():
                 assert a[0]==0x70000000
                 result=self.stub_address['Real'+self.cstr(a[1])]
             elif name=='GetPrivateProfileIntW':
-                section,key=self.wstr(a[0]),self.wstr(a[1]);assert section in ('KPCFix','HUD','Cursor','Tooltip','Multiplayer'),(section,key,a)
+                section,key=self.wstr(a[0]),self.wstr(a[1]);assert section in ('KPCFix','HUD','Cursor','Tooltip','Multiplayer','AspectRatio'),(section,key,a)
                 if section!='KPCFix':key=section+'.'+key
                 # Existing-fix suites isolate the original core; test_nettrace
                 # explicitly enables the new observer and supplies Winsock APIs.

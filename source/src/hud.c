@@ -148,3 +148,36 @@ U32 CDECL kpc_hud_cross(U8 *api,U8 *object,void *destination,void *source,
     }
     return solid_with_scope(api,&scope,destination,source,source_rect,x,y,color);
 }
+
+/* Give the enemy font draw the same coordinate system as the six bitmaps.
+ * Obtain screen dimensions lazily: the game may skip drawing altogether. */
+void CDECL kpc_enemy_draw(void){
+    HudScope scope={0};
+    HudScope *previous=active_hud;
+    void (CDECL *original)(void)=(void *)(g_hud_shell+g_shell_layout->enemy_draw);
+    U32 tid=GetCurrentThreadId();
+    if(!hud_thread)__sync_val_compare_and_swap(&hud_thread,0,tid);
+    if(tid!=hud_thread){original();return;}
+    active_hud=&scope;
+    original();
+    active_hud=previous;
+}
+
+U32 CDECL kpc_enemy_blit(void *dest,void *source,const void *rect,const void *crop){
+    typedef U32 (CDECL *OpaqueScale)(void *,void *,const void *,const void *);
+    U8 *api=(U8 *)get32(g_hud_shell+g_shell_layout->enemy_api);
+    HudScope *scope=active_hud;
+    HudRect scaled;
+    if(scope && !scope->panel && GetCurrentThreadId()==hud_thread){
+        if(!scope->screen && dest){
+            U32 width=0,height=0;
+            ((SurfaceDims)get32(api+0x174))(dest,&width,&height);
+            if(width>=320 && width<=16384 && height>=200 && height<=16384){
+                scope->screen=dest;
+                scope->anchor_x=(I32)width;
+            }
+        }
+        if(rect && scope->screen==dest && transform(scope,rect,&scaled))rect=&scaled;
+    }
+    return ((OpaqueScale)get32(api+0x18c))(dest,source,rect,crop);
+}
