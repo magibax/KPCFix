@@ -1,77 +1,32 @@
-# KPCFix for KISS Psycho Circus 1.13
+# KPCFix
 
-A Windows drop-in for the official Europe, US, German and Italian Covermount 1.13 builds of *The Nightmare Child*. One x86 DirectInput proxy handles all four. It selects a shell by its file contents, so the Windows display language and the game folder name can be anything. DDrawCompat 0.7.2 supplies the display wrapper.
+KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high frame rates to the Windows version of *KISS: Psycho Circus — The Nightmare Child*. It supports the official **1.13** Europe, US, German and Italian Covermount builds.
+
+- **Smooth mouse input.** Turning the camera and moving the menu cursor feel smoother, especially on a high-refresh display. The sensitivity slider gives finer control at low settings. To restore the original mouse behaviour and Input Rate slider, set `StockMouse=1` in `KPCFix.ini` and restart.
+- **Multiplayer from the main menu.** Direct IP now lets you query and join a server immediately after launching the game. This fixes the “No Response” that previously meant loading a local map before you could connect.
+- **Play above 60 FPS.** Timing and movement fixes address slow-motion animations and excess sliding after releasing a movement key. In playtesting, the game has generally been stable with FPS unlocked, and narration, camera pans and animations have typically kept their expected pace. Some scripted sequences may still be unstable and need more playtesting.
+- **Readable HUD at native resolution.** The HUD, menu cursor and tooltips scale together. The default HUD scale is 150% at 1080p. For 1440p, select 2560×1440 in game and set `ScalePercent=200` under `[HUD]` in `KPCFix.ini`.
 
 ## Install
 
-Keep the runtime files in the same folder as Psycho.exe, normally C:\Games\Psycho. Do not put them in a nested KPCFix subfolder.
+1. Update your edition of the game to **1.13** and close it. Back up any existing local DLLs or INIs you are replacing.
+2. [Download the Windows release ZIP](https://github.com/magibax/KPCFix/releases/download/regional-1.13-r1/KPCFix-1.13-Regional-Windows.zip). Extract its contents beside `Psycho.exe`, usually in `C:\Games\Psycho\`.
+3. Run `Launch-KPCFix.cmd`. On a fresh install, click **Display** in the game launcher to enumerate devices. The default is **1920×1080, 60 FPS, VSync on**. Keyboard bindings are yours to configure in the game.
 
-### Files to put beside Psycho.exe
+## Unlock FPS
 
-The Windows runtime needs these files in the game folder:
+Edit these three lines in `DDrawCompat-CLIENT.ini` and restart the game. **Shift+F12** toggles the FPS display.
 
-- dinput.dll and KPCFix.ini
-- ddraw.dll and DDrawCompat-CLIENT.ini
-- Launch-KPCFix.cmd and Setup-KPCFix.ps1
-- Check-KPCVersion.ps1, Check-KPCVersion.cmd, and SUPPORTED_BUILDS.json
-
-These do not replace the game's Psycho.exe, client.exe, cshell.dll, d3d.ren, resources, or other regional files. Keep the game's own version-matched files. The source, verification, licenses, and documentation in the full project archive are for review and are not required in the game folder. To use the bundled server launcher, also place Start-KPC-Server-Windows.cmd, Start-KPC-Random-Server.ps1, kpc-lan.cfg, and kpc-lan-maps.txt beside the game files.
-
-### Checking the installed game
-
-From PowerShell, change to the game folder and run:
-
-```powershell
-Set-Location 'C:\Games\Psycho'
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\Check-KPCVersion.ps1
+```ini
+FullscreenMode = exclusive(0)
+VSync = off
+FpsLimiter = off
 ```
 
-The policy change lasts only for that PowerShell window. The checker now prints a pass/fail result and the recognized edition when run directly; previously it only defined helper functions, so it appeared to do nothing. Check-KPCVersion.cmd is also included and invokes the check with a one-command execution-policy bypass.
+For a 165 FPS cap, use `FpsLimiter = flipend(165)`. If a scripted sequence misbehaves, restore the shipped values (`borderless`, `wait(1)`, and `flipend(60)`) and replay it at 60 FPS.
 
-1. Apply the official update for your edition through version **1.13**. Europe, Germany and Italy normally update through 1.12. The US release updates through 1.10. Keep the client, shell, resources and server files from your own installation.
-2. Close the game. Back up any existing local `dinput.dll`, `ddraw.dll` and INI files you are replacing. Extract the contents of this ZIP into the folder containing `Psycho.exe`.
-3. Run **Launch-KPCFix.cmd** for each game session. It checks the client and shell, applies the 1080p preset on first use, sets Developer=1, then starts the game. On a fresh game profile, use **Display** in the game launcher to enumerate devices. Select **1920×1080** if the launcher or a new profile has chosen a lower mode. Set keyboard bindings yourself in the game controls menu or the game config files.
-4. In `KPCFix.log`, look for your shell profile and the line reporting 13 installed HUD sites. Shift+F12 toggles the on-screen flip and present rates. The default is **1920×1080, 60 FPS, VSync on**, with a 150% HUD.
+## Host a LAN game
 
-The DLL checks both executable hashes before patching the client. It also checks the shell it actually loads and the instructions at each patch site. An unsupported or modified game pair gets no KPCFix game patches. The DirectInput proxy can still forward Windows input calls.
+Run `Start-KPC-Server-Windows.cmd` from your patched game folder. It starts a four-player deathmatch on a random map from PM01–PM10. Players join using the host’s LAN IP and UDP port **42972**. Edit `kpc-lan.cfg` to change the rules.
 
-## Fixes and settings
-
-| Setting | Behaviour |
-|---|---|
-| Timing and ground contact | Apply the animation fractional carries, timing guard and ground-contact fix when using higher render rates. The default cap is 60. |
-| Mouse | The input clock and interval guards improve mouse look and cursor response. InputRate defaults to zero and the obsolete slider is hidden. |
-| Stock mouse | Set `StockMouse=1` in `KPCFix.ini` and restart. This restores the original clock, editable Input Rate slider and sensitivity range. The selection in the slider reflects the currently saved value. |
-| Sensitivity | In the default mouse mode, `SensitivityRangePercent=10` gives the slider a range of 0.01–2.0. |
-| HUD, cursor and tooltips | `[HUD] ScalePercent=150` at 1080p, or 200 at 1440p, keeps approximately the proportions of the 720p HUD. Cursor and tooltip scales follow the HUD by default. The item carousel scales counts around the projected item positions. |
-| Direct IP multiplayer | The empty local bind address uses the wildcard address when querying a server from a fresh menu. Explicit addresses keep their original behaviour. `NetTrace=1` enables optional socket diagnostics. |
-| VSync and frame cap | In `DDrawCompat-CLIENT.ini`, `VSync = wait(1)` requests VSync. Use `VSync = off` to disable that wait. `FpsLimiter = flipend(60)` caps game flips at 60 independently of desktop refresh. See the INI for exclusive mode and other caps. |
-
-The shipped KPCFix.ini sets ForceDeveloper=1. Before the game starts, the launcher sets Developer=1 in default.cfg, autoexec.cfg and current Profiles/*.cfg files. Set ForceDeveloper=0 to preserve those stored values. KPCFix does not alter keyboard bindings; choose and save them yourself in the game. New profiles keep the game's own keyboard defaults until you change them. Developer and mouse settings are independent.
-
-For another resolution, choose it in the game and set the desired HUD size. To apply a resolution to the existing profiles again, close the game and run the following in PowerShell from the game folder. Supply your own width and height.
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup-KPCFix.ps1 -Width 2560 -Height 1440
-```
-
-## Dedicated server
-
-Run **Start-KPC-Server-Windows.cmd** from a full, patched game installation. It checks the local server files, starts regular deathmatch on UDP **42972** and queues a random first map from **PM01–PM10**. Subsequent maps follow `kpc-lan-maps.txt`. The default is four players, 20 frags, 15 minutes. Edit `kpc-lan.cfg` to change those rules. Use the host's LAN IP to join. If the console remains at `Ready.`, type `start worlds\deathmatch\PM01`.
-
-The US release ships a different dedicated executable and server library from the other editions. Keep them together. The regional comparison and archived game documentation findings are in **REGIONAL-NOTES.md**.
-
-## Rollback
-
-Close the game. To restore the configuration captured by the first KPCFix setup, run the following from the game folder. This restores complete backed-up config files, including their then-current settings. Profiles created later are kept.
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Setup-KPCFix.ps1 -Restore
-```
-
-The input normalizer also saves the first changed version of each eligible file as `.kpc-inputrate.bak`. You can recover an individual original InputRate from that copy. Remove the local KPCFix and DDrawCompat DLLs and restore any DLLs or INIs you backed up at installation.
-
-## Verification and credits
-
-The release includes the patch source, build instructions, exact supported SHA-256 values and CPU regression results. Native Windows rendering and live server joins with this rebuilt DLL still need a playtest. KPCFix is licensed under MIT. DDrawCompat is narzoul's separate 0BSD project. Its unmodified 0.7.2 DLL and license are supplied here. [DDrawCompat upstream](https://github.com/narzoul/DDrawCompat)
+See the [regional compatibility notes](REGIONAL-NOTES.md) for build details. KPCFix uses the [MIT license](LICENSE). The Windows release includes [DDrawCompat 0.7.2](https://github.com/narzoul/DDrawCompat) under its [0BSD license](LICENSES/DDrawCompat-0BSD.txt).
