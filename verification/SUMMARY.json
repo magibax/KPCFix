@@ -1,0 +1,200 @@
+{
+  "archive": "KPCFix-region-research-final.tar.gz",
+  "reference_archive_sha256": "e6edddf47e9ee8d20c05ef61d8b2c7b29b99ce352d187cbf9a0e7adeeaf76d89",
+  "dinput_sha256": "7b15e046efb33b64134fbace312873ac7e7dee15281f50696f832abf12a4e920",
+  "ddrawcompat_sha256": "94895cf6ede8fd0f74ee1447fdc08b7044a9c65a1a25a49a4df893a0370975a3",
+  "ddrawcompat_version": "0.7.2",
+  "repeat_build_identical": true,
+  "cpu_backend": "Unicorn 2.1.4",
+  "regions": {
+    "Europe": {
+      "regional": {
+        "result": "pass",
+        "checks": 8
+      },
+      "filegate": {
+        "result": "pass",
+        "checks": 1
+      },
+      "audit": {
+        "result": "pass",
+        "checks": 1
+      },
+      "hud": {
+        "result": "pass",
+        "checks": 31
+      },
+      "hud_loop": {
+        "result": "pass",
+        "checks": 24
+      },
+      "carousel": {
+        "result": "pass",
+        "checks": 24
+      },
+      "ui": {
+        "result": "pass",
+        "checks": 38
+      },
+      "tooltip_cursor": {
+        "result": "pass",
+        "checks": 38
+      },
+      "bindfix": {
+        "result": "pass",
+        "checks": 48
+      },
+      "nettrace": {
+        "result": "pass",
+        "checks": 9
+      },
+      "config_io": {
+        "result": "pass",
+        "checks": 9
+      }
+    },
+    "USA": {
+      "regional": {
+        "result": "pass",
+        "checks": 8
+      },
+      "filegate": {
+        "result": "pass",
+        "checks": 1
+      },
+      "audit": {
+        "result": "pass",
+        "checks": 1
+      },
+      "hud": {
+        "result": "pass",
+        "checks": 31
+      },
+      "hud_loop": {
+        "result": "pass",
+        "checks": 24
+      },
+      "carousel": {
+        "result": "pass",
+        "checks": 24
+      },
+      "ui": {
+        "result": "pass",
+        "checks": 38
+      },
+      "tooltip_cursor": {
+        "result": "pass",
+        "checks": 38
+      },
+      "bindfix": {
+        "result": "pass",
+        "checks": 48
+      },
+      "nettrace": {
+        "result": "pass",
+        "checks": 9
+      },
+      "config_io": {
+        "result": "pass",
+        "checks": 9
+      }
+    },
+    "Germany": {
+      "regional": {
+        "result": "pass",
+        "checks": 8
+      },
+      "filegate": {
+        "result": "pass",
+        "checks": 1
+      },
+      "audit": {
+        "result": "pass",
+        "checks": 1
+      },
+      "hud": {
+        "result": "pass",
+        "checks": 31
+      },
+      "hud_loop": {
+        "result": "pass",
+        "checks": 24
+      },
+      "carousel": {
+        "result": "pass",
+        "checks": 24
+      },
+      "ui": {
+        "result": "pass",
+        "checks": 38
+      },
+      "tooltip_cursor": {
+        "result": "pass",
+        "checks": 38
+      },
+      "bindfix": {
+        "result": "pass",
+        "checks": 48
+      },
+      "nettrace": {
+        "result": "pass",
+        "checks": 9
+      },
+      "config_io": {
+        "result": "pass",
+        "checks": 9
+      },
+      "altered": {
+        "result": "pass",
+        "checks": 1
+      }
+    },
+    "Italy-Covermount": {
+      "regional": {
+        "result": "pass",
+        "checks": 8
+      },
+      "filegate": {
+        "result": "pass",
+        "checks": 1
+      },
+      "audit": {
+        "result": "pass",
+        "checks": 1
+      },
+      "hud": {
+        "result": "pass",
+        "checks": 31
+      },
+      "hud_loop": {
+        "result": "pass",
+        "checks": 24
+      },
+      "carousel": {
+        "result": "pass",
+        "checks": 24
+      },
+      "ui": {
+        "result": "pass",
+        "checks": 38
+      },
+      "tooltip_cursor": {
+        "result": "pass",
+        "checks": 38
+      },
+      "bindfix": {
+        "result": "pass",
+        "checks": 48
+      },
+      "nettrace": {
+        "result": "pass",
+        "checks": 9
+      },
+      "config_io": {
+        "result": "pass",
+        "checks": 9
+      }
+    }
+  },
+  "native_playtest": "pending for this DLL, DDrawCompat presentation, PowerShell launchers and live networking"
+}

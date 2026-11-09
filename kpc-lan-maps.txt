@@ -1,0 +1,10 @@
+worlds\deathmatch\PM01
+worlds\deathmatch\PM02
+worlds\deathmatch\PM03
+worlds\deathmatch\PM04
+worlds\deathmatch\PM05
+worlds\deathmatch\PM06
+worlds\deathmatch\PM07
+worlds\deathmatch\PM08
+worlds\deathmatch\PM09
+worlds\deathmatch\PM10

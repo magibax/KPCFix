@@ -1,0 +1,49 @@
+{
+  "status": "pass",
+  "dll_sha256": "7b15e046efb33b64134fbace312873ac7e7dee15281f50696f832abf12a4e920",
+  "groups": 9,
+  "results": [
+    {
+      "startup_migration_multiple_profiles_backup_idempotence_and_later_repair": "pass"
+    },
+    {
+      "failure": "copy",
+      "originals_and_prior_temp_preserved_handles_closed": "pass"
+    },
+    {
+      "failure": "short_write",
+      "originals_and_prior_temp_preserved_handles_closed": "pass"
+    },
+    {
+      "failure": "flush",
+      "originals_and_prior_temp_preserved_handles_closed": "pass"
+    },
+    {
+      "failure": "rename",
+      "originals_and_prior_temp_preserved_handles_closed": "pass"
+    },
+    {
+      "failure": "stale_temp",
+      "originals_and_prior_temp_preserved_handles_closed": "pass"
+    },
+    {
+      "settings": {
+        "LockInputRate": 0
+      },
+      "no_disk_changes": "pass"
+    },
+    {
+      "settings": {
+        "Enabled": 0
+      },
+      "no_disk_changes": "pass"
+    },
+    {
+      "settings": {
+        "NormalizeInputRateConfigs": 0
+      },
+      "no_disk_changes": "pass"
+    }
+  ],
+  "scope": "Compiled PE32 migration code, synthetic Win32 file system. Not native Windows file-lock/antivirus testing."
+}

@@ -1,0 +1,70 @@
+{
+  "output": "dinput.dll",
+  "platform": "windows",
+  "sha256": "7b15e046efb33b64134fbace312873ac7e7dee15281f50696f832abf12a4e920",
+  "bytes": 39936,
+  "exports": [
+    "DirectInputCreateA",
+    "DirectInputCreateW",
+    "DirectInputCreateEx",
+    "DllGetClassObject",
+    "DllCanUnloadNow",
+    "DllRegisterServer",
+    "DllUnregisterServer",
+    "KPCFixVersion",
+    "KPCFixStatus"
+  ],
+  "elf_to_coff": [
+    {
+      "object": "kpcfix.obj",
+      "dir32": 663,
+      "rel32": 175
+    },
+    {
+      "object": "sha256.obj",
+      "dir32": 1,
+      "rel32": 0
+    },
+    {
+      "object": "hud.obj",
+      "dir32": 34,
+      "rel32": 6
+    },
+    {
+      "object": "ui.obj",
+      "dir32": 29,
+      "rel32": 0
+    },
+    {
+      "object": "configs.obj",
+      "dir32": 27,
+      "rel32": 22
+    },
+    {
+      "object": "timing.obj",
+      "dir32": 48,
+      "rel32": 0
+    },
+    {
+      "object": "ground.obj",
+      "dir32": 0,
+      "rel32": 0
+    },
+    {
+      "object": "input_interval.obj",
+      "dir32": 7,
+      "rel32": 0
+    },
+    {
+      "object": "hud_hooks.obj",
+      "dir32": 0,
+      "rel32": 9
+    },
+    {
+      "object": "ui_hooks.obj",
+      "dir32": 2,
+      "rel32": 3
+    }
+  ],
+  "build_only_system_stubs": "Not deployed. Used only to generate import libraries."
+}

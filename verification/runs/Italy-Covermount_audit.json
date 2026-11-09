@@ -1,0 +1,8 @@
+{
+  "status": "pass",
+  "region": "Italy-Covermount",
+  "cshell_sha256": "a3f27e7bdf36f992744dc2b283439a83a0638058f80352e0181018cdfe410ff4",
+  "detours": 19,
+  "direct_transfers_examined": 35917,
+  "scope": "Instruction boundaries and direct branch targets. Indirect runtime transfers are outside this static check."
+}

@@ -1,0 +1,408 @@
+{
+  "status": "pass",
+  "dll_sha256": "7b15e046efb33b64134fbace312873ac7e7dee15281f50696f832abf12a4e920",
+  "groups": 31,
+  "unicorn_version": "2.1.4",
+  "results": [
+    {
+      "test": "off_no_HUD_edits",
+      "value": 0
+    },
+    {
+      "test": "off_no_HUD_edits",
+      "value": 100
+    },
+    {
+      "test": "invalid_scale_no_game_edits",
+      "value": 1
+    },
+    {
+      "test": "invalid_scale_no_game_edits",
+      "value": 49
+    },
+    {
+      "test": "invalid_scale_no_game_edits",
+      "value": 401
+    },
+    {
+      "test": "invalid_scale_no_game_edits",
+      "value": 4294967295
+    },
+    {
+      "test": "cshell_transaction_rollback",
+      "failure": "bytes"
+    },
+    {
+      "test": "cshell_transaction_rollback",
+      "failure": "protect"
+    },
+    {
+      "test": "cshell_transaction_rollback",
+      "failure": "cache"
+    },
+    {
+      "test": "rectangle_bridge_ABI_and_scale",
+      "percent": 50
+    },
+    {
+      "test": "rectangle_bridge_ABI_and_scale",
+      "percent": 150
+    },
+    {
+      "test": "rectangle_bridge_ABI_and_scale",
+      "percent": 200
+    },
+    {
+      "test": "rectangle_bridge_ABI_and_scale",
+      "percent": 400
+    },
+    {
+      "test": "original_bitmap_and_font_vs_720_baseline",
+      "flags": "0x0",
+      "draws": [
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            180,
+            860,
+            260,
+            924
+          ],
+          "sr": null,
+          "color": 2864434397
+        },
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            194,
+            870,
+            210,
+            894
+          ],
+          "sr": [
+            400,
+            0,
+            408,
+            12
+          ],
+          "color": 4293787903
+        },
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            212,
+            870,
+            228,
+            894
+          ],
+          "sr": [
+            408,
+            0,
+            416,
+            12
+          ],
+          "color": 4293787903
+        },
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            230,
+            870,
+            246,
+            894
+          ],
+          "sr": [
+            384,
+            0,
+            392,
+            12
+          ],
+          "color": 4293787903
+        }
+      ]
+    },
+    {
+      "test": "original_bitmap_and_font_vs_720_baseline",
+      "flags": "0x8",
+      "draws": [
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            1460,
+            860,
+            1540,
+            924
+          ],
+          "sr": null,
+          "color": 2864434397
+        },
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            1474,
+            870,
+            1490,
+            894
+          ],
+          "sr": [
+            400,
+            0,
+            408,
+            12
+          ],
+          "color": 4293787903
+        },
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            1492,
+            870,
+            1508,
+            894
+          ],
+          "sr": [
+            408,
+            0,
+            416,
+            12
+          ],
+          "color": 4293787903
+        },
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            1510,
+            870,
+            1526,
+            894
+          ],
+          "sr": [
+            384,
+            0,
+            392,
+            12
+          ],
+          "color": 4293787903
+        }
+      ]
+    },
+    {
+      "test": "original_bitmap_and_font_vs_720_baseline",
+      "flags": "0x42",
+      "draws": [
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            820,
+            1340,
+            900,
+            1404
+          ],
+          "sr": null,
+          "color": 2864434397
+        },
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            834,
+            1350,
+            850,
+            1374
+          ],
+          "sr": [
+            400,
+            0,
+            408,
+            12
+          ],
+          "color": 4293787903
+        },
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            852,
+            1350,
+            868,
+            1374
+          ],
+          "sr": [
+            408,
+            0,
+            416,
+            12
+          ],
+          "color": 4293787903
+        },
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            870,
+            1350,
+            886,
+            1374
+          ],
+          "sr": [
+            384,
+            0,
+            392,
+            12
+          ],
+          "color": 4293787903
+        }
+      ]
+    },
+    {
+      "test": "original_bitmap_and_font_vs_720_baseline",
+      "flags": "0x30",
+      "draws": [
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            640,
+            1080,
+            720,
+            1144
+          ],
+          "sr": null,
+          "color": 2864434397
+        },
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            654,
+            1090,
+            670,
+            1114
+          ],
+          "sr": [
+            400,
+            0,
+            408,
+            12
+          ],
+          "color": 4293787903
+        },
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            672,
+            1090,
+            688,
+            1114
+          ],
+          "sr": [
+            408,
+            0,
+            416,
+            12
+          ],
+          "color": 4293787903
+        },
+        {
+          "kind": "scale",
+          "dst": 5869568,
+          "src": 5873664,
+          "dr": [
+            690,
+            1090,
+            706,
+            1114
+          ],
+          "sr": [
+            384,
+            0,
+            392,
+            12
+          ],
+          "color": 4293787903
+        }
+      ]
+    },
+    {
+      "test": "font_call_ABI_scope_and_passthrough",
+      "site": "0xb27cb"
+    },
+    {
+      "test": "font_call_ABI_scope_and_passthrough",
+      "site": "0xb28e7"
+    },
+    {
+      "test": "font_call_ABI_scope_and_passthrough",
+      "site": "0xb2ac5"
+    },
+    {
+      "test": "font_call_ABI_scope_and_passthrough",
+      "site": "0xb2ca0"
+    },
+    {
+      "test": "font_call_ABI_scope_and_passthrough",
+      "site": "0xb2ef4"
+    },
+    {
+      "test": "font_call_ABI_scope_and_passthrough",
+      "site": "0xb3110"
+    },
+    {
+      "test": "font_call_ABI_scope_and_passthrough",
+      "site": "0xb349f"
+    },
+    {
+      "test": "crosshair_call_ABI_center_and_custom",
+      "site": "0xe2e6b"
+    },
+    {
+      "test": "crosshair_call_ABI_center_and_custom",
+      "site": "0xe2f42"
+    },
+    {
+      "test": "other_thread_passthrough"
+    },
+    {
+      "test": "nested_panel_scope_restored",
+      "invalid_inner": false
+    },
+    {
+      "test": "nested_panel_scope_restored",
+      "invalid_inner": true
+    },
+    {
+      "test": "original_panel_manager_bridge_ABI",
+      "post": false
+    },
+    {
+      "test": "original_panel_manager_bridge_ABI",
+      "post": true
+    }
+  ],
+  "scope": "Exact original HUD bitmap/font code and actual linked PE32 hooks under CPU emulation. Synthetic HUD objects and mocked Win32/surface APIs. No native Windows/Wine gameplay or visual validation."
+}

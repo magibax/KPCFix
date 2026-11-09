@@ -1,0 +1,251 @@
+{
+  "status": "pass",
+  "dll_sha256": "7b15e046efb33b64134fbace312873ac7e7dee15281f50696f832abf12a4e920",
+  "groups": 38,
+  "results": [
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 200,
+      "dll_base": "0x68000000",
+      "frame": 0,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 200,
+      "dll_base": "0x68000000",
+      "frame": 1,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 200,
+      "dll_base": "0x68000000",
+      "message_characters": 12,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 200,
+      "dll_base": "0x68000000",
+      "message_characters": 35,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 200,
+      "original_cursor_cleanup_and_tooltip_resource_lifetime_retained": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 200,
+      "dll_base": "0x3000000",
+      "frame": 0,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 200,
+      "dll_base": "0x3000000",
+      "frame": 1,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 200,
+      "dll_base": "0x3000000",
+      "message_characters": 12,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 200,
+      "dll_base": "0x3000000",
+      "message_characters": 35,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 200,
+      "original_cursor_cleanup_and_tooltip_resource_lifetime_retained": "pass"
+    },
+    {
+      "cursor_percent": 100,
+      "tooltip_percent": 100,
+      "dll_base": "0x68000000",
+      "frame": 0,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 100,
+      "tooltip_percent": 100,
+      "dll_base": "0x68000000",
+      "frame": 1,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 100,
+      "tooltip_percent": 100,
+      "dll_base": "0x68000000",
+      "message_characters": 12,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 100,
+      "tooltip_percent": 100,
+      "dll_base": "0x68000000",
+      "message_characters": 35,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 100,
+      "tooltip_percent": 100,
+      "original_cursor_cleanup_and_tooltip_resource_lifetime_retained": "pass"
+    },
+    {
+      "cursor_percent": 150,
+      "tooltip_percent": 150,
+      "dll_base": "0x68000000",
+      "frame": 0,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 150,
+      "tooltip_percent": 150,
+      "dll_base": "0x68000000",
+      "frame": 1,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 150,
+      "tooltip_percent": 150,
+      "dll_base": "0x68000000",
+      "message_characters": 12,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 150,
+      "tooltip_percent": 150,
+      "dll_base": "0x68000000",
+      "message_characters": 35,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 150,
+      "tooltip_percent": 150,
+      "original_cursor_cleanup_and_tooltip_resource_lifetime_retained": "pass"
+    },
+    {
+      "cursor_percent": 400,
+      "tooltip_percent": 400,
+      "dll_base": "0x68000000",
+      "frame": 0,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 400,
+      "tooltip_percent": 400,
+      "dll_base": "0x68000000",
+      "frame": 1,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 400,
+      "tooltip_percent": 400,
+      "dll_base": "0x68000000",
+      "message_characters": 12,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 400,
+      "tooltip_percent": 400,
+      "dll_base": "0x68000000",
+      "message_characters": 35,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 400,
+      "tooltip_percent": 400,
+      "original_cursor_cleanup_and_tooltip_resource_lifetime_retained": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 100,
+      "dll_base": "0x68000000",
+      "frame": 0,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 100,
+      "dll_base": "0x68000000",
+      "frame": 1,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 100,
+      "dll_base": "0x68000000",
+      "message_characters": 12,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 100,
+      "dll_base": "0x68000000",
+      "message_characters": 35,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 200,
+      "tooltip_percent": 100,
+      "original_cursor_cleanup_and_tooltip_resource_lifetime_retained": "pass"
+    },
+    {
+      "cursor_percent": 100,
+      "tooltip_percent": 200,
+      "dll_base": "0x68000000",
+      "frame": 0,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 100,
+      "tooltip_percent": 200,
+      "dll_base": "0x68000000",
+      "frame": 1,
+      "native_engine_clip_and_full_source_corner_coverage": "pass"
+    },
+    {
+      "cursor_percent": 100,
+      "tooltip_percent": 200,
+      "dll_base": "0x68000000",
+      "message_characters": 12,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 100,
+      "tooltip_percent": 200,
+      "dll_base": "0x68000000",
+      "message_characters": 35,
+      "native_metrics_backplate_text_insets_save_restore": "pass"
+    },
+    {
+      "cursor_percent": 100,
+      "tooltip_percent": 200,
+      "original_cursor_cleanup_and_tooltip_resource_lifetime_retained": "pass"
+    },
+    {
+      "invalid_tooltip_percent": 49,
+      "no_changes": "pass"
+    },
+    {
+      "invalid_tooltip_percent": 401,
+      "no_changes": "pass"
+    },
+    {
+      "invalid_tooltip_percent": 4294967295,
+      "no_changes": "pass"
+    }
+  ],
+  "scope": "Original cursor/tooltip routines plus real engine screen-scale/clipper path.\n\nMocks Win32/fonts/surface storage and the final driver. Checks the actual source\nand destination rectangles delivered by client+0x11660 through its clipper,\nthen rasterizes a small synthetic image to check all four source corners.\nThis does not simulate the native DDrawCompat driver or Windows font rasterizer.\n"
+}

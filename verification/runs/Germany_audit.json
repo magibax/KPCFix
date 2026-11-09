@@ -1,0 +1,8 @@
+{
+  "status": "pass",
+  "region": "Germany",
+  "cshell_sha256": "513f468dca8541d6d7bb766601e10021a1aa5c50b22e869f04151ef7755e35dd",
+  "detours": 19,
+  "direct_transfers_examined": 42113,
+  "scope": "Instruction boundaries and direct branch targets. Indirect runtime transfers are outside this static check."
+}

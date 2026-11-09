@@ -1,0 +1,57 @@
+{
+  "status": "pass",
+  "groups": [
+    {
+      "dll_base": "0x68000000",
+      "shell_base": "0x20000000",
+      "InputClock": 1,
+      "error_slots_alias": false,
+      "all_seven_calls_forwarded_once_with_registers_stack_errors_and_buffers_preserved": "pass",
+      "original_browser_calls": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "shell_base": "0x20000000",
+      "InputClock": 1,
+      "error_slots_alias": true,
+      "all_seven_calls_forwarded_once_with_registers_stack_errors_and_buffers_preserved": "pass",
+      "original_browser_calls": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "shell_base": "0x10000000",
+      "InputClock": 0,
+      "error_slots_alias": false,
+      "all_seven_calls_forwarded_once_with_registers_stack_errors_and_buffers_preserved": "pass",
+      "original_browser_calls": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "shell_base": "0x10000000",
+      "InputClock": 0,
+      "error_slots_alias": true,
+      "all_seven_calls_forwarded_once_with_registers_stack_errors_and_buffers_preserved": "pass",
+      "original_browser_calls": "pass"
+    },
+    {
+      "failed_calls_do_not_dereference_rejected_pointers": "pass"
+    },
+    {
+      "send_budget_48_and_wouldblock_power_of_two_sampling": "pass"
+    },
+    {
+      "busy_logger_skips_observation_without_blocking_or_changing_network_result": "pass"
+    },
+    {
+      "enabled": false,
+      "missing_error_getter": false,
+      "no_network_hooks_other_fixes_active": "pass"
+    },
+    {
+      "enabled": true,
+      "missing_error_getter": true,
+      "no_network_hooks_other_fixes_active": "pass"
+    }
+  ],
+  "scope": "Actual linked x86 Winsock observers with mocked network/Win32 services. ABI, errors, forwarding, buffers, bounds and original browser calls verified. No native packet exchange or connection fix claimed."
+}

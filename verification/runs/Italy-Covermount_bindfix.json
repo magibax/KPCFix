@@ -1,0 +1,390 @@
+{
+  "tests": [
+    {
+      "dll_base": "0x68000000",
+      "enabled": 0,
+      "IP": null,
+      "port": 0,
+      "sockaddr": "02000000000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 0,
+      "IP": null,
+      "port": 42972,
+      "sockaddr": "0200a7dc000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 0,
+      "IP": "",
+      "port": 0,
+      "sockaddr": "02000000ffffffff0000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 0,
+      "IP": "",
+      "port": 42972,
+      "sockaddr": "0200a7dcffffffff0000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 0,
+      "IP": "0.0.0.0",
+      "port": 0,
+      "sockaddr": "02000000000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 0,
+      "IP": "0.0.0.0",
+      "port": 42972,
+      "sockaddr": "0200a7dc000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 0,
+      "IP": "192.168.1.3",
+      "port": 0,
+      "sockaddr": "02000000c0a801030000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 0,
+      "IP": "192.168.1.3",
+      "port": 42972,
+      "sockaddr": "0200a7dcc0a801030000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 0,
+      "IP": "127.0.0.1",
+      "port": 0,
+      "sockaddr": "020000007f0000010000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 0,
+      "IP": "127.0.0.1",
+      "port": 42972,
+      "sockaddr": "0200a7dc7f0000010000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 0,
+      "IP": "bad-ip",
+      "port": 0,
+      "sockaddr": "02000000ffffffff0000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 0,
+      "IP": "bad-ip",
+      "port": 42972,
+      "sockaddr": "0200a7dcffffffff0000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 1,
+      "IP": null,
+      "port": 0,
+      "sockaddr": "02000000000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 1,
+      "IP": null,
+      "port": 42972,
+      "sockaddr": "0200a7dc000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 1,
+      "IP": "",
+      "port": 0,
+      "sockaddr": "02000000000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 1,
+      "IP": "",
+      "port": 42972,
+      "sockaddr": "0200a7dc000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 1,
+      "IP": "0.0.0.0",
+      "port": 0,
+      "sockaddr": "02000000000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 1,
+      "IP": "0.0.0.0",
+      "port": 42972,
+      "sockaddr": "0200a7dc000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 1,
+      "IP": "192.168.1.3",
+      "port": 0,
+      "sockaddr": "02000000c0a801030000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 1,
+      "IP": "192.168.1.3",
+      "port": 42972,
+      "sockaddr": "0200a7dcc0a801030000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 1,
+      "IP": "127.0.0.1",
+      "port": 0,
+      "sockaddr": "020000007f0000010000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 1,
+      "IP": "127.0.0.1",
+      "port": 42972,
+      "sockaddr": "0200a7dc7f0000010000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 1,
+      "IP": "bad-ip",
+      "port": 0,
+      "sockaddr": "02000000ffffffff0000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "enabled": 1,
+      "IP": "bad-ip",
+      "port": 42972,
+      "sockaddr": "0200a7dcffffffff0000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 0,
+      "IP": null,
+      "port": 0,
+      "sockaddr": "02000000000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 0,
+      "IP": null,
+      "port": 42972,
+      "sockaddr": "0200a7dc000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 0,
+      "IP": "",
+      "port": 0,
+      "sockaddr": "02000000ffffffff0000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 0,
+      "IP": "",
+      "port": 42972,
+      "sockaddr": "0200a7dcffffffff0000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 0,
+      "IP": "0.0.0.0",
+      "port": 0,
+      "sockaddr": "02000000000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 0,
+      "IP": "0.0.0.0",
+      "port": 42972,
+      "sockaddr": "0200a7dc000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 0,
+      "IP": "192.168.1.3",
+      "port": 0,
+      "sockaddr": "02000000c0a801030000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 0,
+      "IP": "192.168.1.3",
+      "port": 42972,
+      "sockaddr": "0200a7dcc0a801030000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 0,
+      "IP": "127.0.0.1",
+      "port": 0,
+      "sockaddr": "020000007f0000010000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 0,
+      "IP": "127.0.0.1",
+      "port": 42972,
+      "sockaddr": "0200a7dc7f0000010000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 0,
+      "IP": "bad-ip",
+      "port": 0,
+      "sockaddr": "02000000ffffffff0000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 0,
+      "IP": "bad-ip",
+      "port": 42972,
+      "sockaddr": "0200a7dcffffffff0000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 1,
+      "IP": null,
+      "port": 0,
+      "sockaddr": "02000000000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 1,
+      "IP": null,
+      "port": 42972,
+      "sockaddr": "0200a7dc000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 1,
+      "IP": "",
+      "port": 0,
+      "sockaddr": "02000000000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 1,
+      "IP": "",
+      "port": 42972,
+      "sockaddr": "0200a7dc000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 1,
+      "IP": "0.0.0.0",
+      "port": 0,
+      "sockaddr": "02000000000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 1,
+      "IP": "0.0.0.0",
+      "port": 42972,
+      "sockaddr": "0200a7dc000000000000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 1,
+      "IP": "192.168.1.3",
+      "port": 0,
+      "sockaddr": "02000000c0a801030000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 1,
+      "IP": "192.168.1.3",
+      "port": 42972,
+      "sockaddr": "0200a7dcc0a801030000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 1,
+      "IP": "127.0.0.1",
+      "port": 0,
+      "sockaddr": "020000007f0000010000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 1,
+      "IP": "127.0.0.1",
+      "port": 42972,
+      "sockaddr": "0200a7dc7f0000010000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 1,
+      "IP": "bad-ip",
+      "port": 0,
+      "sockaddr": "02000000ffffffff0000000000000000",
+      "status": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "enabled": 1,
+      "IP": "bad-ip",
+      "port": 42972,
+      "sockaddr": "0200a7dcffffffff0000000000000000",
+      "status": "pass"
+    }
+  ],
+  "count": 48,
+  "native_validation": "pending"
+}

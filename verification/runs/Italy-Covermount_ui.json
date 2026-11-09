@@ -1,0 +1,192 @@
+{
+  "status": "pass",
+  "dll_sha256": "7b15e046efb33b64134fbace312873ac7e7dee15281f50696f832abf12a4e920",
+  "groups": 38,
+  "results": [
+    {
+      "console": "update",
+      "dll_base": "0x68000000",
+      "case_variants_and_unrelated_variables": "pass"
+    },
+    {
+      "console": "create",
+      "dll_base": "0x68000000",
+      "case_variants_and_unrelated_variables": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "original_profile_read_and_setter_entry_zero_lock": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "mouse_menu_hidden_draw_input_keyboard_skip_cleanup_reopen_reflow": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "cursor_percent": 200,
+      "failure": "none",
+      "original_sources_and_screen_scale_with_matching_backgrounds": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "cursor_percent": 150,
+      "failure": "none",
+      "original_sources_and_screen_scale_with_matching_backgrounds": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "cursor_percent": 100,
+      "failure": "none",
+      "original_sources_and_screen_scale_with_matching_backgrounds": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "cursor_percent": 200,
+      "failure": "scale",
+      "original_sources_and_screen_scale_with_matching_backgrounds": "pass"
+    },
+    {
+      "dll_base": "0x68000000",
+      "cursor_percent": 50,
+      "failure": "none",
+      "original_sources_and_screen_scale_with_matching_backgrounds": "pass"
+    },
+    {
+      "console": "update",
+      "dll_base": "0x3000000",
+      "case_variants_and_unrelated_variables": "pass"
+    },
+    {
+      "console": "create",
+      "dll_base": "0x3000000",
+      "case_variants_and_unrelated_variables": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "original_profile_read_and_setter_entry_zero_lock": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "mouse_menu_hidden_draw_input_keyboard_skip_cleanup_reopen_reflow": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "cursor_percent": 200,
+      "failure": "none",
+      "original_sources_and_screen_scale_with_matching_backgrounds": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "cursor_percent": 150,
+      "failure": "none",
+      "original_sources_and_screen_scale_with_matching_backgrounds": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "cursor_percent": 100,
+      "failure": "none",
+      "original_sources_and_screen_scale_with_matching_backgrounds": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "cursor_percent": 200,
+      "failure": "scale",
+      "original_sources_and_screen_scale_with_matching_backgrounds": "pass"
+    },
+    {
+      "dll_base": "0x3000000",
+      "cursor_percent": 50,
+      "failure": "none",
+      "original_sources_and_screen_scale_with_matching_backgrounds": "pass"
+    },
+    {
+      "startup_preexisting_console_variable_reset": "pass"
+    },
+    {
+      "options": {
+        "LockInputRate": 0,
+        "Cursor.ScalePercent": 100
+      },
+      "reviewed_original_instructions_retained": "pass"
+    },
+    {
+      "options": {
+        "HideInputRate": 0,
+        "Cursor.ScalePercent": 100
+      },
+      "reviewed_original_instructions_retained": "pass"
+    },
+    {
+      "mismatch_module": "client",
+      "rva": "0x1aa0e",
+      "module_transaction_preserved": "pass"
+    },
+    {
+      "mismatch_module": "client",
+      "rva": "0x1ac90",
+      "module_transaction_preserved": "pass"
+    },
+    {
+      "mismatch_module": "shell",
+      "rva": "0x24127",
+      "module_transaction_preserved": "pass"
+    },
+    {
+      "mismatch_module": "shell",
+      "rva": "0xdb8b0",
+      "module_transaction_preserved": "pass"
+    },
+    {
+      "invalid_cursor_percent": 49,
+      "no_code_changes": "pass"
+    },
+    {
+      "invalid_cursor_percent": 401,
+      "no_code_changes": "pass"
+    },
+    {
+      "invalid_cursor_percent": 4294967295,
+      "no_code_changes": "pass"
+    },
+    {
+      "config_text_sha256": "d2a22ee50bc73eb76df3e67f10a9266c5b627aebd4cdc0280df0bc13b26ae63d",
+      "canonical_zero_idempotent_preserves_other_values": "pass"
+    },
+    {
+      "config_text_sha256": "abd8e1525bf63bcf8b264c7bd6e808d7b8d398c777a9d851224eccf1f100bedb",
+      "canonical_zero_idempotent_preserves_other_values": "pass"
+    },
+    {
+      "config_text_sha256": "11db40d4442bc1326394c377fe25b1dde9ad13ebbd605b71fabc4bca20d2ab8c",
+      "canonical_zero_idempotent_preserves_other_values": "pass"
+    },
+    {
+      "config_text_sha256": "96e0ad327fa634e8c88c55866eb16b54add5c906d2041a1e10b2c89b1902ae92",
+      "canonical_zero_idempotent_preserves_other_values": "pass"
+    },
+    {
+      "config_text_sha256": "cb477465c9216a95b2b26c20698db38243c17b9412fcdc801f2837c75bea0110",
+      "canonical_zero_idempotent_preserves_other_values": "pass"
+    },
+    {
+      "config_text_sha256": "d2642fa6bfe5a888a385cd893edbec784d5263944519b8f79ab443c59783ba63",
+      "canonical_zero_idempotent_preserves_other_values": "pass"
+    },
+    {
+      "config_text_sha256": "89eafc933cb62ee47b08bef1001c89c1a29d86edf7e2700214f5351992cce037",
+      "canonical_zero_idempotent_preserves_other_values": "pass"
+    },
+    {
+      "config_text_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "canonical_zero_idempotent_preserves_other_values": "pass"
+    },
+    {
+      "config_text_sha256": "3e90f2a5f0bf2f3652fe68ed33d41482d9931f9fa336cd7161ed97c8830e235d",
+      "canonical_zero_idempotent_preserves_other_values": "pass"
+    },
+    {
+      "config_unsupported_encoding_malformed_quote_size_limit": "pass"
+    }
+  ],
+  "scope": "CPU integration checks for InputRate, the settings menu and cursor surfaces.\n\nRuns the linked PE and exact original game routines. Win32, CRT conversion,\nbitmap pixels and final UI backend methods are mocked; no native playtest.\n"
+}

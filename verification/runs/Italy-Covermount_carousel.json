@@ -1,0 +1,633 @@
+{
+  "status": "pass",
+  "expected": "fixed",
+  "dll_sha256": "7b15e046efb33b64134fbace312873ac7e7dee15281f50696f832abf12a4e920",
+  "cases": 24,
+  "results": [
+    {
+      "scale": 100,
+      "dll_base": "0x68000000",
+      "quantity": 22,
+      "projected": [
+        1255.85791015625,
+        40.12258529663086
+      ],
+      "glyph_rects": [
+        [
+          1246,
+          60,
+          1254,
+          72
+        ],
+        [
+          1255,
+          60,
+          1263,
+          72
+        ]
+      ],
+      "maximum_baseline_error_pixels": 0
+    },
+    {
+      "scale": 100,
+      "dll_base": "0x68000000",
+      "quantity": 20,
+      "projected": [
+        1280.0,
+        41.33011245727539
+      ],
+      "glyph_rects": [
+        [
+          1271,
+          61,
+          1279,
+          73
+        ],
+        [
+          1280,
+          61,
+          1288,
+          73
+        ]
+      ],
+      "maximum_baseline_error_pixels": 0
+    },
+    {
+      "scale": 100,
+      "dll_base": "0x68000000",
+      "quantity": 180,
+      "projected": [
+        1310.1776123046875,
+        37.841697692871094
+      ],
+      "glyph_rects": [
+        [
+          1297,
+          57,
+          1305,
+          69
+        ],
+        [
+          1306,
+          57,
+          1314,
+          69
+        ],
+        [
+          1315,
+          57,
+          1323,
+          69
+        ]
+      ],
+      "maximum_baseline_error_pixels": 0
+    },
+    {
+      "scale": 150,
+      "dll_base": "0x68000000",
+      "quantity": 22,
+      "projected": [
+        1243.8834228515625,
+        59.909061431884766
+      ],
+      "glyph_rects": [
+        [
+          1230,
+          89,
+          1242,
+          107
+        ],
+        [
+          1243,
+          89,
+          1255,
+          107
+        ]
+      ],
+      "maximum_baseline_error_pixels": 1
+    },
+    {
+      "scale": 150,
+      "dll_base": "0x68000000",
+      "quantity": 20,
+      "projected": [
+        1280.0,
+        61.71208572387695
+      ],
+      "glyph_rects": [
+        [
+          1267,
+          91,
+          1279,
+          109
+        ],
+        [
+          1280,
+          91,
+          1292,
+          109
+        ]
+      ],
+      "maximum_baseline_error_pixels": 0
+    },
+    {
+      "scale": 150,
+      "dll_base": "0x68000000",
+      "quantity": 180,
+      "projected": [
+        1325.145751953125,
+        56.50335693359375
+      ],
+      "glyph_rects": [
+        [
+          1306,
+          86,
+          1318,
+          104
+        ],
+        [
+          1319,
+          86,
+          1331,
+          104
+        ],
+        [
+          1332,
+          86,
+          1344,
+          104
+        ]
+      ],
+      "maximum_baseline_error_pixels": 1
+    },
+    {
+      "scale": 200,
+      "dll_base": "0x68000000",
+      "quantity": 22,
+      "projected": [
+        1231.7156982421875,
+        80.24517059326172
+      ],
+      "glyph_rects": [
+        [
+          1213,
+          120,
+          1229,
+          144
+        ],
+        [
+          1231,
+          120,
+          1247,
+          144
+        ]
+      ],
+      "maximum_baseline_error_pixels": 1
+    },
+    {
+      "scale": 200,
+      "dll_base": "0x68000000",
+      "quantity": 20,
+      "projected": [
+        1280.0,
+        82.66022491455078
+      ],
+      "glyph_rects": [
+        [
+          1262,
+          122,
+          1278,
+          146
+        ],
+        [
+          1280,
+          122,
+          1296,
+          146
+        ]
+      ],
+      "maximum_baseline_error_pixels": 0
+    },
+    {
+      "scale": 200,
+      "dll_base": "0x68000000",
+      "quantity": 180,
+      "projected": [
+        1340.3553466796875,
+        75.68339538574219
+      ],
+      "glyph_rects": [
+        [
+          1314,
+          115,
+          1330,
+          139
+        ],
+        [
+          1332,
+          115,
+          1348,
+          139
+        ],
+        [
+          1350,
+          115,
+          1366,
+          139
+        ]
+      ],
+      "maximum_baseline_error_pixels": 1
+    },
+    {
+      "scale": 300,
+      "dll_base": "0x68000000",
+      "quantity": 22,
+      "projected": [
+        1207.5736083984375,
+        120.36775207519531
+      ],
+      "glyph_rects": [
+        [
+          1180,
+          180,
+          1204,
+          216
+        ],
+        [
+          1207,
+          180,
+          1231,
+          216
+        ]
+      ],
+      "maximum_baseline_error_pixels": 2
+    },
+    {
+      "scale": 300,
+      "dll_base": "0x68000000",
+      "quantity": 20,
+      "projected": [
+        1280.0,
+        123.9903335571289
+      ],
+      "glyph_rects": [
+        [
+          1253,
+          183,
+          1277,
+          219
+        ],
+        [
+          1280,
+          183,
+          1304,
+          219
+        ]
+      ],
+      "maximum_baseline_error_pixels": 0
+    },
+    {
+      "scale": 300,
+      "dll_base": "0x68000000",
+      "quantity": 180,
+      "projected": [
+        1370.532958984375,
+        113.52509307861328
+      ],
+      "glyph_rects": [
+        [
+          1331,
+          173,
+          1355,
+          209
+        ],
+        [
+          1358,
+          173,
+          1382,
+          209
+        ],
+        [
+          1385,
+          173,
+          1409,
+          209
+        ]
+      ],
+      "maximum_baseline_error_pixels": 2
+    },
+    {
+      "scale": 100,
+      "dll_base": "0x3000000",
+      "quantity": 22,
+      "projected": [
+        1255.85791015625,
+        40.12258529663086
+      ],
+      "glyph_rects": [
+        [
+          1246,
+          60,
+          1254,
+          72
+        ],
+        [
+          1255,
+          60,
+          1263,
+          72
+        ]
+      ],
+      "maximum_baseline_error_pixels": 0
+    },
+    {
+      "scale": 100,
+      "dll_base": "0x3000000",
+      "quantity": 20,
+      "projected": [
+        1280.0,
+        41.33011245727539
+      ],
+      "glyph_rects": [
+        [
+          1271,
+          61,
+          1279,
+          73
+        ],
+        [
+          1280,
+          61,
+          1288,
+          73
+        ]
+      ],
+      "maximum_baseline_error_pixels": 0
+    },
+    {
+      "scale": 100,
+      "dll_base": "0x3000000",
+      "quantity": 180,
+      "projected": [
+        1310.1776123046875,
+        37.841697692871094
+      ],
+      "glyph_rects": [
+        [
+          1297,
+          57,
+          1305,
+          69
+        ],
+        [
+          1306,
+          57,
+          1314,
+          69
+        ],
+        [
+          1315,
+          57,
+          1323,
+          69
+        ]
+      ],
+      "maximum_baseline_error_pixels": 0
+    },
+    {
+      "scale": 150,
+      "dll_base": "0x3000000",
+      "quantity": 22,
+      "projected": [
+        1243.8834228515625,
+        59.909061431884766
+      ],
+      "glyph_rects": [
+        [
+          1230,
+          89,
+          1242,
+          107
+        ],
+        [
+          1243,
+          89,
+          1255,
+          107
+        ]
+      ],
+      "maximum_baseline_error_pixels": 1
+    },
+    {
+      "scale": 150,
+      "dll_base": "0x3000000",
+      "quantity": 20,
+      "projected": [
+        1280.0,
+        61.71208572387695
+      ],
+      "glyph_rects": [
+        [
+          1267,
+          91,
+          1279,
+          109
+        ],
+        [
+          1280,
+          91,
+          1292,
+          109
+        ]
+      ],
+      "maximum_baseline_error_pixels": 0
+    },
+    {
+      "scale": 150,
+      "dll_base": "0x3000000",
+      "quantity": 180,
+      "projected": [
+        1325.145751953125,
+        56.50335693359375
+      ],
+      "glyph_rects": [
+        [
+          1306,
+          86,
+          1318,
+          104
+        ],
+        [
+          1319,
+          86,
+          1331,
+          104
+        ],
+        [
+          1332,
+          86,
+          1344,
+          104
+        ]
+      ],
+      "maximum_baseline_error_pixels": 1
+    },
+    {
+      "scale": 200,
+      "dll_base": "0x3000000",
+      "quantity": 22,
+      "projected": [
+        1231.7156982421875,
+        80.24517059326172
+      ],
+      "glyph_rects": [
+        [
+          1213,
+          120,
+          1229,
+          144
+        ],
+        [
+          1231,
+          120,
+          1247,
+          144
+        ]
+      ],
+      "maximum_baseline_error_pixels": 1
+    },
+    {
+      "scale": 200,
+      "dll_base": "0x3000000",
+      "quantity": 20,
+      "projected": [
+        1280.0,
+        82.66022491455078
+      ],
+      "glyph_rects": [
+        [
+          1262,
+          122,
+          1278,
+          146
+        ],
+        [
+          1280,
+          122,
+          1296,
+          146
+        ]
+      ],
+      "maximum_baseline_error_pixels": 0
+    },
+    {
+      "scale": 200,
+      "dll_base": "0x3000000",
+      "quantity": 180,
+      "projected": [
+        1340.3553466796875,
+        75.68339538574219
+      ],
+      "glyph_rects": [
+        [
+          1314,
+          115,
+          1330,
+          139
+        ],
+        [
+          1332,
+          115,
+          1348,
+          139
+        ],
+        [
+          1350,
+          115,
+          1366,
+          139
+        ]
+      ],
+      "maximum_baseline_error_pixels": 1
+    },
+    {
+      "scale": 300,
+      "dll_base": "0x3000000",
+      "quantity": 22,
+      "projected": [
+        1207.5736083984375,
+        120.36775207519531
+      ],
+      "glyph_rects": [
+        [
+          1180,
+          180,
+          1204,
+          216
+        ],
+        [
+          1207,
+          180,
+          1231,
+          216
+        ]
+      ],
+      "maximum_baseline_error_pixels": 2
+    },
+    {
+      "scale": 300,
+      "dll_base": "0x3000000",
+      "quantity": 20,
+      "projected": [
+        1280.0,
+        123.9903335571289
+      ],
+      "glyph_rects": [
+        [
+          1253,
+          183,
+          1277,
+          219
+        ],
+        [
+          1280,
+          183,
+          1304,
+          219
+        ]
+      ],
+      "maximum_baseline_error_pixels": 0
+    },
+    {
+      "scale": 300,
+      "dll_base": "0x3000000",
+      "quantity": 180,
+      "projected": [
+        1370.532958984375,
+        113.52509307861328
+      ],
+      "glyph_rects": [
+        [
+          1331,
+          173,
+          1355,
+          209
+        ],
+        [
+          1358,
+          173,
+          1382,
+          209
+        ],
+        [
+          1385,
+          173,
+          1409,
+          209
+        ]
+      ],
+      "maximum_baseline_error_pixels": 2
+    }
+  ],
+  "scope": "Original camera projection, count conversion/+20 call block, number helper and bitmap-font paths with the selected linked DLL. Mock snprintf and surface APIs. Integer projection rounding permits two pixels of baseline error. No native Windows visual test."
+}

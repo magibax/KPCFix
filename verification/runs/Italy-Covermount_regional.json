@@ -1,0 +1,43 @@
+{
+  "status": "pass",
+  "region": "Italy-Covermount",
+  "dll_sha256": "7b15e046efb33b64134fbace312873ac7e7dee15281f50696f832abf12a4e920",
+  "results": [
+    {
+      "mode": "full",
+      "shell_base": "0x20000000",
+      "status": "pass"
+    },
+    {
+      "mode": "stock mouse",
+      "shell_base": "0x20000000",
+      "status": "pass"
+    },
+    {
+      "mode": "full",
+      "shell_base": "0x10000000",
+      "status": "pass"
+    },
+    {
+      "mode": "stock mouse",
+      "shell_base": "0x10000000",
+      "status": "pass"
+    },
+    {
+      "disc_file_rejected": "client.exe",
+      "status": "pass"
+    },
+    {
+      "disc_file_rejected": "cshell.dll",
+      "status": "pass"
+    },
+    {
+      "disc_file_rejected": "both",
+      "status": "pass"
+    },
+    {
+      "memory_mismatch": "no shell edits",
+      "status": "pass"
+    }
+  ]
+}
