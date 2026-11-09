@@ -8,11 +8,11 @@ KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high f
 - **Readable HUD at native resolution.** The HUD, menu cursor and tooltips scale together. The default HUD scale is 150% at 1080p. For 1440p, select 2560×1440 in game and set `ScalePercent=200` under `[HUD]` in `KPCFix.ini`.
 
 **TO DO:** 
-- Graphics configuration: Investigate c_GlobalDetail, GibDetail, LodOffset and other graphics settings to understand their behaviour, performance impact and sensible defaults for modern hardware.
-- Anisotropic filtering & antialiasing: Investigate enabling or improving anisotropic filtering and antialiasing, including within the game's menus.
 - Enemy health bar scaling: Fix enemy health bars not respecting the HUD ScalePercent setting.
 - Cinematic aspect ratio: Restore the intended 4:3 aspect ratio of cinematics when displayed on modern widescreen monitors.
 - Engine performance optimisation: Inspect the engine for opportunities to improve FPS, reduce rendering overhead and optimise performance without introducing instability.
+- Anisotropic filtering & antialiasing: Investigate enabling or improving anisotropic filtering and antialiasing, including within the game's menus.
+- Graphics configuration: Investigate c_GlobalDetail, GibDetail, LodOffset and other graphics settings to understand their behaviour, performance impact and sensible defaults for modern hardware.
 - Graphics fidelity improvements: Investigate engine-level methods to improve rendering quality, texture filtering, model detail, draw distances and other visual effects.
 
 ## Install
