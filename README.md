@@ -11,6 +11,7 @@ KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high f
 - Enemy health bars don't scale with ScalePercent yet
 - Restore intended 4:3 aspect ratio of cinematics when playing on modern displays
 - Switches for antialiasing and anisotropic filtering
+- c_GlobalDetail, GibDetail, LodOffset and various other graphics improvements
 
 ## Install
 
