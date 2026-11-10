@@ -33,7 +33,7 @@ def run():
         assert rig.load_shell()==shell_base
         assert not rig.messages and rig.invoke('KPCFixStatus')&0x87==7,rig.messages
         assert b'13 checked HUD call sites' in rig.logs
-        assert rig.cstr(rig.invoke('KPCFixVersion')).startswith('KPCFix 1.13 Regional')
+        assert rig.cstr(rig.invoke('KPCFixVersion')).startswith('KPCFix 1.13 for Windows')
         # Decode the target of each installed relative CALL or JMP.
         from test_hud import SITES
         for english,before,bridge in SITES:

@@ -4,7 +4,7 @@
 #include "ui.h"
 
 #include "shell_layout.h"
-#define KPC_VERSION "KPCFix 1.13 Regional"
+#define KPC_VERSION "KPCFix 1.13 for Windows"
 #define KPC_CLOCK_DEFAULT 1
 const ShellLayout *g_shell_layout;
 typedef char assert_pointer_size[(sizeof(void *)==4)?1:-1];
@@ -218,7 +218,7 @@ void CDECL kpc_config_notice(const WCHAR *path,const char *message){
 }
 static void report_error(const char *message){
     kpc_status|=ERROR_STATE;log_text("ERROR: ");log_text(message);log_text("\r\n");
-    MessageBoxA(NULL,message,"KPCFix 1.13 Regional",0x10);
+    MessageBoxA(NULL,message,"KPCFix 1.13 for Windows",0x10);
 }
 static int sibling_path(WCHAR out[PATH_CAP],const WCHAR *name){
     U32 n=0,last=0,i;

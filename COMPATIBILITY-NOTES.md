@@ -1,4 +1,4 @@
-# KPCFix regional findings for game version 1.13
+# KPCFix compatibility notes for game version 1.13
 
 The reference is `KPCFix-region-research-final.tar.gz`, SHA-256 `e6edddf47e9ee8d20c05ef61d8b2c7b29b99ce352d187cbf9a0e7adeeaf76d89`. It contains four disc installations and four installations updated to 1.13. The analysis covered all 40 TXT and CFG files across the eight folders. The per-file hashes are in `verification/reference-files.json`.
 
@@ -46,6 +46,6 @@ The common patch notes list a 1.12 server crash when a jack-in-the-box exploded 
 
 The tests load the shipped DLL and execute original 1.13 x86 routines with mocked Windows, graphics and socket services. They exercise the slider and its stock switch, both cursor images and tooltip bounds, ground movement, fractional animation timing, each of the 13 HUD redirects, the original panel loop, projected inventory counts and the direct-IP address builder. The compiled file reader and SHA-256 accept each stock 1.13 pair. A same-size shell with one altered byte is rejected. The disc files are also exercised as rejected inputs. See `verification/SUMMARY.json` for the per-region results.
 
-Native visual presentation through DDrawCompat, actual mouse feel, Windows launcher execution and live multiplayer between regional server builds remain playtest items.
+Native visual presentation through DDrawCompat, actual mouse feel, Windows launcher execution and live multiplayer between server editions remain playtest items.
 
-The summary and logs under verification/runs are retained from the first regional release and identify its DLL by hash. R2 adds checks for enemy bar geometry, per-region label placement, fullscreen movie placement and the movie filter fallback. The original client is shared across regions. Enemy HUD hooks use the separate shell layouts in profiles.h.
+The summary and logs under verification/runs are retained from the first KPCFix release and identify its DLL by hash. R2 adds checks for enemy bar geometry, edition-specific label placement, fullscreen movie placement and the movie filter fallback. The original client is shared across regions. Enemy HUD hooks use the separate shell layouts in profiles.h.
