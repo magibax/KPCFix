@@ -19,7 +19,7 @@ This is a design investigation, separate from the three-position R1M2B spawn tri
 - The current opt-in `[Coop] TraceCampaign=1` instrumentation in `server-tools/server-tools-source/src/proxy.c` observes the original startup lookup callsite at RVA `0x1045b1`, logging the path and whether the lookup returns an object, and observes entry into the mode-gated exit handler. It leaves native decisions intact. **A successful lookup does not prove dispatch, execution or completion of the cinematic.** Absence of an exit-handler trace does not prove that the exit handler is the failing component; the event may never have reached it.
 - The existing client-side `source/src/cinematic.c` handles fullscreen movie aspect ratio/blitting. It is not an implemented network synchronisation layer for the in-engine `starting_cinematic` script.
 
-Related work: [co-op README](README.md), [world/object survey](SPAWN-FINDINGS.md), [spawn ABI research](SPAWN-ENGINE-TRACE.md), and [issue #8](https://github.com/magibax/KPCFix/issues/8).
+Related work: [co-op roadmap](README.md), [world/object survey](SPAWN-FINDINGS.md), [spawn ABI research](SPAWN-ENGINE-TRACE.md), and [allocator integration](GENERAL-ALLOCATOR.md).
 
 ### Unknowns requiring evidence
 
