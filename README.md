@@ -37,7 +37,15 @@ For a 165 FPS cap, use `FpsLimiter = flipend(165)`. If a scripted sequence misbe
 
 ## Host a multiplayer game
 
-Run `Start-KPC-Server-Windows.cmd` from your patched game folder. It starts a four-player deathmatch on a random map from PM01–PM10. Connect using the host’s IP address and UDP port **42972**. Edit `kpc-lan.cfg` to change the rules.
+[Download KPCFix Server Tools](https://github.com/magibax/KPCFix/releases/tag/server-tools-v0.1.0) and extract its contents into the game directory beside `Psycho.exe`, `dedicated.exe` and `object.lto`.
+
+1. To enable the optional client cheats, close the game and server, then run **`Enable-ServerCheats.cmd`**. This patches the host’s `object.lto` to allow per-player invulnerability and noclip. Clients need `Developer=1` and their chosen developer key bindings. This step is unnecessary if you only want the graphical launcher.
+2. Run **`KPC-Server-Launcher.cmd`** to open the graphical UI. Select the map and adjust the server name, port, player count, frag/time limits, teamplay, item retention, FOV changes and starting weapons/armour.
+3. Start the server and connect using the host’s IP address and selected UDP port (default **42972**).
+
+All 59 maps can be selected, including campaign maps, realm introductions and the tutorial. **Campaign maps may be buggy in multiplayer** due to missing multiplayer spawn points, unsupported entities or scripts; this does not add campaign co-op.
+
+The launcher uses its own generated configuration and leaves `server.cfg` untouched. To undo the cheat patch, close the game and server and run **`Disable-ServerCheats.cmd`**, which restores the original `object.lto`. These scripts currently require a restart; live cheat controls are not yet implemented.
 
 See the [game compatibility notes](COMPATIBILITY-NOTES.md) for build details. KPCFix uses the [MIT license](LICENSE). The Windows release includes [DDrawCompat 0.7.2](https://github.com/narzoul/DDrawCompat) under its [0BSD license](LICENSES/DDrawCompat-0BSD.txt).
 
