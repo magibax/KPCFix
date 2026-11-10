@@ -11,7 +11,7 @@ KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high f
 ## Install the Windows client
 
 1. Patch a clean installation of your game to **1.13**, then close the game and launcher. Back up any existing local DLLs or INIs you are replacing.
-2. [Download the Windows client R4 ZIP](https://github.com/magibax/KPCFix/releases/download/kpcfix-1.13-r4/KPCFix-Windows-1.13.zip). Extract its contents beside `Psycho.exe`, usually in `C:\Games\Psycho\`.
+2. [Download the Windows client ZIP](https://github.com/magibax/KPCFix/releases/download/kpcfix-1.13-r4/KPCFix-Windows-1.13.zip). Extract its contents beside `Psycho.exe`, usually in `C:\Games\Psycho\`.
 3. Before launching the game, run `Check-KPCVersion.cmd` from that folder. Continue only if it reports **PASS** and identifies your region as a supported official 1.13 build.
 4. **Recommended for the first launch after patching:** run `Launch-KPCFix.cmd`. It applies the initial KPCFix setup and opens the shipped `Psycho.exe` launcher. In the launcher, open **Display** and choose your desired resolution. Start the game and save/select a profile with that same resolution. The initial preset is **1920×1080, 60 FPS, VSync on**.
 5. After that first setup, once the desired resolution is saved in both the launcher and your game profile, you can start the game directly with the shipped `Psycho.exe`. Run `Check-KPCVersion.cmd` again after replacing or repatching game files. Keyboard bindings are yours to configure in the game.
