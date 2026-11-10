@@ -52,6 +52,6 @@ Lobby/ready-up UI, synchronized films, scripted triggers, shared pickups, saves,
 
 ## Next live test
 
-Verify a player-sized clearance query against known open and blocked positions. Keep the trial at three clients and restart before reusing slots until authoritative departure and world-reset events are verified. See [allocator integration](GENERAL-ALLOCATOR.md).
+Run the read-only volume evidence gate on open and obstructed positions, then verify native full-hull and active-actor clearance. Keep the trial at three clients and restart before reusing slots until authoritative departure and world-reset events are verified. See [allocator integration](GENERAL-ALLOCATOR.md).
 
 [Issue #8](https://github.com/magibax/KPCFix/issues/8) tracks clearance, reconnect, map transitions and Windows regression tests for the integrated build.

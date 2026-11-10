@@ -68,3 +68,17 @@ Two distinct player handles were placed at the original anchor. The diagnostic r
 2. Add a strictly read-only diagnostic pass to log candidate acceptance/rejection, initially on R1M2B against the three known good positions and at least one deliberately blocked location.
 3. Only after that diagnostic has passed independently, replace the current three fixed positions with `coop_allocator_assign` using the verified engine probe.
 4. Integrate authoritative disconnect/map-reset notifications, then regression-test ordinary deathmatch and the untouched server mode.
+
+## Read-only player-volume evidence gate
+
+`server-tools/server-tools-source/src/coop_volume_probe.h` defines a fail-closed evidence policy, exercised by `test_coop_volume_probe.c` and the CI-built Windows diagnostic. With `TracePlayerClearance=1`, the server logs `[KPCFix Co-op] volume gate=...` for three known navigable R1M2B positions and an obstructed wall control. **No position is changed or approved for automatic spawning.**
+
+| Inputs | Result |
+| --- | --- |
+| Positive body ray hit or verified native overlap | `BLOCKED` |
+| Ground hit and ray misses, but native hull/active-actor results unknown | `UNSUPPORTED` |
+| Valid ground/bounds plus *independently verified native full-volume AND active-actor clearance* | `SAFE` (synthetic policy test only, not available in this game adapter) |
+
+Currently the native hull and actor fields remain explicitly UNKNOWN. The three previously live-tested positions should therefore log `UNSUPPORTED`, not `SAFE`; the wall-crossing control should log `BLOCKED`. Floor-gap and slope constraints are provisional (32 world units, normal Y 0.70) and do not prove absence of hazards or scripted conflicts.
+
+**Next research:** Use matching original 1.13 binaries to find a *read-only* box/hull world intersection or sweep. Establish calling convention, ECX receiver, return layout, flags and two original callsites before invoking any newly identified API. Test positive controls (wall at X=1664 and a blocker fully enclosed in the body that the sampling rays miss), three open controls, and active-player overlap. The proven `IntersectSegment` +0x90 API performs line tests; +0x104 returns object bounds; the nearby-object routine at RVA 0xf10c0 handles telefrag contacts, not general world-hull clearance. The general allocator remains disconnected.

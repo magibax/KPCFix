@@ -1,4 +1,4 @@
-name: Experimental co-op collision query differential test
+name: Experimental co-op player-volume evidence gate
 
 on:
   push:
@@ -32,6 +32,12 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
             server-tools/server-tools-source/tests/test_coop_allocator.c -o /tmp/kpc-coop-allocator-test
           /tmp/kpc-coop-allocator-test
+      - name: Fail-closed player-volume evidence gate unit tests
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_volume_probe.c -o /tmp/kpc-volume-gate-test
+          /tmp/kpc-volume-gate-test
       - name: Verify legacy LithTech IntersectSegment ABI structs
         shell: bash
         run: |
@@ -63,62 +69,34 @@ jobs:
           mkdir -p dist
           cp server-tools/KPCServerTools.dll server-tools/SERVER_TOOLS_BUILD.json dist/
           cat > dist/TEST-INSTRUCTIONS.txt <<'TXT'
-          KPCFIX CO-OP INTERSECTSEGMENT DIFFERENTIAL TEST - EXPERIMENTAL
-          Branch: feature/coop-campaign. Not a stable release.
+          EXPERIMENTAL KPCFIX CO-OP PLAYER-VOLUME GATE TEST
+          Not a stable release. No automatic spawning or collision edits.
 
-          Earlier test found hit=0 at ALL THREE navigable R1M2B spawns.
-          Disassembly of the game's original object.lto at RVA 0xf2f7c
-          proves it writes WORD 0x6003 to query+0x30. Our old diagnostic
-          left that 16-bit field zero. Its meaning is still unknown.
-          This build compares FOUR read-only probes at each known spawn:
+          Back up server.dll, KPCServerTools.dll, SERVER_TOOLS_BUILD.json
+          and KPCServerTools.ini. With the dedicated server stopped,
+          copy this artifact's DLL and JSON, run Setup-KPCServerTools.cmd.
 
-          mode 0: flags=5, +0x30=0,      from Y+64  to Y-256 (old control)
-          mode 1: flags=5, +0x30=0x6003, from Y+64  to Y-256 (native word)
-          mode 2: flags=4, +0x30=0x6003, from Y+64  to Y-256 (world only)
-          mode 3: flags=5, +0x30=0x6003, from Y+192 to Y-2048 (long ray)
+          Use KPCServerTools.ini:
+            [ServerTools]
+            Enabled=1
+            AllowCheats=0
 
-          At most 12 read-only segment queries total (4 * 3 spawns).
-          Hit=1 alone DOES NOT certify a full player body can fit.
+            [Coop]
+            TracePlayerClearance=1
+            TrialSeparateSpawns=0
+            TraceCollisionABI=0
 
-          INSTALL
-          1. Close the dedicated server and game.
-          2. Back up server.dll, KPCServerTools.dll,
-             SERVER_TOOLS_BUILD.json and KPCServerTools.ini.
-          3. Extract KPCServerTools.dll and SERVER_TOOLS_BUILD.json to
-             the game folder; do not overwrite original server DLL/map.
-          4. Run your existing Setup-KPCServerTools.cmd.
-          5. In KPCServerTools.ini use:
-               [ServerTools]
-               Enabled=1
-               AllowCheats=0
+          Load worlds\\realm1\\R1M2B with maxclients=2, join once
+          with ONE client, inspect KPCServerTools.log:
+          Three navigable candidates should give volume gate=UNSUPPORTED.
+          The deliberately obstructed wall should give volume gate=BLOCKED.
+          Send all candidate/floor/body/volume gate log lines.
 
-               [Coop]
-               TrialSeparateSpawns=1
-               TraceSpawns=1
-               TraceCollisionABI=1
-
-          TEST
-          1. Set maxclients=3 and load worlds\\realm1\\R1M2B.
-          2. Connect no more than three clients once each.
-          3. Confirm all three players can move and survive normally.
-          4. Upload all [KPCFix Co-op] ray m=... log lines, and
-             [KPCFix Co-op] ray+ m=... details if any hit.
-          5. Stop testing if a client/server crashes or hangs.
-
-          FOR SAFETY
-          - This is strictly a private three-client test build, not a
-            universal spawn or collision fix.
-          - The existing hard-coded positions are unchanged.
-          - It does not modify the engine's collisions or telefragging.
-          - Turn TraceCollisionABI=0 and restart to disable extra rays.
-          - Never test a fourth player or reconnect with new object
-            pointers after all three trial slots have been filled.
-
-          ROLLBACK
-          Stop server and restore ALL four backed-up files including
-          the old working server.dll. Do NOT replace only the build
-          manifest and re-run setup: the previous manifest may reject
-          the experimental DLL hash.
+          This test only detects positive obstructions and verifies that
+          unknown hull or actor clearance is never marked SAFE.
+          It does not prove arbitrary full-body clearance.
+          Disable TracePlayerClearance and restart to stop tracing.
+          Roll back all backed-up files (including server.dll) if needed.
 
           No original proprietary game binaries or maps are included.
           TXT
@@ -138,7 +116,7 @@ jobs:
       - name: Upload local-test files
         uses: actions/upload-artifact@v4
         with:
-          name: KPCFix-Coop-CollisionABI-Differential-Test
+          name: KPCFix-Coop-Player-Volume-Gate-Test
           path: dist/
           if-no-files-found: error
           retention-days: 14

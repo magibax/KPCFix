@@ -3,6 +3,7 @@
 #include "runtime_data.h"
 #include "coop_spawn.h"
 #include "coop_intersect_abi.h"
+#include "coop_volume_probe.h"
 extern HANDLE WINAPI GetStdHandle(DWORD);
 extern void WINAPI ExitProcess(UINT) __attribute__((noreturn));
 extern DWORD WINAPI VirtualQuery(const void *,void *,DWORD);
@@ -202,15 +203,26 @@ static int world_segment(KpcIntersectFn intersect,KpcIntersectVec from,KpcInters
 
 /* Sample horizontal cross sections at three heights. An intersection is
  * evidence of obstruction. Misses leave unsampled space unknown. */
+/* Ray samples provide positive obstruction evidence only. Full-hull and
+ * active-actor clearance are UNKNOWN until their native ABI is verified. */
 static void sample_candidate(KpcIntersectFn intersect,KpcIntersectVec center,KpcIntersectVec lo,KpcIntersectVec hi){
  KpcIntersectVec floor_end=center;
  KpcIntersectInfo hit={0};
+ CoopVolumeObservation o={0};
+ CoopVec3 candidate={center.x,center.y,center.z};
  float levels[]={lo.y+1.f,(lo.y+hi.y)*0.5f,hi.y-1.f};
  unsigned level;
  int blocked=0;
+ o.bounds_min=(CoopVec3){lo.x,lo.y,lo.z};
+ o.bounds_max=(CoopVec3){hi.x,hi.y,hi.z};
+ o.world_hull=COOP_VOLUME_UNKNOWN;
+ o.other_actors=COOP_VOLUME_UNKNOWN;
  log_vector("candidate",center);
  floor_end.y-=256.f;
  if(world_segment(intersect,center,floor_end,&hit)){
+  o.ground_hit=1;
+  o.ground_point=(CoopVec3){hit.point.x,hit.point.y,hit.point.z};
+  o.ground_normal=(CoopVec3){hit.plane.normal.x,hit.plane.normal.y,hit.plane.normal.z};
   log_vector("floor",hit.point);
   log_vector("floor normal",hit.plane.normal);
  }else log_file("[KPCFix Co-op] floor missed");
@@ -226,8 +238,13 @@ static void sample_candidate(KpcIntersectFn intersect,KpcIntersectVec center,Kpc
   blocked|=world_segment(intersect,b,a,&hit);
  }
  log_file(blocked?"[KPCFix Co-op] body sample=obstructed":"[KPCFix Co-op] body sample=no sampled hit");
+ o.sampled_body_hit=blocked;
+ {CoopProbeResult verdict=coop_volume_assess(&candidate,&o);
+  log_file(verdict==COOP_PROBE_BLOCKED?"[KPCFix Co-op] volume gate=BLOCKED":
+    verdict==COOP_PROBE_SAFE?"[KPCFix Co-op] volume gate=SAFE":
+    "[KPCFix Co-op] volume gate=UNSUPPORTED (full hull/actors unverified)");
+ }
 }
-
 static void trace_clearance(U32 *engine,void *object){
  U32 *vtable=(U32 *)engine[0];
  KpcIntersectFn intersect=(KpcIntersectFn)engine[KPC_INTERSECT_SERVER_SLOT/4];
