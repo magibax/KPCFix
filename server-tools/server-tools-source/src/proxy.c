@@ -1,6 +1,13 @@
 #include "winmini.h"
 #include "sha256.h"
 #include "runtime_data.h"
+#include "coop_spawn.h"
+#include "coop_intersect_abi.h"
+#include "coop_volume_probe.h"
+#include "coop_bsp_box.h"
+#include "coop_model_registry.h"
+#include "coop_aabb_overlap.h"
+#include "coop_model_state.h"
 extern HANDLE WINAPI GetStdHandle(DWORD);
 extern void WINAPI ExitProcess(UINT) __attribute__((noreturn));
 extern DWORD WINAPI VirtualQuery(const void *,void *,DWORD);
@@ -93,12 +100,592 @@ static int trim_spawn_warning(U8 *b){
 
 /* Preserve the code already tested in object.lto, but install only loaded-memory
  * code/data edits. PE headers and relocation tables are never patched here. */
+
+/* Co-op research: opt-in, read-only observation of the original player-spawn
+ * position setter. This callsite is inside the *original* 1.13 object image;
+ * guard the original bytes before installing the redirect. */
+#define SPAWN_POS_CALL_RVA 0x0f13c4u
+#define SPAWN_PREPARE_CALL_RVA 0x0f13a4u
+#define SPAWN_PREPARE_TARGET_RVA 0x0f10c0u
+#define SPAWN_POS_GLOBAL_RVA 0x16de80u
+static const U8 original_spawn_pos_call[6]={0xff,0x91,0xe0,0x01,0x00,0x00};
+static const U8 original_prepare_call[5]={0xe8,0x17,0xfd,0xff,0xff};
+typedef void (CDECL *SpawnSetPos)(void *,const U32 *);
+static U8 *spawn_image;
+static int spawn_trace_enabled,spawn_separation_enabled,collision_trace_enabled;
+static volatile U32 spawn_trace_count,collision_trace_count;
+#define COLLISION_FILTER_RVA 0x102730u
+#define COLLISION_DIAG_LIMIT 3u /* at most 3 known player locations */
+typedef U8 (CDECL *KpcIntersectFn)(const KpcIntersectQuery *,KpcIntersectInfo *);
+static float collision_float(U32 bits){union{U32 bits;float value;}u;u.bits=bits;return u.value;}
+static U32 collision_bits(float value){union{U32 bits;float value;}u;u.value=value;return u.bits;}
+
+static int clearance_enabled,bsp_volume_enabled,model_registry_enabled,model_state_enabled;
+static const U8 bsp_original_hash[32]={0x83,0xb7,0xbc,0xe8,0x09,0x94,0x8b,0x6f,0x70,0xed,0x3f,0x35,0xa7,0x7a,0x77,0x1b,0x60,0x87,0xf1,0x10,0x4d,0x90,0xd0,0x6a,0x62,0xac,0x3d,0xc0,0xd4,0xbd,0x37,0xd5};
+static volatile U32 clearance_started;
+static CoopSpawnReservations spawn_trial_reservations;
+static void trace_append(char *out,U32 *n,const char *s){
+ while(*s&&*n<115)out[(*n)++]=*s++;
+}
+static void trace_hex(char *out,U32 *n,U32 value){
+ static const char hex[]="0123456789abcdef";int i;
+ trace_append(out,n,"0x");
+ for(i=7;i>=0&&*n<115;i--)out[(*n)++]=hex[(value>>(i*4))&15u];
+}
+/* Evidence from original object.lto RVA f2fae/f2fb4:
+ * API slot +0x90, two stack pointer args, 8-byte caller cleanup, bool in AL.
+ * Original callback at +0x102730 filters the supplied user object.
+ * Diagnostic only: a downward RAY is NOT a player collision-volume test.
+ * Each test leaves all player transforms and engine game state unchanged.
+ */
+/* Four carefully bounded, read-only queries at each of the three known
+ * R1M2B positions. Mode 0 reproduces our live-tested all-zero +0x30 control;
+ * modes 1-3 vary the previously omitted original query word and flags/range.
+ * The original game at RVA f2f7c writes 0x6003 to query+0x30, so retaining
+ * that control comparison identifies whether its omission caused hit=0.
+ * Even a hit is NOT sufficient to approve a player-sized spawn position. */
+static void diagnostic_intersect_segment(const U32 *object_pos,void *object){
+ U32 *engine;
+ U32 mode;
+ float x=collision_float(object_pos[0]),y=collision_float(object_pos[1]),z=collision_float(object_pos[2]);
+ engine=spawn_image?*(U32 **)(spawn_image+SPAWN_POS_GLOBAL_RVA):0;
+ if(!engine||!engine[KPC_INTERSECT_SERVER_SLOT/4]){
+  log_file("[KPCFix Co-op] ABI segment unavailable (no engine pointer).");
+  return;
+ }
+ for(mode=0;mode<4;mode++){
+  KpcIntersectQuery query={0};
+  KpcIntersectInfo hit={0};
+  U8 result;
+  char line[116];U32 n=0;
+  query.from.x=x;query.from.y=y+(mode==3?192.f:64.f);query.from.z=z;
+  query.to.x=x;query.to.y=y-(mode==3?2048.f:256.f);query.to.z=z;
+  query.flags=(mode==2)?KPC_INTERSECT_HPOLY:(KPC_INTERSECT_OBJECTS|KPC_INTERSECT_HPOLY);
+  query.object_filter=(U32)(spawn_image+COLLISION_FILTER_RVA);
+  query.filter_userdata=(U32)object;
+  query.legacy_word_30=(unsigned short)(mode==0?0:KPC_INTERSECT_ORIGINAL_WORD_30);
+  result=((KpcIntersectFn)engine[KPC_INTERSECT_SERVER_SLOT/4])(&query,&hit);
+  trace_append(line,&n,"[KPCFix Co-op] ray m=");
+  if(n<115)line[n++]=(char)('0'+mode);
+  trace_append(line,&n," flags=");
+  if(n<115)line[n++]=(char)('0'+query.flags);
+  trace_append(line,&n," ext=");trace_hex(line,&n,query.legacy_word_30);
+  trace_append(line,&n," z=");trace_hex(line,&n,object_pos[2]);
+  trace_append(line,&n," hit=");
+  if(n<115)line[n++]=result?'1':'0';
+  line[n]=0;log_file(line);
+  if(result){
+   n=0;
+   trace_append(line,&n,"[KPCFix Co-op] ray+ m=");
+   if(n<115)line[n++]=(char)('0'+mode);
+   trace_append(line,&n," y=");trace_hex(line,&n,collision_bits(hit.point.y));
+   trace_append(line,&n," ny=");trace_hex(line,&n,collision_bits(hit.plane.normal.y));
+   trace_append(line,&n," obj=");trace_hex(line,&n,hit.hit_object);
+   trace_append(line,&n," surf=");trace_hex(line,&n,hit.surface_flags);
+   line[n]=0;log_file(line);
+  }
+ }
+}
+/* Original overlap code at 0xf1157 supplies ECX=this and pushes upper,
+ * lower, HOBJECT. The callee pops its three stack arguments. */
+typedef void (__attribute__((thiscall)) *ReadBounds)(void *,void *,KpcIntersectVec *,KpcIntersectVec *);
+
+static void log_vector(const char *label,KpcIntersectVec v){
+ char line[116];U32 n=0;
+ trace_append(line,&n,"[KPCFix Co-op] ");trace_append(line,&n,label);
+ trace_append(line,&n," x=");trace_hex(line,&n,collision_bits(v.x));
+ trace_append(line,&n," y=");trace_hex(line,&n,collision_bits(v.y));
+ trace_append(line,&n," z=");trace_hex(line,&n,collision_bits(v.z));
+ line[n]=0;log_file(line);
+}
+
+static int world_segment(KpcIntersectFn intersect,KpcIntersectVec from,KpcIntersectVec to,KpcIntersectInfo *info){
+ KpcIntersectQuery q={0};
+ q.from=from;q.to=to;q.flags=KPC_INTERSECT_HPOLY;
+ q.legacy_word_30=KPC_INTERSECT_ORIGINAL_WORD_30;
+ return intersect(&q,info)!=0;
+}
+
+
+/* Experimental, opt-in, read-only BASE WORLD BSP volume differential.
+ * The original 1.13 server DLL is hash-gated at initialize(). Pointer
+ * provenance was recovered from its GetPointStatus wrapper at +0x2440a.
+ * No code is patched here and no transforms or objects are modified.
+ * Not a complete world-hull probe: movable models/actors are outside scope.
+ */
+static int bsp_mem_readable(U32 addr,U32 size){
+ U32 m[7],base,extent,protect;
+ if(!addr||!size||addr>0xffffffffu-size)return 0;
+ if(VirtualQuery((const void *)addr,m,sizeof(m))!=sizeof(m))return 0;
+ base=m[0];extent=m[3];protect=m[5];
+ if(m[4]!=0x1000u||(protect&0x100u)||size>extent||
+    addr<base||addr-base>extent-size)return 0;
+ protect&=0xffu;
+ return protect==0x02u||protect==0x04u||protect==0x08u||
+        protect==0x20u||protect==0x40u||protect==0x80u;
+}
+static int bsp_read_native(void *ctx,unsigned int address,CoopBspNode *out){
+ const U32 *node;
+ U32 plane_addr;
+ const float *plane;
+ (void)ctx;
+ if(!out||!bsp_mem_readable(address,4))return 0;
+ node=(const U32 *)address;
+ out->flags=node[0];
+ out->child_neg=out->child_pos=0;
+ out->normal=(CoopBspVec){0.f,0.f,0.f};out->distance=0.f;
+ if(out->flags&3u)return 1;
+ if(!bsp_mem_readable(address,0x34))return 0;
+ plane_addr=node[0x08/4];
+ if(!bsp_mem_readable(plane_addr,0x10))return 0;
+ plane=(const float *)plane_addr;
+ out->normal=(CoopBspVec){plane[0],plane[1],plane[2]};
+ out->distance=plane[3];
+ out->child_neg=node[0x2c/4];
+ out->child_pos=node[0x30/4];
+ return out->child_neg!=0u&&out->child_pos!=0u;
+}
+static CoopBspResult bsp_probe_base_world(KpcIntersectVec centre,
+ KpcIntersectVec lo,KpcIntersectVec hi,U32 *nodes,U32 *root_out){
+ U32 manager,shared,world,root;
+ CoopBspBox candidate;
+ const U32 global_ptr=(U32)backend+0x4a250u;
+ if(root_out)*root_out=0;
+ if(nodes)*nodes=0;
+ if(!backend||!bsp_volume_enabled||
+    !bsp_mem_readable(global_ptr,4))return COOP_BSP_UNKNOWN;
+ manager=*(const U32 *)global_ptr;
+ if(!bsp_mem_readable(manager+0x19cu,4))return COOP_BSP_UNKNOWN;
+ shared=*(const U32 *)(manager+0x19cu);
+ if(!bsp_mem_readable(shared+0x08u,4))return COOP_BSP_UNKNOWN;
+ world=*(const U32 *)(shared+0x08u);
+ if(!bsp_mem_readable(world+0x44u,4))return COOP_BSP_UNKNOWN;
+ root=*(const U32 *)(world+0x44u);
+ if(!bsp_mem_readable(root,4))return COOP_BSP_UNKNOWN;
+ if(root_out)*root_out=root;
+ candidate.min=(CoopBspVec){centre.x+lo.x,centre.y+lo.y,centre.z+lo.z};
+ candidate.max=(CoopBspVec){centre.x+hi.x,centre.y+hi.y,centre.z+hi.z};
+ return coop_bsp_box_classify(&candidate,root,bsp_read_native,0,nodes);
+}
+static void bsp_log_box(KpcIntersectVec centre,KpcIntersectVec lo,KpcIntersectVec hi){
+ U32 nodes=0,root=0,n=0;
+ char msg[116];
+ CoopBspResult status=bsp_probe_base_world(centre,lo,hi,&nodes,&root);
+ trace_append(msg,&n,"[KPCFix Co-op] base BSP box=");
+ if(status==COOP_BSP_INTERIOR_ONLY)trace_append(msg,&n,"INTERIOR_ONLY");
+ else if(status==COOP_BSP_TOUCHES_CLASS_ZERO)trace_append(msg,&n,"TOUCHES_CLASS_ZERO");
+ else trace_append(msg,&n,"UNKNOWN");
+ trace_append(msg,&n," nodes=");trace_hex(msg,&n,nodes);
+ trace_append(msg,&n," root=");trace_hex(msg,&n,root);
+ msg[n]=0;log_file(msg);
+}
+
+
+/* Named model RESOURCE registry; never identifies solid/live occupancy.
+ * The exact original DLL hash is required before this path is enabled.
+ * Native named-model lookup 0x10008f69 walks a sentinel list at +0xb0.
+ * No native callback is invoked; all dereferences are VirtualQuery guarded.
+ */
+static int registry_read32(void *ctx,unsigned int address,unsigned int *out){
+ (void)ctx;
+ if(!out||!bsp_mem_readable(address,4))return 0;
+ *out=*(const U32 *)address;return 1;
+}
+typedef struct {
+ CoopAabb player;
+ U32 disjoint,overlap,unknown;
+} ModelOverlapSurvey;
+
+static int read_spatial_box(U32 object,CoopModelRead32 read,void *ctx,CoopAabb *box){
+ float coords[6];
+ for(U32 i=0;i<6;i++){
+  U32 bits;
+  if(!coop_model_read_offset(read,ctx,object,0xacu+4*i,&bits))return 0;
+  coords[i]=collision_float(bits);
+ }
+ box->min=(CoopVec3){coords[0],coords[1],coords[2]};
+ box->max=(CoopVec3){coords[3],coords[4],coords[5]};
+ return coop_aabb_valid(box);
+}
+
+/* Inspect the same object boxes passed by the native spatial visitor. */
+static void observe_model_box(void *user,U32 entry,U32 model,U32 object,
+ int matched,CoopModelRead32 read,void *ctx){
+ ModelOverlapSurvey *survey=user;
+ CoopAabb box;
+ (void)entry;(void)model;
+ if(!matched||!read_spatial_box(object,read,ctx,&box)){survey->unknown++;return;}
+ switch(coop_aabb_overlap(&survey->player,&box,0.f)){
+  case COOP_AABB_OVERLAP:survey->overlap++;break;
+  case COOP_AABB_DISJOINT:survey->disjoint++;break;
+  default:survey->unknown++;break;
+ }
+}
+
+/* Original spawn preparation traverses selector zero at object.lto
+ * 0xf1120 and 0xf1285. Use a private cursor: the original iterators
+ * write manager+0xc and therefore cannot be nested in a diagnostic. */
+static void survey_spawn_list(const CoopAabb *candidate,U32 player){
+ CoopAabb box;
+ U32 manager,node,seen=0,own=0,overlap=0,unknown=0,n=0;
+ char line[116];
+ CoopAabbResult self=read_spatial_box(player,registry_read32,0,&box)?
+  coop_aabb_overlap(candidate,&box,0.f):COOP_AABB_UNKNOWN;
+ log_file(self==COOP_AABB_OVERLAP?"[KPCFix Co-op] player control=OVERLAP":
+          self==COOP_AABB_DISJOINT?"[KPCFix Co-op] player control=DISJOINT":
+          "[KPCFix Co-op] player control=UNKNOWN");
+ if(!coop_model_read_offset(registry_read32,0,(U32)spawn_image,0x157724,&manager)||
+    !coop_model_read_offset(registry_read32,0,manager,4,&node))goto incomplete;
+ while(node){
+  U32 handle,next;
+  if(++seen>1024||!registry_read32(0,node,&handle)||
+     !coop_model_read_offset(registry_read32,0,node,4,&next))goto incomplete;
+  if(handle==player)own++;
+  else if(!read_spatial_box(handle,registry_read32,0,&box))unknown++;
+  else if(coop_aabb_overlap(candidate,&box,0.f)==COOP_AABB_OVERLAP)overlap++;
+  node=next;
+ }
+ trace_append(line,&n,"[KPCFix Co-op] spawn list count=");trace_hex(line,&n,seen);
+ trace_append(line,&n," self=");trace_hex(line,&n,own);
+ trace_append(line,&n," otherHits=");trace_hex(line,&n,overlap);
+ trace_append(line,&n," unknown=");trace_hex(line,&n,unknown);
+ line[n]=0;log_file(line);return;
+incomplete:
+ log_file("[KPCFix Co-op] spawn list=incomplete");
+}
+static void survey_candidate_boxes(U32 player,CoopVec3 center,CoopVec3 lo,CoopVec3 hi){
+ ModelOverlapSurvey survey={0};
+ CoopModelRegistrySnapshot snapshot={0};
+ U32 manager,state,n=0;
+ char line[116];
+ if(!coop_aabb_from_relative(&center,&lo,&hi,&survey.player)||
+    !registry_read32(0,(U32)backend+0x4a250u,&manager)||
+    !coop_model_read_offset(registry_read32,0,manager,0x19cu,&state)||
+    coop_model_registry_scan_visit(state,registry_read32,0,&snapshot,observe_model_box,&survey)!=COOP_MODEL_REGISTRY_TRAVERSED){
+  log_file("[KPCFix Co-op] linked boxes=incomplete");return;
+ }
+ survey_spawn_list(&survey.player,player);
+ trace_append(line,&n,"[KPCFix Co-op] linked boxes overlap=");trace_hex(line,&n,survey.overlap);
+ trace_append(line,&n," disjoint=");trace_hex(line,&n,survey.disjoint);
+ trace_append(line,&n," unknown=");trace_hex(line,&n,survey.unknown);
+ line[n]=0;log_file(line);
+}
+static void registry_trace_loaded(void){
+ const U32 global_ptr=(U32)backend+0x4a250u;
+ U32 manager=0,state=0,n=0;
+ CoopModelRegistrySnapshot snap={0};
+ CoopModelRawState raw={0};
+ CoopModelRegistryStatus verdict=COOP_MODEL_REGISTRY_UNKNOWN;
+ char msg[116];
+ if(model_registry_enabled&&registry_read32(0,global_ptr,&manager)&&
+    registry_read32(0,manager+0x19cu,&state)){
+  if(model_state_enabled)
+   verdict=coop_model_state_scan(state,registry_read32,0,&snap,&raw);
+  else verdict=coop_model_registry_scan(state,registry_read32,0,&snap);
+ }
+ trace_append(msg,&n,"[KPCFix Co-op] model registry=");
+ trace_append(msg,&n,verdict==COOP_MODEL_REGISTRY_TRAVERSED?"TRAVERSED":"UNKNOWN");
+ trace_append(msg,&n," entries=");trace_hex(msg,&n,snap.entries);
+ trace_append(msg,&n," roots=");trace_hex(msg,&n,snap.root_candidates);
+ trace_append(msg,&n," attached=");trace_hex(msg,&n,snap.associated_candidates);
+ msg[n]=0;log_file(msg);
+ n=0;
+ trace_append(msg,&n,"[KPCFix Co-op] model refs matched=");
+ trace_hex(msg,&n,snap.reciprocal_matches);
+ trace_append(msg,&n," mismatch=");trace_hex(msg,&n,snap.reciprocal_mismatches);
+ trace_append(msg,&n," unreadable=");trace_hex(msg,&n,snap.reciprocal_unreadable);
+ msg[n]=0;log_file(msg);
+ if(model_state_enabled){
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] model state=");
+  trace_append(msg,&n,verdict==COOP_MODEL_REGISTRY_TRAVERSED?"TRAVERSED":"UNKNOWN");
+  trace_append(msg,&n," matched=");trace_hex(msg,&n,raw.matched);
+  trace_append(msg,&n," skipped=");trace_hex(msg,&n,raw.skipped_unverified);
+  msg[n]=0;log_file(msg);
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] model types type2=");
+  trace_hex(msg,&n,raw.type_2);
+  trace_append(msg,&n," type1=");trace_hex(msg,&n,raw.type_1);
+  trace_append(msg,&n," other=");trace_hex(msg,&n,raw.type_other);
+  trace_append(msg,&n," unread=");trace_hex(msg,&n,raw.type_unreadable);
+  msg[n]=0;log_file(msg);
+  n=0;
+  {
+   unsigned i;
+   for(i=0;i<16u;i++){
+    if(!raw.type_hist[i])continue;
+    n=0;
+    trace_append(msg,&n,"[KPCFix Co-op] model type bucket=");
+    trace_hex(msg,&n,i);
+    trace_append(msg,&n," count=");trace_hex(msg,&n,raw.type_hist[i]);
+    msg[n]=0;log_file(msg);
+   }
+   if(raw.type_outside_hist){
+    n=0;
+    trace_append(msg,&n,"[KPCFix Co-op] model type bucket=OUTSIDE_0_TO_15 count=");
+    trace_hex(msg,&n,raw.type_outside_hist);
+    msg[n]=0;log_file(msg);
+   }
+  }
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] type2 masks any12000=");
+  trace_hex(msg,&n,raw.type2_flags_any12000);
+  trace_append(msg,&n," none=");trace_hex(msg,&n,raw.type2_flags_none12000);
+  trace_append(msg,&n," bit4000=");trace_hex(msg,&n,raw.type2_flags_4000);
+  msg[n]=0;log_file(msg);
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] other masks any12000=");
+  trace_hex(msg,&n,raw.other_flags_any12000);
+  trace_append(msg,&n," none=");trace_hex(msg,&n,raw.other_flags_none12000);
+  trace_append(msg,&n," bit4000=");trace_hex(msg,&n,raw.other_flags_4000);
+  msg[n]=0;log_file(msg);
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] model flags 2000=");
+  trace_hex(msg,&n,raw.flags_2000);
+  trace_append(msg,&n," 10000=");trace_hex(msg,&n,raw.flags_10000);
+  trace_append(msg,&n," any12000=");trace_hex(msg,&n,raw.flags_any_12000);
+  trace_append(msg,&n," unread=");trace_hex(msg,&n,raw.flags_unreadable);
+  msg[n]=0;log_file(msg);
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] model vectors equal=");
+  trace_hex(msg,&n,raw.init_vector_equal);
+  trace_append(msg,&n," changed=");trace_hex(msg,&n,raw.init_vector_different);
+  trace_append(msg,&n," unread=");trace_hex(msg,&n,raw.init_vector_unreadable);
+  msg[n]=0;log_file(msg);
+  {
+   unsigned i,j;
+   for(i=0;i<raw.sample_count;i++){
+    const CoopModelVectorSample *sample=&raw.samples[i];
+    n=0;
+    trace_append(msg,&n,"[KPCFix Co-op] model delta object=");
+    trace_hex(msg,&n,sample->object);
+    trace_append(msg,&n," record=");trace_hex(msg,&n,sample->resource);
+    trace_append(msg,&n," type=");trace_hex(msg,&n,sample->type);
+    trace_append(msg,&n," flags=");trace_hex(msg,&n,sample->flags);
+    msg[n]=0;log_file(msg);
+    for(j=0;j<2;j++){
+     const U32 *v=j?sample->object_vector:sample->model_vector;
+     n=0;
+     trace_append(msg,&n,j?"[KPCFix Co-op] model vector current":"[KPCFix Co-op] model vector source");
+     trace_append(msg,&n," x=");trace_hex(msg,&n,v[0]);
+     trace_append(msg,&n," y=");trace_hex(msg,&n,v[1]);
+     trace_append(msg,&n," z=");trace_hex(msg,&n,v[2]);
+     msg[n]=0;log_file(msg);
+    }
+    n=0;
+    trace_append(msg,&n,"[KPCFix Co-op] model adjacent valid=");
+    trace_hex(msg,&n,sample->adjacent_valid);
+    trace_append(msg,&n," a=");trace_hex(msg,&n,sample->adjacent_object_words[0]);
+    trace_append(msg,&n," b=");trace_hex(msg,&n,sample->adjacent_object_words[1]);
+    trace_append(msg,&n," c=");trace_hex(msg,&n,sample->adjacent_object_words[2]);
+    trace_append(msg,&n," d=");trace_hex(msg,&n,sample->adjacent_object_words[3]);
+    msg[n]=0;log_file(msg);
+    for(j=0;j<2;j++){
+     const U32 *v=&sample->resource_bounds_words[j*3];
+     n=0;
+     trace_append(msg,&n,j?"[KPCFix Co-op] model raw bounds high":"[KPCFix Co-op] model raw bounds low");
+     trace_append(msg,&n," valid=");trace_hex(msg,&n,sample->bounds_valid);
+     trace_append(msg,&n," x=");trace_hex(msg,&n,v[0]);
+     trace_append(msg,&n," y=");trace_hex(msg,&n,v[1]);
+     trace_append(msg,&n," z=");trace_hex(msg,&n,v[2]);
+     msg[n]=0;log_file(msg);
+    }
+   }
+  }
+ }
+ if(snap.first_root){
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] model registry first root=");
+  trace_hex(msg,&n,snap.first_root);
+  trace_append(msg,&n," object=");trace_hex(msg,&n,snap.first_associated);
+  msg[n]=0;log_file(msg);
+ }
+}
+
+/* Sample horizontal cross sections at three heights. An intersection is
+ * evidence of obstruction. Misses leave unsampled space unknown. */
+/* Ray samples provide positive obstruction evidence only. Full-hull and
+ * active-actor clearance are UNKNOWN until their native ABI is verified. */
+static void sample_candidate(U32 player,KpcIntersectFn intersect,KpcIntersectVec center,KpcIntersectVec lo,KpcIntersectVec hi){
+ KpcIntersectVec floor_end=center;
+ KpcIntersectInfo hit={0};
+ CoopVolumeObservation o={0};
+ CoopVec3 candidate={center.x,center.y,center.z};
+ float levels[]={lo.y+1.f,(lo.y+hi.y)*0.5f,hi.y-1.f};
+ unsigned level;
+ int blocked=0;
+ o.bounds_min=(CoopVec3){lo.x,lo.y,lo.z};
+ o.bounds_max=(CoopVec3){hi.x,hi.y,hi.z};
+ o.world_hull=COOP_VOLUME_UNKNOWN;
+ o.other_actors=COOP_VOLUME_UNKNOWN;
+ log_vector("candidate",center);
+ if(model_registry_enabled&&model_state_enabled)survey_candidate_boxes(player,candidate,o.bounds_min,o.bounds_max);
+ floor_end.y-=256.f;
+ if(world_segment(intersect,center,floor_end,&hit)){
+  o.ground_hit=1;
+  o.ground_point=(CoopVec3){hit.point.x,hit.point.y,hit.point.z};
+  o.ground_normal=(CoopVec3){hit.plane.normal.x,hit.plane.normal.y,hit.plane.normal.z};
+  log_vector("floor",hit.point);
+  log_vector("floor normal",hit.plane.normal);
+ }else log_file("[KPCFix Co-op] floor missed");
+ for(level=0;level<3;level++){
+  KpcIntersectVec a=center,b=center;
+  a.y=b.y=center.y+levels[level];
+  a.x+=lo.x;b.x+=hi.x;
+  blocked|=world_segment(intersect,a,b,&hit);
+  blocked|=world_segment(intersect,b,a,&hit);
+  a.x=b.x=center.x;
+  a.z+=lo.z;b.z+=hi.z;
+  blocked|=world_segment(intersect,a,b,&hit);
+  blocked|=world_segment(intersect,b,a,&hit);
+ }
+ log_file(blocked?"[KPCFix Co-op] body sample=obstructed":"[KPCFix Co-op] body sample=no sampled hit");
+ o.sampled_body_hit=blocked;
+ if(bsp_volume_enabled)bsp_log_box(center,lo,hi);
+ {CoopProbeResult verdict=coop_volume_assess(&candidate,&o);
+  log_file(verdict==COOP_PROBE_BLOCKED?"[KPCFix Co-op] volume gate=BLOCKED":
+    verdict==COOP_PROBE_SAFE?"[KPCFix Co-op] volume gate=SAFE":
+    "[KPCFix Co-op] volume gate=UNSUPPORTED (full hull/actors unverified)");
+ }
+}
+static void trace_clearance(U32 *engine,void *object){
+ U32 *vtable=(U32 *)engine[0];
+ KpcIntersectFn intersect=(KpcIntersectFn)engine[KPC_INTERSECT_SERVER_SLOT/4];
+ KpcIntersectVec lo={0},hi={0},anchor={1600.f,-256.f,-2944.f};
+ static const int directions[][2]={{1,0},{-1,0},{0,1},{0,-1}};
+ unsigned i;
+ if(!object||!vtable||!vtable[0x104/4]||!intersect){
+  log_file("[KPCFix Co-op] bounds or segment API unavailable");return;
+ }
+ ((ReadBounds)vtable[0x104/4])(engine,object,&lo,&hi);
+ log_vector("bounds min",lo);log_vector("bounds max",hi);
+ if(model_registry_enabled)registry_trace_loaded();
+ else log_file("[KPCFix Co-op] model registry=DISABLED (check effective KPCServerTools.ini; restart)");
+ if(!(lo.x<0&&lo.y<-1&&lo.z<0&&hi.x>0&&hi.y>1&&hi.z>0&&
+      lo.x>=-128&&lo.y>=-128&&lo.z>=-128&&hi.x<=128&&hi.y<=128&&hi.z<=128)){
+  log_file("[KPCFix Co-op] bounds outside diagnostic range");return;
+ }
+ for(i=0;i<3;i++){
+  KpcIntersectVec candidate=anchor;
+  if(i==1)candidate.z+=96.f;
+  if(i==2)candidate.z-=96.f;
+  sample_candidate((U32)object,intersect,candidate,lo,hi);
+ }
+ for(i=0;i<4;i++){
+  int dx=directions[i][0],dz=directions[i][1];
+  KpcIntersectVec end=anchor;
+  KpcIntersectInfo hit={0};
+  float reach=dx>0?hi.x:dx<0?-lo.x:dz>0?hi.z:-lo.z;
+  end.x+=512.f*dx;end.z+=512.f*dz;
+  if(world_segment(intersect,anchor,end,&hit)&&
+     hit.plane.normal.x*dx+hit.plane.normal.z*dz < -0.9f){
+   KpcIntersectVec candidate=hit.point;
+   log_vector("wall reference",hit.point);
+   candidate.x-=0.5f*reach*dx;candidate.z-=0.5f*reach*dz;
+   sample_candidate((U32)object,intersect,candidate,lo,hi);
+   return;
+  }
+ }
+ log_file("[KPCFix Co-op] wall control unavailable within 512 units");
+}
+/* The native game call pushes (HOBJECT, LTVector*) and cleans eight bytes
+ * in the caller. Forward it unchanged and only then write an observation. */
+static void CDECL trace_spawn_position(void *object,const U32 *pos){
+ U32 *engine=spawn_image?*(U32 **)(spawn_image+SPAWN_POS_GLOBAL_RVA):0;
+ if(!engine||!engine[0x1e0/4])fatal("[KPCFix Co-op] Missing original position-set API.");
+ ((SpawnSetPos)engine[0x1e0/4])(object,pos);
+ if(clearance_enabled&&coop_is_r1m2b_anchor(pos)&&
+    __sync_bool_compare_and_swap(&clearance_started,0,1))trace_clearance(engine,object);
+ if(pos&&__sync_fetch_and_add(&spawn_trace_count,1)<64){
+  char line[116];U32 n=0;
+  trace_append(line,&n,"[KPCFix Co-op] spawn position obj=");
+  trace_hex(line,&n,(U32)object);
+  trace_append(line,&n," x=");trace_hex(line,&n,pos[0]);
+  trace_append(line,&n," y=");trace_hex(line,&n,pos[1]);
+  trace_append(line,&n," z=");trace_hex(line,&n,pos[2]);
+  line[n]=0;log_file(line);
+ }
+ /* Limit opt-in live ABI tests to three known-good R1M2B coordinates.
+  * The result is logged AFTER the original engine position assignment.
+  * This neither changes spawn positions nor disables telefragging. */
+ if(collision_trace_enabled&&pos&&
+    pos[0]==0x44c80000u&&pos[1]==0xc3800000u&&
+    (pos[2]==0xc5380000u||pos[2]==0xc5320000u||pos[2]==0xc53e0000u)&&
+    __sync_fetch_and_add(&collision_trace_count,1)<COLLISION_DIAG_LIMIT)
+  diagnostic_intersect_segment(pos,object);
+}
+/* RVA f13a4 precedes the engine's nearby-object / telefrag handling.
+ * The callee is a thiscall method (ECX=player, ret 12). Adjust the private
+ * local copy of the spawn vector BEFORE forwarding the original invocation.
+ * This is an experimental trial, not a collision-validated placement API. */
+typedef void (__attribute__((thiscall)) *SpawnPrepareFn)(void *,U32 *,const U32 *,const U32 *);
+static void __attribute__((thiscall)) coop_before_telefrag(void *player,U32 *pos,const U32 *a,const U32 *b){
+ if(spawn_separation_enabled&&coop_is_r1m2b_anchor(pos)){
+  int slot=coop_claim_slot(&spawn_trial_reservations,(U32)player);
+  if(slot>=0){
+   coop_assign_trial_position(pos,slot);
+   if(spawn_trace_count<64){
+    char line[116];U32 n=0;
+    trace_append(line,&n,"[KPCFix Co-op] trial slot=");
+    if(n<115)line[n++]=(char)('0'+slot);
+    trace_append(line,&n," player=");trace_hex(line,&n,(U32)player);
+    trace_append(line,&n," z=");trace_hex(line,&n,pos[2]);
+    line[n]=0;log_file(line);
+   }
+  }else{
+   log_file("[KPCFix Co-op] WARNING: trial full (3 slots). Set maxclients=3; original fallback may telefrag.");
+  }
+ }
+ ((SpawnPrepareFn)(spawn_image+SPAWN_PREPARE_TARGET_RVA))(player,pos,a,b);
+}
+static void make_prepare_call(U8 *out,U8 *site){
+ U32 relative=(U32)coop_before_telefrag-((U32)site+5);
+ out[0]=0xe8;copy(out+1,(const U8 *)&relative,4);
+}
+
+static void make_spawn_call(U8 *out,U8 *site){
+ U32 relative=(U32)trace_spawn_position-((U32)site+5);
+ out[0]=0xe8;copy(out+1,(const U8 *)&relative,4);out[5]=0x90;
+}
+
+static int campaign_trace;
+static U8 *campaign_image;
+
+/* Replace only the native six-byte game-type load. Preserve the receiver,
+ * original registers and flags, then replay the load before returning. */
+static void __attribute__((used,noinline)) campaign_exit_seen(U32 mode){
+ log_file(mode?"[KPCFix Campaign] exit handler reached: multiplayer gate closed":
+               "[KPCFix Campaign] exit handler reached: single-player gate open");
+}
+static void __attribute__((naked)) campaign_exit_load(void){
+ __asm__ volatile("pushfl; pushal; pushl 0x1d0(%eax); call campaign_exit_seen;"
+                  "addl $4,%esp; popal; popfl; movl 0x1d0(%eax),%edx; ret");
+}
+typedef void *(CDECL *CampaignLookup)(const char *);
+static void *CDECL campaign_lookup(const char *path){
+ void *result=((CampaignLookup)(campaign_image+0xc50c0))(path);
+ log_file("[KPCFix Campaign] starting_cinematic lookup");
+ log_file(path);
+ log_file(result?"[KPCFix Campaign] script object found":"[KPCFix Campaign] script lookup returned null");
+ return result;
+}
 static int apply_object(HMODULE module){
- U8 *b=(U8 *)module;U8 hash[32],expected[8];U32 i,j,old,restore,already=1;
+ U8 *b=(U8 *)module;U8 hash[32],expected[8],spawn_call[6],prepare_call[5];U32 i,j,old,restore,already=1;
  U32 mbi[7],delta=(U32)b-0x10000000u;
  if(!module_hash(module,hash)||!same(hash,object_hash,32)||!valid_image(b,0x196000))return 0;
+ make_spawn_call(spawn_call,b+SPAWN_POS_CALL_RVA);
+ make_prepare_call(prepare_call,b+SPAWN_PREPARE_CALL_RVA);
  for(i=0;i<PATCH_COUNT;i++)if(!same(b+patches[i].rva,patches[i].after,patches[i].size))already=0;
+ U8 exit_call[6]={0xe8,0,0,0,0,0x90},intro_call[5]={0xe8};
+ const U8 exit_original[]={0x8b,0x90,0xd0,0x01,0,0},intro_original[]={0xe8,0x0a,0x0b,0xfc,0xff};
+ U32 exit_rel=(U32)campaign_exit_load-(U32)(b+0x2d455+5);
+ U32 intro_rel=(U32)campaign_lookup-(U32)(b+0x1045b1+5);
+ copy(exit_call+1,(U8 *)&exit_rel,4);copy(intro_call+1,(U8 *)&intro_rel,4);
+ if(campaign_trace&&(!same(b+0x2d455,already?exit_call:exit_original,6)||
+                      !same(b+0x1045b1,already?intro_call:intro_original,5)))return 0;
  if(already){
+  if(!same(b+SPAWN_POS_CALL_RVA,spawn_trace_enabled?spawn_call:original_spawn_pos_call,6))return 0;
+  if(!same(b+SPAWN_PREPARE_CALL_RVA,spawn_separation_enabled?prepare_call:original_prepare_call,5))return 0;
   if(b[HOOK_RVA+INITIAL_OFFSET]>1||!same(b+0x116550,noclip_init,sizeof(noclip_init)))return 0;
   for(i=0;i<sizeof(hook_code);i++)if(i!=INITIAL_OFFSET&&b[HOOK_RVA+i]!=hook_code[i])return 0;
   return 1;
@@ -108,6 +695,8 @@ static int apply_object(HMODULE module){
   if(patches[i].reloc>=0)*(U32 *)(expected+patches[i].reloc)+=delta;
   if(!same(b+patches[i].rva,expected,patches[i].size))return 0;
  }
+ if(!same(b+SPAWN_POS_CALL_RVA,original_spawn_pos_call,6))return 0;
+ if(!same(b+SPAWN_PREPARE_CALL_RVA,original_prepare_call,5))return 0;
  for(i=0;i<sizeof(hook_code);i++)if(b[HOOK_RVA+i])return 0;
  for(i=0;i<sizeof(noclip_init);i++)if(b[0x116550+i])return 0;
  /* The known .data section's final page includes unused, writable padding.
@@ -118,10 +707,22 @@ static int apply_object(HMODULE module){
  for(i=0;i<0x90;i++)if(b[0x174f00+i])return 0;
  if(rd(b+0x16d950)!=3&&rd(b+0x16d950)!=0)return 0;
  if(!VirtualProtect(b+0x1000,0x116000,0x40,&old))return 0;
+ if(campaign_trace){
+  campaign_image=b;
+  copy(b+0x2d455,exit_call,6);
+  copy(b+0x1045b1,intro_call,5);
+  log_file("[KPCFix Campaign] startup and exit trace armed");
+ }
  copy(b+HOOK_RVA,hook_code,sizeof(hook_code));
  b[HOOK_RVA+INITIAL_OFFSET]=(U8)initial_cheats;
  copy(b+0x116550,noclip_init,sizeof(noclip_init));
  for(i=0;i<PATCH_COUNT;i++)for(j=0;j<patches[i].size;j++)b[patches[i].rva+j]=patches[i].after[j];
+ if(spawn_trace_enabled||spawn_separation_enabled){
+  spawn_image=b;clearance_started=0;spawn_trace_count=0;collision_trace_count=0;
+  for(i=0;i<COOP_TRIAL_SLOTS;i++)spawn_trial_reservations.player[i]=0;
+  if(spawn_trace_enabled)copy(b+SPAWN_POS_CALL_RVA,spawn_call,6);
+  if(spawn_separation_enabled)copy(b+SPAWN_PREPARE_CALL_RVA,prepare_call,5);
+ }
  /* LoadLibrary has already applied relocations and may have run table init. */
  *(U32 *)(b+0x16d950)&=~3u;
  if(!VirtualProtect(b+0x1000,0x116000,old,&restore)||
@@ -187,7 +788,35 @@ static void initialize(void){
   if(!create_real||!delete_real)fatal("[KPCFix Server Tools] ERROR: missing original server exports.");
  }
  active=profile>=0&&GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"Enabled",1,ini_path)!=0;
+ campaign_trace=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceCampaign",0,ini_path)!=0;
  initial_cheats=GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"AllowCheats",0,ini_path)!=0;
+ spawn_separation_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TrialSeparateSpawns",0,ini_path)!=0;
+ collision_trace_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceCollisionABI",0,ini_path)!=0;
+ bsp_volume_enabled=active&&same(back_sha,bsp_original_hash,32)&&
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceBspVolume",0,ini_path)!=0;
+ if(active&&!same(back_sha,bsp_original_hash,32)&&
+    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceBspVolume",0,ini_path)!=0)
+   log_file("[KPCFix Co-op] BSP trace unsupported for this original server.dll hash; disabled.");
+ model_registry_enabled=active&&same(back_sha,bsp_original_hash,32)&&
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceModelRegistry",0,ini_path)!=0;
+ if(active&&!same(back_sha,bsp_original_hash,32)&&
+    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceModelRegistry",0,ini_path)!=0)
+   log_file("[KPCFix Co-op] Model registry trace unsupported for this original server.dll hash; disabled.");
+ model_state_enabled=model_registry_enabled&&
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceModelState",0,ini_path)!=0;
+ clearance_enabled=active&&(bsp_volume_enabled||model_registry_enabled||
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TracePlayerClearance",0,ini_path)!=0);
+ spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
+ if(active&&spawn_trace_enabled){
+  log_file("[KPCFix Co-op] diagnostics build=spawn-list-control-v8 (reads KPCServerTools.ini)");
+  log_file(model_registry_enabled?
+    "[KPCFix Co-op] effective TraceModelRegistry=1":
+    "[KPCFix Co-op] effective TraceModelRegistry=0 (set [Coop] TraceModelRegistry=1; restart)");
+  log_file(model_state_enabled?
+    "[KPCFix Co-op] effective TraceModelState=1":
+    "[KPCFix Co-op] effective TraceModelState=0 (requires both TraceModelState=1 and TraceModelRegistry=1)");
+ }
  if(active&&!hooked){
   if(!intercept_backend())fatal("[KPCFix Server Tools] ERROR: could not install engine loading hook.");
   hooked=1;
