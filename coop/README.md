@@ -72,3 +72,9 @@ The follow-up `registry-backrefs-v3` build additionally verifies
 reporting matched, mismatched and unreadable counts separately.
 Even a matching link is not evidence of current solidity or safe
 world-space hull clearance.
+
+The optional `TraceModelState=1` (requiring `TraceModelRegistry=1`)
+now surveys raw native WorldModel type, object flag-bit counts and
+creation-time vector equality for reciprocally verified associations.
+These are diagnostics, not validated solidity flags or geometry
+transforms. See [BSP-VOLUME-ABI.md](BSP-VOLUME-ABI.md).

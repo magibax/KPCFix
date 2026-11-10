@@ -6,6 +6,7 @@
 #include "coop_volume_probe.h"
 #include "coop_bsp_box.h"
 #include "coop_model_registry.h"
+#include "coop_model_state.h"
 extern HANDLE WINAPI GetStdHandle(DWORD);
 extern void WINAPI ExitProcess(UINT) __attribute__((noreturn));
 extern DWORD WINAPI VirtualQuery(const void *,void *,DWORD);
@@ -118,7 +119,7 @@ typedef U8 (CDECL *KpcIntersectFn)(const KpcIntersectQuery *,KpcIntersectInfo *)
 static float collision_float(U32 bits){union{U32 bits;float value;}u;u.bits=bits;return u.value;}
 static U32 collision_bits(float value){union{U32 bits;float value;}u;u.value=value;return u.bits;}
 
-static int clearance_enabled,bsp_volume_enabled,model_registry_enabled;
+static int clearance_enabled,bsp_volume_enabled,model_registry_enabled,model_state_enabled;
 static const U8 bsp_original_hash[32]={0x83,0xb7,0xbc,0xe8,0x09,0x94,0x8b,0x6f,0x70,0xed,0x3f,0x35,0xa7,0x7a,0x77,0x1b,0x60,0x87,0xf1,0x10,0x4d,0x90,0xd0,0x6a,0x62,0xac,0x3d,0xc0,0xd4,0xbd,0x37,0xd5};
 static volatile U32 clearance_started;
 static CoopSpawnReservations spawn_trial_reservations;
@@ -293,11 +294,15 @@ static void registry_trace_loaded(void){
  const U32 global_ptr=(U32)backend+0x4a250u;
  U32 manager=0,state=0,n=0;
  CoopModelRegistrySnapshot snap={0};
+ CoopModelRawState raw={0};
  CoopModelRegistryStatus verdict=COOP_MODEL_REGISTRY_UNKNOWN;
  char msg[116];
  if(model_registry_enabled&&registry_read32(0,global_ptr,&manager)&&
-    registry_read32(0,manager+0x19cu,&state))
-  verdict=coop_model_registry_scan(state,registry_read32,0,&snap);
+    registry_read32(0,manager+0x19cu,&state)){
+  if(model_state_enabled)
+   verdict=coop_model_state_scan(state,registry_read32,0,&snap,&raw);
+  else verdict=coop_model_registry_scan(state,registry_read32,0,&snap);
+ }
  trace_append(msg,&n,"[KPCFix Co-op] model registry=");
  trace_append(msg,&n,verdict==COOP_MODEL_REGISTRY_TRAVERSED?"TRAVERSED":"UNKNOWN");
  trace_append(msg,&n," entries=");trace_hex(msg,&n,snap.entries);
@@ -310,6 +315,33 @@ static void registry_trace_loaded(void){
  trace_append(msg,&n," mismatch=");trace_hex(msg,&n,snap.reciprocal_mismatches);
  trace_append(msg,&n," unreadable=");trace_hex(msg,&n,snap.reciprocal_unreadable);
  msg[n]=0;log_file(msg);
+ if(model_state_enabled){
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] model state=");
+  trace_append(msg,&n,verdict==COOP_MODEL_REGISTRY_TRAVERSED?"TRAVERSED":"UNKNOWN");
+  trace_append(msg,&n," matched=");trace_hex(msg,&n,raw.matched);
+  trace_append(msg,&n," skipped=");trace_hex(msg,&n,raw.skipped_unverified);
+  msg[n]=0;log_file(msg);
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] model types type1=");
+  trace_hex(msg,&n,raw.type_1);
+  trace_append(msg,&n," other=");trace_hex(msg,&n,raw.type_other);
+  trace_append(msg,&n," unread=");trace_hex(msg,&n,raw.type_unreadable);
+  msg[n]=0;log_file(msg);
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] model flags 2000=");
+  trace_hex(msg,&n,raw.flags_2000);
+  trace_append(msg,&n," 10000=");trace_hex(msg,&n,raw.flags_10000);
+  trace_append(msg,&n," any12000=");trace_hex(msg,&n,raw.flags_any_12000);
+  trace_append(msg,&n," unread=");trace_hex(msg,&n,raw.flags_unreadable);
+  msg[n]=0;log_file(msg);
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] model vectors equal=");
+  trace_hex(msg,&n,raw.init_vector_equal);
+  trace_append(msg,&n," changed=");trace_hex(msg,&n,raw.init_vector_different);
+  trace_append(msg,&n," unread=");trace_hex(msg,&n,raw.init_vector_unreadable);
+  msg[n]=0;log_file(msg);
+ }
  if(snap.first_root){
   n=0;
   trace_append(msg,&n,"[KPCFix Co-op] model registry first root=");
@@ -583,15 +615,20 @@ static void initialize(void){
  if(active&&!same(back_sha,bsp_original_hash,32)&&
     GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceModelRegistry",0,ini_path)!=0)
    log_file("[KPCFix Co-op] Model registry trace unsupported for this original server.dll hash; disabled.");
+ model_state_enabled=model_registry_enabled&&
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceModelState",0,ini_path)!=0;
  clearance_enabled=active&&(bsp_volume_enabled||model_registry_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TracePlayerClearance",0,ini_path)!=0);
  spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
  if(active&&spawn_trace_enabled){
-  log_file("[KPCFix Co-op] diagnostics build=registry-backrefs-v3 (reads KPCServerTools.ini)");
+  log_file("[KPCFix Co-op] diagnostics build=registry-object-state-v4 (reads KPCServerTools.ini)");
   log_file(model_registry_enabled?
     "[KPCFix Co-op] effective TraceModelRegistry=1":
     "[KPCFix Co-op] effective TraceModelRegistry=0 (set [Coop] TraceModelRegistry=1; restart)");
+  log_file(model_state_enabled?
+    "[KPCFix Co-op] effective TraceModelState=1":
+    "[KPCFix Co-op] effective TraceModelState=0 (requires both TraceModelState=1 and TraceModelRegistry=1)");
  }
  if(active&&!hooked){
   if(!intercept_backend())fatal("[KPCFix Server Tools] ERROR: could not install engine loading hook.");

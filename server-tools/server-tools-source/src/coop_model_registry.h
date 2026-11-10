@@ -27,9 +27,13 @@ static int coop_model_read_offset(CoopModelRead32 read,void *ctx,
  unsigned int offset;
  return coop_model_address_plus(address,delta,&offset)&&read(ctx,offset,value);
 }
-static CoopModelRegistryStatus coop_model_registry_scan(
+typedef void (*CoopModelAssociationVisitor)(void *visit_ctx,
+ unsigned int entry,unsigned int model,unsigned int object,
+ int reference_matches,CoopModelRead32 reader,void *read_ctx);
+static CoopModelRegistryStatus coop_model_registry_scan_visit(
  unsigned int world_state,CoopModelRead32 read,void *ctx,
- CoopModelRegistrySnapshot *summary){
+ CoopModelRegistrySnapshot *summary,CoopModelAssociationVisitor visitor,
+ void *visit_ctx){
  unsigned int sentinel,next,entry,model,root,associated,i;
  if(!summary)return COOP_MODEL_REGISTRY_UNKNOWN;
  *summary=(CoopModelRegistrySnapshot){0};
@@ -58,22 +62,29 @@ static CoopModelRegistryStatus coop_model_registry_scan(
   }
   if(associated){
    unsigned int backref=0;
+   int matched=0;
    if(!summary->first_associated)summary->first_associated=associated;
    summary->associated_candidates++;
-   /* The original 1.13 se_InitWorldModel writes obj+0x140=entry and
-    * model+0xdc=obj (RVA 0x22990 and 0x22998 respectively).
-    * An object reference may be stale: unreadable/mismatched is diagnostic,
-    * not a reason to abandon the bounded RESOURCE registry traversal.
+   /* Original 1.13 se_InitWorldModel sets object+0x140 to the resource
+    * record and model+0xdc to the object (RVAs 0x22990, 0x22998).
+    * Even matching pointers do not prove the object is active/solid.
     */
    if(!coop_model_read_offset(read,ctx,associated,0x140u,&backref))
     summary->reciprocal_unreadable++;
-   else if(backref==entry)summary->reciprocal_matches++;
-   else summary->reciprocal_mismatches++;
+   else if(backref==entry){
+    summary->reciprocal_matches++;matched=1;
+   }else summary->reciprocal_mismatches++;
+   if(visitor)visitor(visit_ctx,entry,model,associated,matched,read,ctx);
   }
   next=new_next;
  }
  /* TRAVERSED certifies bounded RESOURCE linkage only. Even a reciprocal
   * pointer does not prove object liveness, solidity or world transforms. */
  return COOP_MODEL_REGISTRY_TRAVERSED;
+}
+static CoopModelRegistryStatus coop_model_registry_scan(
+ unsigned int world_state,CoopModelRead32 read,void *ctx,
+ CoopModelRegistrySnapshot *summary){
+ return coop_model_registry_scan_visit(world_state,read,ctx,summary,0,0);
 }
 #endif

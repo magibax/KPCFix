@@ -355,3 +355,53 @@ object list, collision flags and world-to-model transform** from
 independent original call sites. Only once those contracts are
 verified can a read-only, transformed multi-BSP hull check be
 considered. Respawn and actor occupancy remain separate blockers.
+
+## Static object type/flags survey — experimental original 1.13 milestone
+
+Independent original-server disassembly verifies that the engine object's
+constructor at **RVA 0x1d403** copies creation flags to
+`object+0x28` (RVA 0x1d486), and the creation-object type
+into byte `object+0x76` (RVA 0x1d509). The `se_InitWorldModel`
+path at RVA 0x2299e copies the three DWORDs at
+`model+0x11c..0x124` into `object+0x40..0x48` at creation.
+The original physics spatial-tree visitor at RVA 0x19d0c
+performs `test dword [object+0x28],0x12000`, then checks
+more type, masks and callback conditions before AABB overlap.
+This is evidence that these bits influence a collision-related
+path, **not** that a particular bit alone means fully solid.
+
+`coop_model_state.h` now adds a **bounded, pure read-only
+collector** for every model/object association that passes its
+existing reciprocal back-reference check. It uses the same guarded
+reader as the resource registry, and never invokes a virtual method,
+mutates the object or turns a classification into a `SAFE` spawn.
+
+With `[Coop] TraceModelRegistry=1` and
+`[Coop] TraceModelState=1`, the Windows tracer records:
+
+- `model state=TRAVERSED/UNKNOWN matched=... skipped=...`:
+  count of reciprocally verified associations inspected versus
+  candidates excluded for broken/unreadable backlinks.
+- `model types type1=... other=... unread=...`:
+  object+0x76 type one is the engine's WorldModel path.
+- `model flags 2000=... 10000=... any12000=... unread=...`:
+  raw object+0x28 mask test counts, **not a solid roster**.
+  These counts overlap: `any12000` means either tested bit.
+- `model vectors equal=... changed=... unread=...`:
+  bit-for-bit comparison of the creation-time model vector with
+  the currently stored object vector. A difference may indicate
+  changed placement or something else; equality does **not**
+  prove the model is stationary, unrotated or safe to collide.
+
+The three outcome sets (types, flags-readable/unreadable,
+vector-readable/unreadable) should each account for the number of
+reciprocally matched references if the registry is `TRAVERSED`.
+The earlier R1M2B baseline was 115 resource entries, 109/109
+reciprocal matches and stable primary-BSP positive/negative controls.
+
+The current blocker remains **collision semantics and true
+world-to-local transforms**, including the distinction between
+associated WorldModel resources and actively collidable instances.
+The model's `+0x11c` triple is only a creation-time copy
+relationship; do not use it to translate or rotate BSP queries.
+No dynamic BSP sweep or automatic spawn has been enabled.
