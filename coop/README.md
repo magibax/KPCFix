@@ -1,6 +1,6 @@
 # Co-op campaign: spawn-point investigation
 
-Status: three-player R1M2B separation **live-tested successfully**; general fail-closed spawn allocator implemented and tested as a standalone policy (**not yet connected to game physics**). The map-specific prototype stays off by default. All changes for this experiment belong on `feature/coop-campaign`, not `main`.
+Status: three-player R1M2B separation **live-tested successfully**; general fail-closed spawn allocator implemented and tested as a standalone policy (**not yet connected to game physics**). The map-specific prototype stays off by default. Continue experimental co-op development on `feature/coop-campaign`. The current `main` history also contains these changes following the earlier branch merge; this does not make the tagged stable Server Tools release co-op-ready.
 
 ## Question
 
@@ -86,9 +86,10 @@ type 2 and type 1 and captures at most two read-only examples
 of mismatched model/source position vectors. See
 [BSP-VOLUME-ABI.md](BSP-VOLUME-ABI.md).
 
-The next `model-geometry-survey-v6` diagnostic adds a type histogram,
+The earlier `model-geometry-survey-v6` diagnostic added a type histogram,
 type-2/other flag cross-tabs and raw adjacent/bounds values for the
-two changed-vector objects. These are *read-only research data*,
+two changed-vector objects. The current `spawn-list-control-v8` build
+continues the read-only investigation. These are *read-only research data*,
 not a verified collision transform, live-solid roster, or spawn gate.
 
 ## Roadmap to a playable campaign

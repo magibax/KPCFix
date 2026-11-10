@@ -1,4 +1,4 @@
-# KPCFix Server Tools 1.0.0
+# KPCFix Server Tools
 
 Windows dedicated-server tools for official game version **1.13**. Supports the supplied Europe/UK, USA, German and Italian 1.13 builds.
 
@@ -58,11 +58,11 @@ Source and build/test instructions are in `server-tools-source/README.md`. The s
 
 Server Tools uses its own README, license, checksums, compatibility checker, build list and source directory. Extracting either release over the other does not overwrite those files. Run `Check-KPCVersion.cmd` for the client; the server launcher automatically runs its separate `Check-KPCServerVersion.ps1` checks.
 
-## Experimental co-op branch: spawn-point instrumentation
+## Unreleased co-op diagnostics and spawn-point instrumentation
 
-This section applies **only** to the `feature/coop-campaign` branch, not to the stable Server Tools release. Source now includes a conditional spawn-position trace plus an **opt-in, R1M2B-only three-client spawn trial**. Both hooks are off by default. The trial is not collision-validated and must not be used on public servers.
+This section describes **unreleased development functionality**, not the tagged stable Server Tools R3 release. Development source includes a conditional spawn-position trace and an **opt-in, R1M2B-only three-client spawn trial**. Both hooks are off by default. The trial is not collision-validated and must not be used on public servers.
 
-The branch includes a rebuilt experimental DLL and matching build metadata. After deploying it with setup, edit the existing `KPCServerTools.ini` and restart the server:
+Development checkouts include an experimental DLL and matching build metadata. After deploying it with setup, edit the existing `KPCServerTools.ini` and restart the server:
 
 ```ini
 [ServerTools]

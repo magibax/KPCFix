@@ -1,4 +1,4 @@
-name: Experimental co-op WorldModel type histogram and geometry survey
+name: Experimental co-op diagnostics and regression checks
 
 on:
   push:
@@ -87,13 +87,13 @@ jobs:
           print('PASS:', binary.stat().st_size, 'bytes;', manifest['proxy_sha256'])
           PY
           objdump -p server-tools/KPCServerTools.dll | grep -A12 'Export Table'
-      - name: Verify registry survey markers are present in the compiled DLL
+      - name: Verify compiled co-op diagnostic markers are present
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
           dll=Path('server-tools/KPCServerTools.dll').read_bytes()
-          assert b'diagnostics build=model-geometry-survey-v6' in dll
+          assert b'diagnostics build=spawn-list-control-v8' in dll
           assert b'effective TraceModelRegistry=1' in dll
           assert b'effective TraceModelState=1' in dll
           assert b'[KPCFix Co-op] model flags 2000=' in dll
@@ -143,7 +143,7 @@ jobs:
           / model type bucket=... / type2 masks=... / other masks=...
           / model vectors / model delta object / model vector source
           / model vector current / model adjacent / model raw bounds lines.
-          New v6 type histogram separates the 52 non-type-2 objects.
+          The type histogram separates the 52 non-type-2 objects.
           Raw adjacent words at object+0x4c..0x58 and model
           source bounds at +0xe0..+0xf4 are only diagnostic field
           samples, not a proven world-to-model transform.
@@ -158,7 +158,7 @@ jobs:
           expected resource-record pointer at object+0x140. All
           matched/mismatched/unreadable counts should sum to attached.
           Matching DOES NOT prove live solidity or a valid transform.
-          Confirm the log says diagnostics build=model-geometry-survey-v6 and
+          Confirm the log says diagnostics build=spawn-list-control-v8 and
           effective TraceModelRegistry=1 at the top. If there is no
           build marker, the dedicated server is loading an older DLL
           (or this ZIP was not installed). If it reports effective
