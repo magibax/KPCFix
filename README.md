@@ -7,7 +7,7 @@ KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high f
 - **Play above 60 FPS.** Timing and movement fixes address slow-motion animations and excess sliding after releasing a movement key. In playtesting, the game has generally been stable with FPS unlocked, and narration, camera pans and animations have typically kept their expected pace. Some scripted sequences may still be unstable and need more playtesting.
 - **Readable HUD at native resolution.** Enemy health bars, their centred name labels, the menu cursor and tooltips follow the HUD scale. The default HUD scale is 150% at 1080p. For 1440p, select 2560×1440 in game and set `ScalePercent=200` under `[HUD]` in `KPCFix.ini`.
 - **4:3 cinematics.** Fullscreen movies are centred on widescreen displays. Movie smoothing is enabled by default. The HUD and cursor use point filtering to keep their pixel edges sharp. In the `[AspectRatio]` section of `KPCFix.ini`, set `CinematicFilter=0` for sharper movies or `Cinematics4x3=0` for the original stretched playback.
-- **Local multiplayer server.** `Start-KPC-Server-Windows.cmd` starts a four-player deathmatch on a random PM01–PM10 map. On the same LAN, the server should appear automatically in the in-game server browser.
+- **Multiplayer server.** `Start-KPC-Server-Windows.cmd` starts a four-player deathmatch on a random PM01–PM10 map. On the same LAN, the server should appear automatically in the in-game server browser.
 
 **TO DO:** 
 - Engine performance optimisation: Inspect the engine for opportunities to improve FPS, reduce rendering overhead and optimise performance without introducing instability.
@@ -35,9 +35,9 @@ FpsLimiter = off
 
 For a 165 FPS cap, use `FpsLimiter = flipend(165)`. If a scripted sequence misbehaves, restore the shipped values (`borderless`, `wait(1)`, and `flipend(60)`) and replay it at 60 FPS.
 
-## Host a LAN game
+## Host a multiplayer game
 
-Run `Start-KPC-Server-Windows.cmd` from your patched game folder. It starts a four-player deathmatch on a random map from PM01–PM10 and should advertise itself in the in-game server browser to players on the same LAN. If needed, connect directly using the host’s LAN IP and UDP port **42972**. Edit `kpc-lan.cfg` to change the rules.
+Run `Start-KPC-Server-Windows.cmd` from your patched game folder. It starts a four-player deathmatch on a random map from PM01–PM10. Connect using the host’s IP address and UDP port **42972**. Edit `kpc-lan.cfg` to change the rules.
 
 See the [game compatibility notes](COMPATIBILITY-NOTES.md) for build details. KPCFix uses the [MIT license](LICENSE). The Windows release includes [DDrawCompat 0.7.2](https://github.com/narzoul/DDrawCompat) under its [0BSD license](LICENSES/DDrawCompat-0BSD.txt).
 
