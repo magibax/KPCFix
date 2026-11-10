@@ -84,9 +84,9 @@ The trial:
 - leaves the original engine setter and telefrag handling intact, logs the chosen slot/coordinates, and keeps the existing post-position trace enabled;
 - does **not** validate walls, floor, body size, or other actors, and does **not** release slots after disconnect. Set maxclients=3 and do not test a fourth distinct player pointer.
 
-The first two positions have now been tested by the user in-game. Both players survived, no telefragging occurred, and their spawns were sensible and navigable. The trial logged three placements for slot 0 because of disconnect/rejoin testing; in those records the engine returned the **same player pointer**. That does not prove safe reuse when reconnecting produces a new pointer. The third candidate, -96 Z relative to the entry anchor, lies near corridor light and script-manager objects, but compiled object proximity does not certify floor or wall geometry. It remains untested.
+The first two positions have now been tested by the user in-game. Both players survived, no telefragging occurred, and their spawns were sensible and navigable. The trial logged three placements for slot 0 because of disconnect/rejoin testing; in those records the engine returned the **same player pointer**. That does not prove safe reuse when reconnecting produces a new pointer. The third candidate, -96 Z relative to the entry anchor, lies near corridor light and script-manager objects. Its position is now live-verified for this R1M2B session, but compiled object proximity does not provide a general floor/wall safety guarantee.
 
-**Three-client test:** Set server maxclients=3, connect three clients to R1M2B once, confirm every client survives and can move normally, and provide KPCServerTools.log. Do not test a fourth player or repeated disconnect/reconnect after three distinct pointer slots are reserved.
+**Three-client test completed:** With maxclients=3, all three clients successfully spawned and moved without observed overlap or telefragging. Do not test a fourth player or repeated disconnect/reconnect after three distinct pointer slots are reserved.
 
 This remains a research-only, non-collision-validating allocator. Existing engine telefrag logic is not disabled.
 
@@ -100,7 +100,7 @@ The user's subsequent three-player R1M2B server log shows the opt-in trial assig
 | 1 | `0x02ecb170` | `0x02e680d8` | 1600 | -256 | -2848 |
 | 2 | `0x02ecaeb8` | `0x02e67f2c` | 1600 | -256 | -3040 |
 
-The log reported successful runtime hook installation and emitted all three modified positions at the engine position setter; no allocation-capacity warning appears. **This confirms three-slot assignment and forwarding, not actual player survival, wall/floor safety, or absence of telefragging.** Await direct in-game confirmation for all three, especially slot 2.
+The log reported successful runtime hook installation and emitted all three modified positions at the engine position setter; no allocation-capacity warning appeared. **The user subsequently confirmed all three players survived without telefragging and could move normally, with none inside walls or outside map bounds.** This verifies the three configured positions in a live R1M2B session, but **does not establish collision safety for other maps, different spawn anchors, respawn lifecycle changes, or additional players**.
 
 Do not enable more than three players, assume safe reconnect replacement, or generalize this hard-coded coordinate trial to other levels.
 
