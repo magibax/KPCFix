@@ -34,9 +34,11 @@ typedef enum {
 
 /* A candidate is SAFE only if the host engine has checked that the player
  * body fits, is grounded and in the playable world. The callback must be
- * read-only and side-effect-free. A segment ray alone is NOT enough.
+ * read-only and side-effect-free. It writes the *actual verified* placement
+ * to out (allowing floor-adjusted Y) only on COOP_PROBE_SAFE.
+ * A segment ray alone is NOT enough.
  */
-typedef CoopProbeResult (*CoopProbe)(void *ctx,const CoopVec3 *pos);
+typedef CoopProbeResult (*CoopProbe)(void *ctx,const CoopVec3 *candidate,CoopVec3 *out);
 
 typedef enum {
  COOP_ALLOC_NO_SAFE_POSITION=0,
@@ -97,6 +99,15 @@ static CoopVec3 coop_candidate(const CoopVec3 *anchor,U32 index){
  result.z=anchor->z+COOP_ALLOCATOR_STEP*vectors[index][1];
  return result;
 }
+/* Bound candidate coordinates to finite, plausible world coordinates, even
+ * if a faulty physics callback reports them as safe. This comparison rejects
+ * NaN and infinities without relying on libm or host floating-point helpers.
+ */
+static int coop_valid_vec(const CoopVec3 *p){
+ return p&&p->x>-1000000.f&&p->x<1000000.f&&
+           p->y>-1000000.f&&p->y<1000000.f&&
+           p->z>-1000000.f&&p->z<1000000.f;
+}
 static int coop_candidate_clear(const CoopAllocator *a,const CoopVec3 *candidate){
  U32 i;
  for(i=0;i<COOP_ALLOCATOR_CAPACITY;i++){
@@ -104,10 +115,8 @@ static int coop_candidate_clear(const CoopAllocator *a,const CoopVec3 *candidate
   if(slot->owner){
    float dx=candidate->x-slot->position.x;
    float dz=candidate->z-slot->position.z;
-   float dy=candidate->y-slot->position.y;
    /* Conservative horizontal exclusion, regardless of vertical difference.
     * The host's physics callback must still verify full-body clearance. */
-   (void)dy;
    if(dx*dx+dz*dz<COOP_ALLOCATOR_MIN_GAP*COOP_ALLOCATOR_MIN_GAP)
     return 0;
   }
@@ -119,7 +128,7 @@ static CoopAllocationStatus coop_allocator_assign(
  CoopProbe probe,void *ctx,CoopVec3 *out,U32 *candidate_index){
  U32 i;
  int slot,existing;
- if(!a||!owner||!anchor||!probe||!out)return COOP_ALLOC_BAD_INPUT;
+ if(!a||!owner||!coop_valid_vec(anchor)||!probe||!out)return COOP_ALLOC_BAD_INPUT;
  existing=coop_allocator_find(a,owner);
  if(existing>=0){
   *out=a->slots[existing].position;
@@ -131,13 +140,18 @@ static CoopAllocationStatus coop_allocator_assign(
   if(!a->slots[i].owner){slot=(int)i;break;}
  if(slot<0)return COOP_ALLOC_FULL;
  for(i=0;i<COOP_ALLOCATOR_CANDIDATES;i++){
-  CoopVec3 c=coop_candidate(anchor,i);
-  if(!coop_candidate_clear(a,&c))continue;
-  /* Only a POSITIVE, independently validated result is eligible. */
-  if(probe(ctx,&c)!=COOP_PROBE_SAFE)continue;
+  CoopVec3 candidate=coop_candidate(anchor,i),validated;
+  if(!coop_valid_vec(&candidate)||!coop_candidate_clear(a,&candidate))
+   continue;
+  /* Only a POSITIVE, independently validated result is eligible.
+   * Recheck the adjusted position; a floor snap must not cause overlap.
+   */
+  if(probe(ctx,&candidate,&validated)!=COOP_PROBE_SAFE)continue;
+  if(!coop_valid_vec(&validated)||!coop_candidate_clear(a,&validated))
+   continue;
   a->slots[slot].owner=owner;
-  a->slots[slot].position=c;
-  *out=c;
+  a->slots[slot].position=validated;
+  *out=validated;
   if(candidate_index)*candidate_index=i;
   return COOP_ALLOC_SUCCESS;
  }
