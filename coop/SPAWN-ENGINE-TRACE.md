@@ -1,6 +1,6 @@
 # Engine spawn trace: official 1.13 binaries
 
-Status: **spawn trace live-tested with two clients**; both were assigned the same anchor, with telefragging observed. An **opt-in, map-specific two-player position trial** is in the feature branch; it has not yet been live-tested.
+Status: **two-client spawn separation live-verified** on R1M2B (no telefragging; in-bounds movement), with repeat same-pointer placement observed after reconnects. A **three-client map-specific trial** is in the feature branch; slot 2 has not yet been live-tested.
 
 ## Uploaded binary provenance
 
@@ -79,13 +79,17 @@ Further disassembly shows the world-object handling function at RVA 0x0f10c0 is 
 The trial:
 - is **disabled by default** and requires [Coop] TrialSeparateSpawns=1, with ServerTools.Enabled=1;
 - only acts on exact R1M2B single-player start coordinate bits;
-- reserves first two distinct player *object pointers* for the lifetime of the map/module;
-- leaves the first at (1600,-256,-2944) and moves the second to (1600,-256,-2848), **before** calling the unmodified original f10c0 routine;
+- reserves first three distinct player *object pointers* for the lifetime of the object module;
+- leaves the first at (1600,-256,-2944), moves the second to (1600,-256,-2848), and proposes (1600,-256,-3040) for the third, **before** calling the unmodified original f10c0 routine;
 - leaves the original engine setter and telefrag handling intact, logs the chosen slot/coordinates, and keeps the existing post-position trace enabled;
-- does **not** validate walls, floor, body size, or other actors, and does **not** release slots after disconnect. Only two connected players in a throwaway test are supported.
+- does **not** validate walls, floor, body size, or other actors, and does **not** release slots after disconnect. Set maxclients=3 and do not test a fourth distinct player pointer.
 
-This +96 Z position is a **test hypothesis** (map object coordinates suggest a corridor in Z), *not a proven safe spawn*. If the second player is clipped into geometry or unable to move, disable the trial and report the result. This is not a production-ready allocator.
+The first two positions have now been tested by the user in-game. Both players survived, no telefragging occurred, and their spawns were sensible and navigable. The trial logged three placements for slot 0 because of disconnect/rejoin testing; in those records the engine returned the **same player pointer**. That does not prove safe reuse when reconnecting produces a new pointer. The third candidate, -96 Z relative to the entry anchor, lies near corridor light and script-manager objects, but compiled object proximity does not certify floor or wall geometry. It remains untested.
+
+**Three-client test:** Set server maxclients=3, connect three clients to R1M2B once, confirm every client survives and can move normally, and provide KPCServerTools.log. Do not test a fourth player or repeated disconnect/reconnect after three distinct pointer slots are reserved.
+
+This remains a research-only, non-collision-validating allocator. Existing engine telefrag logic is not disabled.
 
 ## Next gate
 
-Only after verifying this tracing hook in-game should we add co-op-only, server-authoritative spawn assignment. That requires known player collision dimensions, safe nearby world positions, distinct reservations, and regression against PM01 and normal server mode.
+After the third-player test, the next engineering gate is robust disconnect/reconnect slot reclamation, then collision-validated nearby spawn selection, all-map entry anchors, and regressions against PM01 and normal server mode.
