@@ -1,4 +1,4 @@
-name: Experimental co-op base-BSP player-volume differential
+name: Experimental co-op named WorldModel registry survey
 
 on:
   push:
@@ -50,6 +50,12 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
             server-tools/server-tools-source/tests/test_coop_bsp_box.c -o /tmp/kpc-coop-bsp-test
           /tmp/kpc-coop-bsp-test
+      - name: Verify fail-closed named-model registry traversal
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_model_registry.c -o /tmp/kpc-model-registry-test
+          /tmp/kpc-model-registry-test
       - name: Verify legacy LithTech IntersectSegment ABI structs
         shell: bash
         run: |
@@ -81,7 +87,7 @@ jobs:
           mkdir -p dist
           cp server-tools/KPCServerTools.dll server-tools/SERVER_TOOLS_BUILD.json dist/
           cat > dist/TEST-INSTRUCTIONS.txt <<'TXT'
-          EXPERIMENTAL KPCFIX CO-OP BASE-BSP VOLUME DIFFERENTIAL
+          EXPERIMENTAL KPCFIX CO-OP NAMED WORLDMODEL REGISTRY SURVEY
           Not a stable release. No automatic spawning or collision edits.
 
           Back up server.dll, KPCServerTools.dll, SERVER_TOOLS_BUILD.json
@@ -96,6 +102,7 @@ jobs:
             [Coop]
             TracePlayerClearance=1
             TraceBspVolume=1
+            TraceModelRegistry=1
             TrialSeparateSpawns=0
             TraceCollisionABI=0
 
@@ -103,7 +110,11 @@ jobs:
           with ONE client, inspect KPCServerTools.log:
           Three navigable candidates should give volume gate=UNSUPPORTED.
           The deliberately obstructed wall should give volume gate=BLOCKED.
-          Additionally collect [KPCFix Co-op] base BSP box=... lines.
+          Additionally collect [KPCFix Co-op] base BSP box=... lines
+          AND [KPCFix Co-op] model registry=... lines.
+          The model registry is a resource list, not the active solid
+          object roster. Its roots are only pointer candidates, not
+          validated collision geometry or collision clearance.
           INTERIOR_ONLY means primary BSP tree interior only (not SAFE).
           TOUCHES_CLASS_ZERO means the player box reaches the other
           BSP leaf class. UNKNOWN means unsafe/unsupported data or
@@ -141,7 +152,7 @@ jobs:
       - name: Upload local-test files
         uses: actions/upload-artifact@v4
         with:
-          name: KPCFix-Coop-Base-BSP-Volume-Diagnostic
+          name: KPCFix-Coop-WorldModel-Registry-Survey
           path: dist/
           if-no-files-found: error
           retention-days: 14

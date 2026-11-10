@@ -5,6 +5,7 @@
 #include "coop_intersect_abi.h"
 #include "coop_volume_probe.h"
 #include "coop_bsp_box.h"
+#include "coop_model_registry.h"
 extern HANDLE WINAPI GetStdHandle(DWORD);
 extern void WINAPI ExitProcess(UINT) __attribute__((noreturn));
 extern DWORD WINAPI VirtualQuery(const void *,void *,DWORD);
@@ -117,7 +118,7 @@ typedef U8 (CDECL *KpcIntersectFn)(const KpcIntersectQuery *,KpcIntersectInfo *)
 static float collision_float(U32 bits){union{U32 bits;float value;}u;u.bits=bits;return u.value;}
 static U32 collision_bits(float value){union{U32 bits;float value;}u;u.value=value;return u.bits;}
 
-static int clearance_enabled,bsp_volume_enabled;
+static int clearance_enabled,bsp_volume_enabled,model_registry_enabled;
 static const U8 bsp_original_hash[32]={0x83,0xb7,0xbc,0xe8,0x09,0x94,0x8b,0x6f,0x70,0xed,0x3f,0x35,0xa7,0x7a,0x77,0x1b,0x60,0x87,0xf1,0x10,0x4d,0x90,0xd0,0x6a,0x62,0xac,0x3d,0xc0,0xd4,0xbd,0x37,0xd5};
 static volatile U32 clearance_started;
 static CoopSpawnReservations spawn_trial_reservations;
@@ -277,6 +278,41 @@ static void bsp_log_box(KpcIntersectVec centre,KpcIntersectVec lo,KpcIntersectVe
  msg[n]=0;log_file(msg);
 }
 
+
+/* Named model RESOURCE registry; never identifies solid/live occupancy.
+ * The exact original DLL hash is required before this path is enabled.
+ * Native named-model lookup 0x10008f69 walks a sentinel list at +0xb0.
+ * No native callback is invoked; all dereferences are VirtualQuery guarded.
+ */
+static int registry_read32(void *ctx,unsigned int address,unsigned int *out){
+ (void)ctx;
+ if(!out||!bsp_mem_readable(address,4))return 0;
+ *out=*(const U32 *)address;return 1;
+}
+static void registry_trace_loaded(void){
+ const U32 global_ptr=(U32)backend+0x4a250u;
+ U32 manager=0,state=0,n=0;
+ CoopModelRegistrySnapshot snap={0};
+ CoopModelRegistryStatus verdict=COOP_MODEL_REGISTRY_UNKNOWN;
+ char msg[116];
+ if(model_registry_enabled&&registry_read32(0,global_ptr,&manager)&&
+    registry_read32(0,manager+0x19cu,&state))
+  verdict=coop_model_registry_scan(state,registry_read32,0,&snap);
+ trace_append(msg,&n,"[KPCFix Co-op] model registry=");
+ trace_append(msg,&n,verdict==COOP_MODEL_REGISTRY_TRAVERSED?"TRAVERSED":"UNKNOWN");
+ trace_append(msg,&n," entries=");trace_hex(msg,&n,snap.entries);
+ trace_append(msg,&n," roots=");trace_hex(msg,&n,snap.root_candidates);
+ trace_append(msg,&n," attached=");trace_hex(msg,&n,snap.associated_candidates);
+ msg[n]=0;log_file(msg);
+ if(snap.first_root){
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] model registry first root=");
+  trace_hex(msg,&n,snap.first_root);
+  trace_append(msg,&n," object=");trace_hex(msg,&n,snap.first_associated);
+  msg[n]=0;log_file(msg);
+ }
+}
+
 /* Sample horizontal cross sections at three heights. An intersection is
  * evidence of obstruction. Misses leave unsampled space unknown. */
 /* Ray samples provide positive obstruction evidence only. Full-hull and
@@ -333,6 +369,7 @@ static void trace_clearance(U32 *engine,void *object){
  }
  ((ReadBounds)vtable[0x104/4])(engine,object,&lo,&hi);
  log_vector("bounds min",lo);log_vector("bounds max",hi);
+ if(model_registry_enabled)registry_trace_loaded();
  if(!(lo.x<0&&lo.y<-1&&lo.z<0&&hi.x>0&&hi.y>1&&hi.z>0&&
       lo.x>=-128&&lo.y>=-128&&lo.z>=-128&&hi.x<=128&&hi.y<=128&&hi.z<=128)){
   log_file("[KPCFix Co-op] bounds outside diagnostic range");return;
@@ -534,7 +571,12 @@ static void initialize(void){
  if(active&&!same(back_sha,bsp_original_hash,32)&&
     GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceBspVolume",0,ini_path)!=0)
    log_file("[KPCFix Co-op] BSP trace unsupported for this original server.dll hash; disabled.");
- clearance_enabled=active&&(bsp_volume_enabled||
+ model_registry_enabled=active&&same(back_sha,bsp_original_hash,32)&&
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceModelRegistry",0,ini_path)!=0;
+ if(active&&!same(back_sha,bsp_original_hash,32)&&
+    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceModelRegistry",0,ini_path)!=0)
+   log_file("[KPCFix Co-op] Model registry trace unsupported for this original server.dll hash; disabled.");
+ clearance_enabled=active&&(bsp_volume_enabled||model_registry_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TracePlayerClearance",0,ini_path)!=0);
  spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);

@@ -156,3 +156,52 @@ the obstructed control. Do not set `world_hull` or `other_actors` to
 4. Only after comprehensive coverage, integrate complete physical
    clearance into the fail-closed spawn probe; hazard/script checks and
    disconnect/map-reset lifecycle remain additional gates.
+
+## Next research: named WorldModel resource list (opt-in read-only survey)
+
+The original 1.13 server DLL `se_InitWorldModel` path at RVA
+`0x22958` looks up the model name at RVA `0x22978`, calling a
+read-only `cdecl` name lookup at RVA `0x08f69` with two arguments.
+The caller uses the server manager's `+0x19c` world-state pointer
+and its list sentinel at `state + 0xb0`. The lookup iterates
+`sentinel+4` as the first link, `node+4` as next, and
+`node+8` as a resource record. The record's first DWORD is
+the model-data pointer; the lookup compares the model name at
+`model+0x70`. On successful object initialisation,
+`se_InitWorldModel` stores the resource record at
+`object+0x140`, associates `model+0xdc` with the object,
+and copies `model+0x11c..0x124` into `object+0x40..0x48`.
+
+The new `coop_model_registry.h` uses only a user-supplied, read-only
+32-bit-word callback. Its native adapter checks memory readability
+before each pointer read. It caps traversal at 256 entries and treats
+bad links, unreadable model pointers, a cycle or overflow as
+`UNKNOWN`. Unit tests cover two records, an empty list,
+invalid pointers, a loop, a missing root, and partial read failure.
+
+The log prefix is `[KPCFix Co-op] model registry=` followed by
+`TRAVERSED` or `UNKNOWN`, `entries`, `roots`, and `attached`
+candidate counts, plus a second line with the first plausible root.
+**TRAVERSED certifies only that the registry's linked pointers were
+read within the budget; it is never a claim of complete solid-object
+enumeration**. The `root` field at model+0x44 is a *candidate*
+pointer based on primary-model layout. An `attached` pointer at
+model+0xdc is a *candidate* object association, not authoritative
+liveness. Nothing in this pass applies a model transform or BSP
+collision query. No spawn verdict is changed.
+
+### Windows test
+
+Back up the same original server files as for the prior BSP
+diagnostic, install the branch CI's test artifact, use
+`TraceBspVolume=1` and `TraceModelRegistry=1`, with
+`TrialSeparateSpawns=0`. Run R1M2B with one client, and provide
+`model registry=`, `model registry first root=` and
+`base BSP box=` lines. The four existing BSP controls should
+remain three `INTERIOR_ONLY`, one `TOUCHES_CLASS_ZERO`.
+If registry returns `UNKNOWN`, the native model-list assumption
+requires re-investigation; do **not** enable automatic spawning.
+
+**Next after live confirmation:** prove the model transform/lifecycle
+and object flags, then enumerate the authoritative list of solid live
+WorldModels; only then add a read-only multi-BSP hull differential.

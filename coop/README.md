@@ -55,3 +55,14 @@ Lobby/ready-up UI, synchronized films, scripted triggers, shared pickups, saves,
 The volume evidence gate passed its four Windows controls. The box-vs-box overlap primitive is now statically verified; next identify and verify **native full-hull against world BSP**, followed by active-player enumeration. Do not infer safe spawns from clear rays or broadphase box tests. Keep the trial at three clients and restart before reusing slots until authoritative departure and world-reset events are verified. See [allocator integration](GENERAL-ALLOCATOR.md).
 
 [Issue #8](https://github.com/magibax/KPCFix/issues/8) tracks clearance, reconnect, map transitions and Windows regression tests for the integrated build.
+
+## Next diagnostic: loaded WorldModel resource survey
+
+The new opt-in `[Coop] TraceModelRegistry=1` diagnostic reads only the
+original 1.13 server's named WorldModel resource registry, reports how
+many resource entries and plausible BSP roots are reachable, and logs
+the first root pointer. No engine method is called and no model transform,
+game object or spawning is modified. The resource registry does **not**
+prove which model objects are live, solid or transformed. See
+[BSP-VOLUME-ABI.md](BSP-VOLUME-ABI.md) for the original ABI evidence and
+the Windows test controls.

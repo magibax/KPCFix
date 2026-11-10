@@ -174,3 +174,18 @@ The original 1.13 server DLL contains a small read-only 3D AABB-overlap helper a
 The original `server.original.dll` at RVA `0x1068f` provides a read-only BSP point-to-leaf classifier with verified node flags, plane and child offsets. The new bounded `coop_bsp_box.h` extends its partition logic to a conservative **whole-AABB** traversal, including an enclosed narrow excluded volume missed by corner tests. The static unit tests use synthetic trees; the opt-in Windows probe has now read the loaded R1M2B world BSP and passed three clear controls plus one blocked wall control. This validates the primary BSP on R1M2B only. Details: [BSP-VOLUME-ABI.md](BSP-VOLUME-ABI.md).
 
 A leaf-only interior result is *not* world collision clearance: other solid WorldModels, actors and gameplay hazards still require coverage. Both live `world_hull` and `other_actors` fields remain UNKNOWN. The read-only native-world differential has now passed on R1M2B; the next gate is comprehensive coverage of additional solid WorldModels and active actors, not automatic spawning.
+
+## Named WorldModel registry research: separate resources from live objects
+
+In original `server.original.dll`, the `se_InitWorldModel` name
+lookup at RVA `0x22978` walks `worldState+0xb0` as a linked resource
+registry using routine `0x8f69`. The separate read-only,
+opt-in `TraceModelRegistry=1` survey now reports candidate resource
+counts and BSP roots with guarded reads and a hard 256-entry ceiling;
+see [BSP-VOLUME-ABI.md](BSP-VOLUME-ABI.md).
+
+This is **not yet** the list of active, physically solid objects:
+model resources can be inactive, moving or transformed. Their collision
+flags and world-space transforms are not yet verified. No registry
+output is used to set `world_hull=VERIFIED_CLEAR` or connected to the
+spawn allocator. Live Windows R1M2B validation is the next gate.
