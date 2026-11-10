@@ -79,7 +79,7 @@ static int trim_spawn_warning(U8 *b){
    U8 *at=b+start+i,*tail;U32 extra=0,old,restore;
    if(!same(at,message,n))continue;
    tail=at+n;
-   while(extra<4&&(tail[extra]=='\\r'||tail[extra]=='\\n'))extra++;
+   while(extra<4&&(tail[extra]=='\r'||tail[extra]=='\n'))extra++;
    if(!extra||tail[extra]!=0)return 2;
    if(!VirtualProtect(tail,1,0x40,&old))return -1;
    tail[0]=0;
