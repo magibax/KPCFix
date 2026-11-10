@@ -2,7 +2,7 @@
 
 Date: 2026-11-10
 Branch: feature/coop-campaign
-Status: DAT inspection completed; runtime hook not yet implemented or tested
+Status: DAT inspection completed; original 1.13 server binaries subsequently verified; optional read-only spawn trace is now in feature-branch source, not runtime tested
 
 ## Inputs and reproducibility
 
@@ -48,11 +48,15 @@ GameType=1 positions should not be used as co-op starts merely because they alre
 
 Also, original CExitTrigger objects refer to NextWorld and sometimes StartPointName. For example, the exit from R1M1A into R1M1B names PlayerStart0. A co-op allocator must preserve the intended entry anchor, not just choose the first start object or a random multiplayer position.
 
+## Engine disassembly follow-up
+
+Matching official European-family 1.13 dedicated.exe, server.original.dll, and original object.lto were provided and SHA-256 verified. The start selector, explicit single-player fallback, and spawn-position setter callsite have now been traced. See [SPAWN-ENGINE-TRACE.md](SPAWN-ENGINE-TRACE.md) for exact addresses, the optional tracing hook, and the next Windows runtime test.
+
 ## Recommended next technical experiment
 
-1. Using official matching 1.13 server binaries, locate the exact error string in Ghidra; trace the start list selection and the fallback selection. Capture field accesses, player object references, engine calls, and safe hook candidates.
-2. In R1M2B with a normal dedicated server, observe two clients joining and identify exact starting transforms and collision behaviour. Compare R1M1A and PM01 as controls. Preserve console logs.
+1. **Completed (static):** verify matching official 1.13 binaries; locate the exact warning and trace spawn start selection, temporary single-player filter, and engine position-setting API.
+2. **Pending (runtime):** build the experimental read-only trace hook, set Coop.TraceSpawns=1, join R1M2B with two clients, decode logged requested positions and compare PM01. Confirm no altered gameplay with the trace off.
 3. Implement a guarded, co-op-only spawn assignment path in Server Tools after proving the ABI. Select the single-player campaign entry anchor, then use a collision/ground-validating engine function to reserve distinct nearby transforms. If the engine has no appropriate spatial validation API, do not substitute fixed offsets without in-game verification.
 4. Maintain compatibility with the original 1.13 server's two official engine profiles, Enabled=0, stock deathmatch selection and unmodified object.lto.
 
-**No runtime patch has been implemented.** The uploaded ZIP supplies compiled maps, not the original executable code, which is necessary to confirm the server function signatures and collision APIs. Do not hard-code an address based only on the map format.
+**No spawn-separation runtime patch has been implemented.** A narrow, opt-in observation hook exists in source; it is not yet rebuilt or validated in Windows. The original 1.13 executable code is now available for static inspection, but collision-safe relocation and live calling-convention behaviour still require dedicated testing.
