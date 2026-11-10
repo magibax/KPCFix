@@ -10,9 +10,9 @@ The platform-independent `server-tools/server-tools-source/src/coop_allocator.h`
 
 - A deterministic expanding X/Z candidate grid around a supplied original campaign PlayerStart.
 - Distance-based exclusions from already-reserved spawn positions.
-- A **required read-only engine collision probe** callback; the position is reserved only if the callback explicitly returns `COOP_PROBE_SAFE`.
+- A **required read-only engine collision probe** callback; the position is reserved only if the callback explicitly returns `COOP_PROBE_SAFE` and supplies a validated, potentially floor-snapped position.
 - Explicit owner-slot reservation, stable idempotent repeat placement, release on confirmed player departure, bounded capacity, and full-world reset.
-- Fail-closed behaviour: an unknown/unsupported probe, blocked candidate, or exhausted search does not return the occupied original PlayerStart.
+- Fail-closed behaviour: an unknown/unsupported probe, blocked candidate, invalid/out-of-range position, floor-snap overlap, or exhausted search does not return the occupied original PlayerStart.
 
 `test_coop_allocator.c` exercises synthetic clear/blocked/unknown geometry, deterministic order, reconnect after an explicit release, and full capacity. This does **not** emulate the LithTech physics engine. Build under GitHub Actions and test locally using the documented GCC host build.
 
@@ -28,7 +28,7 @@ The platform-independent `server-tools/server-tools-source/src/coop_allocator.h`
 6. A player-departure event with a verified owner identity, to call `coop_allocator_release`. The present R1M2B trial stores object pointers without an authoritative disconnect callback.
 7. A new-world or restart event to reset reservations. The loaded object module and server process can persist across maps.
 
-The original `object.lto` spawn routine at RVA `0x0f12a0` calls the nearby-object procedure at `0x0f10c0` (from `0x0f13a4`) **before** the engine position setter at `0x0f13c4`. `0x0f10c0` enumerates nearby objects and can cause damage/telefragging. **It is not a full geometry or floor validator.** There is a second spawn path at `0x0f15d0` with another call to `0x0f10c0` from `0x0f167a` and a different placement sequence. Both must eventually be handled before claiming universal respawn support.
+The original `object.lto` spawn routine at RVA `0x0f12a0` calls the nearby-object procedure at `0x0f10c0` (from `0x0f13a4`) **before** the engine position setter at `0x0f13c4`. `0x0f10c0` enumerates nearby objects and can cause damage/telefragging. **It is not a full geometry or floor validator.** There is a second spawn path at `0x0f15d0` with another call to `0x0f10c0` from `0x0f167a` and a different placement sequence. Both must eventually be handled before claiming universal respawn support. The asset-free `check_spawn_site.py` now hash-guards both original paths (16 byte/sequence signatures) before any experimental hook can be considered.
 
 Some published LithTech SDKs expose `IntersectSegment` and `GetStandingOn`, but **those interfaces and virtual-table offsets cannot be copied into the year-2000 KPC build without disassembly/ABI verification**. A single ground ray also cannot prove the entire player body fits.
 
