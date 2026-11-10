@@ -1,0 +1,356 @@
+[
+  {
+    "Group": "Deathmatch",
+    "Name": "PM01",
+    "Path": "worlds\\deathmatch\\PM01",
+    "Intro": false
+  },
+  {
+    "Group": "Deathmatch",
+    "Name": "PM02",
+    "Path": "worlds\\deathmatch\\PM02",
+    "Intro": false
+  },
+  {
+    "Group": "Deathmatch",
+    "Name": "PM03",
+    "Path": "worlds\\deathmatch\\PM03",
+    "Intro": false
+  },
+  {
+    "Group": "Deathmatch",
+    "Name": "PM04",
+    "Path": "worlds\\deathmatch\\PM04",
+    "Intro": false
+  },
+  {
+    "Group": "Deathmatch",
+    "Name": "PM05",
+    "Path": "worlds\\deathmatch\\PM05",
+    "Intro": false
+  },
+  {
+    "Group": "Deathmatch",
+    "Name": "PM06",
+    "Path": "worlds\\deathmatch\\PM06",
+    "Intro": false
+  },
+  {
+    "Group": "Deathmatch",
+    "Name": "PM07",
+    "Path": "worlds\\deathmatch\\PM07",
+    "Intro": false
+  },
+  {
+    "Group": "Deathmatch",
+    "Name": "PM08",
+    "Path": "worlds\\deathmatch\\PM08",
+    "Intro": false
+  },
+  {
+    "Group": "Deathmatch",
+    "Name": "PM09",
+    "Path": "worlds\\deathmatch\\PM09",
+    "Intro": false
+  },
+  {
+    "Group": "Deathmatch",
+    "Name": "PM10",
+    "Path": "worlds\\deathmatch\\PM10",
+    "Intro": false
+  },
+  {
+    "Group": "Starbearer",
+    "Name": "R1M0",
+    "Path": "worlds\\realm1\\R1M0",
+    "Intro": true
+  },
+  {
+    "Group": "Starbearer",
+    "Name": "R1M1A",
+    "Path": "worlds\\realm1\\R1M1A",
+    "Intro": false
+  },
+  {
+    "Group": "Starbearer",
+    "Name": "R1M1B",
+    "Path": "worlds\\realm1\\R1M1B",
+    "Intro": false
+  },
+  {
+    "Group": "Starbearer",
+    "Name": "R1M2A",
+    "Path": "worlds\\realm1\\R1M2A",
+    "Intro": false
+  },
+  {
+    "Group": "Starbearer",
+    "Name": "R1M2B",
+    "Path": "worlds\\realm1\\R1M2B",
+    "Intro": false
+  },
+  {
+    "Group": "Starbearer",
+    "Name": "R1M2C",
+    "Path": "worlds\\realm1\\R1M2C",
+    "Intro": false
+  },
+  {
+    "Group": "Starbearer",
+    "Name": "R1M3A",
+    "Path": "worlds\\realm1\\R1M3A",
+    "Intro": false
+  },
+  {
+    "Group": "Starbearer",
+    "Name": "R1M3B",
+    "Path": "worlds\\realm1\\R1M3B",
+    "Intro": false
+  },
+  {
+    "Group": "Starbearer",
+    "Name": "R1M3C",
+    "Path": "worlds\\realm1\\R1M3C",
+    "Intro": false
+  },
+  {
+    "Group": "Starbearer",
+    "Name": "R1M4A",
+    "Path": "worlds\\realm1\\R1M4A",
+    "Intro": false
+  },
+  {
+    "Group": "Starbearer",
+    "Name": "R1M4B",
+    "Path": "worlds\\realm1\\R1M4B",
+    "Intro": false
+  },
+  {
+    "Group": "Starbearer",
+    "Name": "R1M4C",
+    "Path": "worlds\\realm1\\R1M4C",
+    "Intro": false
+  },
+  {
+    "Group": "Beast King",
+    "Name": "R2M0",
+    "Path": "worlds\\realm2\\R2M0",
+    "Intro": true
+  },
+  {
+    "Group": "Beast King",
+    "Name": "R2M1A",
+    "Path": "worlds\\realm2\\R2M1A",
+    "Intro": false
+  },
+  {
+    "Group": "Beast King",
+    "Name": "R2M1B",
+    "Path": "worlds\\realm2\\R2M1B",
+    "Intro": false
+  },
+  {
+    "Group": "Beast King",
+    "Name": "R2M1C",
+    "Path": "worlds\\realm2\\R2M1C",
+    "Intro": false
+  },
+  {
+    "Group": "Beast King",
+    "Name": "R2M2A",
+    "Path": "worlds\\realm2\\R2M2A",
+    "Intro": false
+  },
+  {
+    "Group": "Beast King",
+    "Name": "R2M2B",
+    "Path": "worlds\\realm2\\R2M2B",
+    "Intro": false
+  },
+  {
+    "Group": "Beast King",
+    "Name": "R2M2C",
+    "Path": "worlds\\realm2\\R2M2C",
+    "Intro": false
+  },
+  {
+    "Group": "Beast King",
+    "Name": "R2M3A",
+    "Path": "worlds\\realm2\\R2M3A",
+    "Intro": false
+  },
+  {
+    "Group": "Beast King",
+    "Name": "R2M3B",
+    "Path": "worlds\\realm2\\R2M3B",
+    "Intro": false
+  },
+  {
+    "Group": "Beast King",
+    "Name": "R2M3C",
+    "Path": "worlds\\realm2\\R2M3C",
+    "Intro": false
+  },
+  {
+    "Group": "Beast King",
+    "Name": "R2M4A",
+    "Path": "worlds\\realm2\\R2M4A",
+    "Intro": false
+  },
+  {
+    "Group": "Beast King",
+    "Name": "R2M4B",
+    "Path": "worlds\\realm2\\R2M4B",
+    "Intro": false
+  },
+  {
+    "Group": "Beast King",
+    "Name": "R2M4C",
+    "Path": "worlds\\realm2\\R2M4C",
+    "Intro": false
+  },
+  {
+    "Group": "Celestial",
+    "Name": "R3M0",
+    "Path": "worlds\\realm3\\R3M0",
+    "Intro": true
+  },
+  {
+    "Group": "Celestial",
+    "Name": "R3M1A",
+    "Path": "worlds\\realm3\\R3M1A",
+    "Intro": false
+  },
+  {
+    "Group": "Celestial",
+    "Name": "R3M1B",
+    "Path": "worlds\\realm3\\R3M1B",
+    "Intro": false
+  },
+  {
+    "Group": "Celestial",
+    "Name": "R3M2A",
+    "Path": "worlds\\realm3\\R3M2A",
+    "Intro": false
+  },
+  {
+    "Group": "Celestial",
+    "Name": "R3M2B",
+    "Path": "worlds\\realm3\\R3M2B",
+    "Intro": false
+  },
+  {
+    "Group": "Celestial",
+    "Name": "R3M3A",
+    "Path": "worlds\\realm3\\R3M3A",
+    "Intro": false
+  },
+  {
+    "Group": "Celestial",
+    "Name": "R3M3B",
+    "Path": "worlds\\realm3\\R3M3B",
+    "Intro": false
+  },
+  {
+    "Group": "Celestial",
+    "Name": "R3M3C",
+    "Path": "worlds\\realm3\\R3M3C",
+    "Intro": false
+  },
+  {
+    "Group": "Celestial",
+    "Name": "R3M4A",
+    "Path": "worlds\\realm3\\R3M4A",
+    "Intro": false
+  },
+  {
+    "Group": "Celestial",
+    "Name": "R3M4B",
+    "Path": "worlds\\realm3\\R3M4B",
+    "Intro": false
+  },
+  {
+    "Group": "Demon",
+    "Name": "R4M0",
+    "Path": "worlds\\realm4\\R4M0",
+    "Intro": true
+  },
+  {
+    "Group": "Demon",
+    "Name": "R4M1A",
+    "Path": "worlds\\realm4\\R4M1A",
+    "Intro": false
+  },
+  {
+    "Group": "Demon",
+    "Name": "R4M1B",
+    "Path": "worlds\\realm4\\R4M1B",
+    "Intro": false
+  },
+  {
+    "Group": "Demon",
+    "Name": "R4M1C",
+    "Path": "worlds\\realm4\\R4M1C",
+    "Intro": false
+  },
+  {
+    "Group": "Demon",
+    "Name": "R4M2A",
+    "Path": "worlds\\realm4\\R4M2A",
+    "Intro": false
+  },
+  {
+    "Group": "Demon",
+    "Name": "R4M2B",
+    "Path": "worlds\\realm4\\R4M2B",
+    "Intro": false
+  },
+  {
+    "Group": "Demon",
+    "Name": "R4M2C",
+    "Path": "worlds\\realm4\\R4M2C",
+    "Intro": false
+  },
+  {
+    "Group": "Demon",
+    "Name": "R4M3A",
+    "Path": "worlds\\realm4\\R4M3A",
+    "Intro": false
+  },
+  {
+    "Group": "Demon",
+    "Name": "R4M3B",
+    "Path": "worlds\\realm4\\R4M3B",
+    "Intro": false
+  },
+  {
+    "Group": "Demon",
+    "Name": "R4M4A",
+    "Path": "worlds\\realm4\\R4M4A",
+    "Intro": false
+  },
+  {
+    "Group": "Demon",
+    "Name": "R4M4B",
+    "Path": "worlds\\realm4\\R4M4B",
+    "Intro": false
+  },
+  {
+    "Group": "Nightmare",
+    "Name": "R5M1A",
+    "Path": "worlds\\realm5\\R5M1A",
+    "Intro": false
+  },
+  {
+    "Group": "Nightmare",
+    "Name": "R5M1B",
+    "Path": "worlds\\realm5\\R5M1B",
+    "Intro": false
+  },
+  {
+    "Group": "Tutorial",
+    "Name": "TUTORIAL",
+    "Path": "worlds\\realm0\\TUTORIAL",
+    "Intro": false
+  }
+]

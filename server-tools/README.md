@@ -1,0 +1,38 @@
+# KPCFix Server Tools 0.1.0
+
+Windows graphical launcher and optional server cheats for KISS: Psycho Circus game version 1.13. Distributed separately from the KPCFix client fixes in the same repository.
+
+## Install and host
+
+Extract the entire ZIP directly beside Psycho.exe, dedicated.exe and object.lto (normally C:\Games\Psycho). Run KPC-Server-Launcher.cmd. Select a category, map, server name, UDP port and player limit, then start the server. Keep its console open; close it or use the server quit command to stop hosting. Run only one server instance at a time.
+
+All 59 listed maps are selectable, including PM01-PM10, campaign maps, M0 introductions and the tutorial. The chosen map is the single-entry round rotation. Campaign hosting is experimental: maps can lack multiplayer spawn points and fall back to a single-player start; missing entity classes and campaign scripting may affect play. This does not implement campaign co-op or new spawn points.
+
+The server should appear in the in-game LAN browser. Direct connection uses the chosen UDP port (default 42972). Allow server traffic through Windows Firewall. Internet hosting also requires appropriate router forwarding. The launcher uses the original dedicated server, REZ archives and other installed game assets; none are redistributed.
+
+## Optional cheats
+
+Cheats remain stock until you run Enable-ServerCheats.cmd. Stop the game and server first. This enables invulnerability and noclip requests from connected clients using Developer=1 and the original developer key bindings. Each action applies to the requesting player, not everyone. Code inspection establishes targeted state/message handling; an independent two-client isolation test is still outstanding.
+
+The server logs invulnerability ON/OFF and accepted noclip toggles with the name supplied by that client. A noclip log confirms the toggle request, not a server-tracked ON/OFF state. Example:
+
+    [KPCFix Server Tools] Invulnerability ON for Player
+    [KPCFix Server Tools] Noclip toggle accepted for Player
+
+Run Disable-ServerCheats.cmd with game/server stopped to restore original object.lto and disable both cheats and their logging. The patcher makes a verified original backup named object.lto.before-noclip-test and accepts only the exact supported original or known development patches. It changes the host object.lto on disk, so local games in the same installation also use it until disabled. Other developer commands retain their original restrictions. No keyboard bindings or player names are changed.
+
+## Supported server files
+
+The UK/European-family dedicated server setup has been tested by the user, including map selection, invulnerability, noclip and client-name logging. The US 1.13 installation uses a different dedicated.exe and server.dll, but its object.lto is byte-identical, so the same cheat patch targets apply. US runtime testing remains outstanding. Keep each official dedicated.exe/server.dll pair together; the checker accepts both supported pairs and exact patch hashes. German and Italian 1.13 server pairs match the European pair in the supplied files.
+
+Europe-family dedicated.exe: 69,632 bytes; server.dll: 323,584 bytes.
+US dedicated.exe: 81,920 bytes; server.dll: 335,872 bytes.
+Both display Server Version 3. The US executable adds -logfile and -debuginfo switches; its manual documents them. Both contain different executable code, so further gameplay differences cannot be inferred merely from size or the shared banner. Their server DLLs both pass packet lengths through their send/receive wrappers; cross-edition network play needs live validation.
+
+Common original object.lto SHA256: 3a03f8796c482b1a7ad72755df33ee8f1f8056bb10957f6f700e64bd006b3e5b
+
+## Validation and source
+
+This 0.1.0 package retains the working gameplay changes and cleans up their console output: consistent prefix, no duplicate original invulnerability diagnostic, and no launcher status line after console-input submission. Those final output changes have static validation and await native confirmation. Earlier runtime tests succeeded with the prior logging build. The original engine's own messages retain their original text.
+
+patch.json describes every changed byte; source/logging.S contains the additional console hooks. The patcher checks input and output hashes and rollback normalization. The launcher requires Windows PowerShell and Windows Forms, already supplied with supported Windows installations. See LICENSE for the MIT license. KPCFix client configuration is separate.

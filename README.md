@@ -40,3 +40,7 @@ For a 165 FPS cap, use `FpsLimiter = flipend(165)`. If a scripted sequence misbe
 Run `Start-KPC-Server-Windows.cmd` from your patched game folder. It starts a four-player deathmatch on a random map from PM01–PM10 and should advertise itself in the in-game server browser to players on the same LAN. If needed, connect directly using the host’s LAN IP and UDP port **42972**. Edit `kpc-lan.cfg` to change the rules.
 
 See the [game compatibility notes](COMPATIBILITY-NOTES.md) for build details. KPCFix uses the [MIT license](LICENSE). The Windows release includes [DDrawCompat 0.7.2](https://github.com/narzoul/DDrawCompat) under its [0BSD license](LICENSES/DDrawCompat-0BSD.txt).
+
+## KPCFix Server Tools
+
+[Download Server Tools 0.1.0](https://github.com/magibax/KPCFix/releases/tag/server-tools-v0.1.0) for a graphical server launcher with all 59 maps, including realm introductions and tutorial, plus optional per-player invulnerability and noclip. Cheats are opt-in and logged under `[KPCFix Server Tools]` using each client's multiplayer name. Stop game/server before enabling or disabling them. The UK/European server setup is tested; the US server uses the same object.lto and is supported by file checks, but US runtime testing remains outstanding. See [Server Tools documentation](server-tools/README.md) for installation, rollback and campaign-map limitations.

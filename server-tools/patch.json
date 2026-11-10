@@ -1,0 +1,1782 @@
+{
+  "original": "3a03f8796c482b1a7ad72755df33ee8f1f8056bb10957f6f700e64bd006b3e5b",
+  "invulnerability": "de5cc80287084508b56de27e9a535de7d389022327771c4f96107a327fc4adc8",
+  "patched": "2ed6fb337901939d9aa641a6c0ddeb75656365bac47811bf033850b352a70a12",
+  "changes": [
+    {
+      "offset": 488,
+      "stock": 63,
+      "patched": 228
+    },
+    {
+      "offset": 489,
+      "stock": 85,
+      "patched": 86
+    },
+    {
+      "offset": 979840,
+      "stock": 117,
+      "patched": 144
+    },
+    {
+      "offset": 979841,
+      "stock": 122,
+      "patched": 144
+    },
+    {
+      "offset": 979867,
+      "stock": 241,
+      "patched": 225
+    },
+    {
+      "offset": 979868,
+      "stock": 148,
+      "patched": 113
+    },
+    {
+      "offset": 979869,
+      "stock": 0,
+      "patched": 2
+    },
+    {
+      "offset": 979894,
+      "stock": 214,
+      "patched": 198
+    },
+    {
+      "offset": 979895,
+      "stock": 148,
+      "patched": 113
+    },
+    {
+      "offset": 979896,
+      "stock": 0,
+      "patched": 2
+    },
+    {
+      "offset": 1025352,
+      "stock": 164,
+      "patched": 95
+    },
+    {
+      "offset": 1025353,
+      "stock": 241,
+      "patched": 192
+    },
+    {
+      "offset": 1025354,
+      "stock": 255,
+      "patched": 1
+    },
+    {
+      "offset": 1025355,
+      "stock": 255,
+      "patched": 0
+    },
+    {
+      "offset": 1031418,
+      "stock": 137,
+      "patched": 233
+    },
+    {
+      "offset": 1031419,
+      "stock": 13,
+      "patched": 81
+    },
+    {
+      "offset": 1031420,
+      "stock": 80,
+      "patched": 168
+    },
+    {
+      "offset": 1031421,
+      "stock": 217,
+      "patched": 1
+    },
+    {
+      "offset": 1031422,
+      "stock": 22,
+      "patched": 0
+    },
+    {
+      "offset": 1031423,
+      "stock": 16,
+      "patched": 144
+    },
+    {
+      "offset": 1140048,
+      "stock": 0,
+      "patched": 156
+    },
+    {
+      "offset": 1140049,
+      "stock": 0,
+      "patched": 80
+    },
+    {
+      "offset": 1140050,
+      "stock": 0,
+      "patched": 81
+    },
+    {
+      "offset": 1140051,
+      "stock": 0,
+      "patched": 131
+    },
+    {
+      "offset": 1140052,
+      "stock": 0,
+      "patched": 225
+    },
+    {
+      "offset": 1140053,
+      "stock": 0,
+      "patched": 252
+    },
+    {
+      "offset": 1140054,
+      "stock": 0,
+      "patched": 232
+    },
+    {
+      "offset": 1140059,
+      "stock": 0,
+      "patched": 88
+    },
+    {
+      "offset": 1140060,
+      "stock": 0,
+      "patched": 5
+    },
+    {
+      "offset": 1140061,
+      "stock": 0,
+      "patched": 245
+    },
+    {
+      "offset": 1140062,
+      "stock": 0,
+      "patched": 115
+    },
+    {
+      "offset": 1140063,
+      "stock": 0,
+      "patched": 5
+    },
+    {
+      "offset": 1140065,
+      "stock": 0,
+      "patched": 137
+    },
+    {
+      "offset": 1140066,
+      "stock": 0,
+      "patched": 8
+    },
+    {
+      "offset": 1140067,
+      "stock": 0,
+      "patched": 89
+    },
+    {
+      "offset": 1140068,
+      "stock": 0,
+      "patched": 88
+    },
+    {
+      "offset": 1140069,
+      "stock": 0,
+      "patched": 157
+    },
+    {
+      "offset": 1140070,
+      "stock": 0,
+      "patched": 233
+    },
+    {
+      "offset": 1140071,
+      "stock": 0,
+      "patched": 149
+    },
+    {
+      "offset": 1140072,
+      "stock": 0,
+      "patched": 87
+    },
+    {
+      "offset": 1140073,
+      "stock": 0,
+      "patched": 254
+    },
+    {
+      "offset": 1140074,
+      "stock": 0,
+      "patched": 255
+    },
+    {
+      "offset": 1140096,
+      "stock": 0,
+      "patched": 156
+    },
+    {
+      "offset": 1140097,
+      "stock": 0,
+      "patched": 96
+    },
+    {
+      "offset": 1140098,
+      "stock": 0,
+      "patched": 232
+    },
+    {
+      "offset": 1140103,
+      "stock": 0,
+      "patched": 93
+    },
+    {
+      "offset": 1140104,
+      "stock": 0,
+      "patched": 129
+    },
+    {
+      "offset": 1140105,
+      "stock": 0,
+      "patched": 237
+    },
+    {
+      "offset": 1140106,
+      "stock": 0,
+      "patched": 135
+    },
+    {
+      "offset": 1140107,
+      "stock": 0,
+      "patched": 101
+    },
+    {
+      "offset": 1140108,
+      "stock": 0,
+      "patched": 17
+    },
+    {
+      "offset": 1140110,
+      "stock": 0,
+      "patched": 141
+    },
+    {
+      "offset": 1140111,
+      "stock": 0,
+      "patched": 149
+    },
+    {
+      "offset": 1140112,
+      "stock": 0,
+      "patched": 131
+    },
+    {
+      "offset": 1140113,
+      "stock": 0,
+      "patched": 102
+    },
+    {
+      "offset": 1140114,
+      "stock": 0,
+      "patched": 17
+    },
+    {
+      "offset": 1140116,
+      "stock": 0,
+      "patched": 128
+    },
+    {
+      "offset": 1140117,
+      "stock": 0,
+      "patched": 190
+    },
+    {
+      "offset": 1140118,
+      "stock": 0,
+      "patched": 63
+    },
+    {
+      "offset": 1140119,
+      "stock": 0,
+      "patched": 1
+    },
+    {
+      "offset": 1140123,
+      "stock": 0,
+      "patched": 116
+    },
+    {
+      "offset": 1140124,
+      "stock": 0,
+      "patched": 6
+    },
+    {
+      "offset": 1140125,
+      "stock": 0,
+      "patched": 141
+    },
+    {
+      "offset": 1140126,
+      "stock": 0,
+      "patched": 149
+    },
+    {
+      "offset": 1140127,
+      "stock": 0,
+      "patched": 85
+    },
+    {
+      "offset": 1140128,
+      "stock": 0,
+      "patched": 102
+    },
+    {
+      "offset": 1140129,
+      "stock": 0,
+      "patched": 17
+    },
+    {
+      "offset": 1140131,
+      "stock": 0,
+      "patched": 232
+    },
+    {
+      "offset": 1140132,
+      "stock": 0,
+      "patched": 68
+    },
+    {
+      "offset": 1140136,
+      "stock": 0,
+      "patched": 97
+    },
+    {
+      "offset": 1140137,
+      "stock": 0,
+      "patched": 157
+    },
+    {
+      "offset": 1140138,
+      "stock": 0,
+      "patched": 195
+    },
+    {
+      "offset": 1140139,
+      "stock": 0,
+      "patched": 255
+    },
+    {
+      "offset": 1140140,
+      "stock": 0,
+      "patched": 116
+    },
+    {
+      "offset": 1140141,
+      "stock": 0,
+      "patched": 36
+    },
+    {
+      "offset": 1140142,
+      "stock": 0,
+      "patched": 8
+    },
+    {
+      "offset": 1140143,
+      "stock": 0,
+      "patched": 255
+    },
+    {
+      "offset": 1140144,
+      "stock": 0,
+      "patched": 116
+    },
+    {
+      "offset": 1140145,
+      "stock": 0,
+      "patched": 36
+    },
+    {
+      "offset": 1140146,
+      "stock": 0,
+      "patched": 8
+    },
+    {
+      "offset": 1140147,
+      "stock": 0,
+      "patched": 232
+    },
+    {
+      "offset": 1140148,
+      "stock": 0,
+      "patched": 56
+    },
+    {
+      "offset": 1140149,
+      "stock": 0,
+      "patched": 49
+    },
+    {
+      "offset": 1140150,
+      "stock": 0,
+      "patched": 254
+    },
+    {
+      "offset": 1140151,
+      "stock": 0,
+      "patched": 255
+    },
+    {
+      "offset": 1140152,
+      "stock": 0,
+      "patched": 131
+    },
+    {
+      "offset": 1140153,
+      "stock": 0,
+      "patched": 196
+    },
+    {
+      "offset": 1140154,
+      "stock": 0,
+      "patched": 8
+    },
+    {
+      "offset": 1140155,
+      "stock": 0,
+      "patched": 156
+    },
+    {
+      "offset": 1140156,
+      "stock": 0,
+      "patched": 96
+    },
+    {
+      "offset": 1140157,
+      "stock": 0,
+      "patched": 232
+    },
+    {
+      "offset": 1140162,
+      "stock": 0,
+      "patched": 93
+    },
+    {
+      "offset": 1140163,
+      "stock": 0,
+      "patched": 129
+    },
+    {
+      "offset": 1140164,
+      "stock": 0,
+      "patched": 237
+    },
+    {
+      "offset": 1140165,
+      "stock": 0,
+      "patched": 194
+    },
+    {
+      "offset": 1140166,
+      "stock": 0,
+      "patched": 101
+    },
+    {
+      "offset": 1140167,
+      "stock": 0,
+      "patched": 17
+    },
+    {
+      "offset": 1140169,
+      "stock": 0,
+      "patched": 139
+    },
+    {
+      "offset": 1140170,
+      "stock": 0,
+      "patched": 68
+    },
+    {
+      "offset": 1140171,
+      "stock": 0,
+      "patched": 36
+    },
+    {
+      "offset": 1140172,
+      "stock": 0,
+      "patched": 12
+    },
+    {
+      "offset": 1140173,
+      "stock": 0,
+      "patched": 255
+    },
+    {
+      "offset": 1140174,
+      "stock": 0,
+      "patched": 112
+    },
+    {
+      "offset": 1140175,
+      "stock": 0,
+      "patched": 8
+    },
+    {
+      "offset": 1140176,
+      "stock": 0,
+      "patched": 232
+    },
+    {
+      "offset": 1140177,
+      "stock": 0,
+      "patched": 155
+    },
+    {
+      "offset": 1140178,
+      "stock": 0,
+      "patched": 221
+    },
+    {
+      "offset": 1140179,
+      "stock": 0,
+      "patched": 253
+    },
+    {
+      "offset": 1140180,
+      "stock": 0,
+      "patched": 255
+    },
+    {
+      "offset": 1140181,
+      "stock": 0,
+      "patched": 131
+    },
+    {
+      "offset": 1140182,
+      "stock": 0,
+      "patched": 196
+    },
+    {
+      "offset": 1140183,
+      "stock": 0,
+      "patched": 4
+    },
+    {
+      "offset": 1140184,
+      "stock": 0,
+      "patched": 133
+    },
+    {
+      "offset": 1140185,
+      "stock": 0,
+      "patched": 192
+    },
+    {
+      "offset": 1140186,
+      "stock": 0,
+      "patched": 116
+    },
+    {
+      "offset": 1140187,
+      "stock": 0,
+      "patched": 13
+    },
+    {
+      "offset": 1140188,
+      "stock": 0,
+      "patched": 137
+    },
+    {
+      "offset": 1140189,
+      "stock": 0,
+      "patched": 198
+    },
+    {
+      "offset": 1140190,
+      "stock": 0,
+      "patched": 141
+    },
+    {
+      "offset": 1140191,
+      "stock": 0,
+      "patched": 149
+    },
+    {
+      "offset": 1140192,
+      "stock": 0,
+      "patched": 178
+    },
+    {
+      "offset": 1140193,
+      "stock": 0,
+      "patched": 102
+    },
+    {
+      "offset": 1140194,
+      "stock": 0,
+      "patched": 17
+    },
+    {
+      "offset": 1140196,
+      "stock": 0,
+      "patched": 232
+    },
+    {
+      "offset": 1140197,
+      "stock": 0,
+      "patched": 3
+    },
+    {
+      "offset": 1140201,
+      "stock": 0,
+      "patched": 97
+    },
+    {
+      "offset": 1140202,
+      "stock": 0,
+      "patched": 157
+    },
+    {
+      "offset": 1140203,
+      "stock": 0,
+      "patched": 195
+    },
+    {
+      "offset": 1140204,
+      "stock": 0,
+      "patched": 252
+    },
+    {
+      "offset": 1140205,
+      "stock": 0,
+      "patched": 129
+    },
+    {
+      "offset": 1140206,
+      "stock": 0,
+      "patched": 236
+    },
+    {
+      "offset": 1140208,
+      "stock": 0,
+      "patched": 1
+    },
+    {
+      "offset": 1140211,
+      "stock": 0,
+      "patched": 137
+    },
+    {
+      "offset": 1140212,
+      "stock": 0,
+      "patched": 227
+    },
+    {
+      "offset": 1140213,
+      "stock": 0,
+      "patched": 137
+    },
+    {
+      "offset": 1140214,
+      "stock": 0,
+      "patched": 231
+    },
+    {
+      "offset": 1140215,
+      "stock": 0,
+      "patched": 185
+    },
+    {
+      "offset": 1140216,
+      "stock": 0,
+      "patched": 96
+    },
+    {
+      "offset": 1140220,
+      "stock": 0,
+      "patched": 138
+    },
+    {
+      "offset": 1140221,
+      "stock": 0,
+      "patched": 2
+    },
+    {
+      "offset": 1140222,
+      "stock": 0,
+      "patched": 66
+    },
+    {
+      "offset": 1140223,
+      "stock": 0,
+      "patched": 132
+    },
+    {
+      "offset": 1140224,
+      "stock": 0,
+      "patched": 192
+    },
+    {
+      "offset": 1140225,
+      "stock": 0,
+      "patched": 116
+    },
+    {
+      "offset": 1140226,
+      "stock": 0,
+      "patched": 3
+    },
+    {
+      "offset": 1140227,
+      "stock": 0,
+      "patched": 170
+    },
+    {
+      "offset": 1140228,
+      "stock": 0,
+      "patched": 226
+    },
+    {
+      "offset": 1140229,
+      "stock": 0,
+      "patched": 246
+    },
+    {
+      "offset": 1140230,
+      "stock": 0,
+      "patched": 141
+    },
+    {
+      "offset": 1140231,
+      "stock": 0,
+      "patched": 150
+    },
+    {
+      "offset": 1140232,
+      "stock": 0,
+      "patched": 232
+    },
+    {
+      "offset": 1140233,
+      "stock": 0,
+      "patched": 1
+    },
+    {
+      "offset": 1140236,
+      "stock": 0,
+      "patched": 185
+    },
+    {
+      "offset": 1140237,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140241,
+      "stock": 0,
+      "patched": 138
+    },
+    {
+      "offset": 1140242,
+      "stock": 0,
+      "patched": 2
+    },
+    {
+      "offset": 1140243,
+      "stock": 0,
+      "patched": 66
+    },
+    {
+      "offset": 1140244,
+      "stock": 0,
+      "patched": 132
+    },
+    {
+      "offset": 1140245,
+      "stock": 0,
+      "patched": 192
+    },
+    {
+      "offset": 1140246,
+      "stock": 0,
+      "patched": 116
+    },
+    {
+      "offset": 1140247,
+      "stock": 0,
+      "patched": 9
+    },
+    {
+      "offset": 1140248,
+      "stock": 0,
+      "patched": 60
+    },
+    {
+      "offset": 1140249,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140250,
+      "stock": 0,
+      "patched": 115
+    },
+    {
+      "offset": 1140251,
+      "stock": 0,
+      "patched": 2
+    },
+    {
+      "offset": 1140252,
+      "stock": 0,
+      "patched": 176
+    },
+    {
+      "offset": 1140253,
+      "stock": 0,
+      "patched": 63
+    },
+    {
+      "offset": 1140254,
+      "stock": 0,
+      "patched": 170
+    },
+    {
+      "offset": 1140255,
+      "stock": 0,
+      "patched": 226
+    },
+    {
+      "offset": 1140256,
+      "stock": 0,
+      "patched": 240
+    },
+    {
+      "offset": 1140257,
+      "stock": 0,
+      "patched": 176
+    },
+    {
+      "offset": 1140258,
+      "stock": 0,
+      "patched": 13
+    },
+    {
+      "offset": 1140259,
+      "stock": 0,
+      "patched": 170
+    },
+    {
+      "offset": 1140260,
+      "stock": 0,
+      "patched": 176
+    },
+    {
+      "offset": 1140261,
+      "stock": 0,
+      "patched": 10
+    },
+    {
+      "offset": 1140262,
+      "stock": 0,
+      "patched": 170
+    },
+    {
+      "offset": 1140263,
+      "stock": 0,
+      "patched": 106
+    },
+    {
+      "offset": 1140264,
+      "stock": 0,
+      "patched": 245
+    },
+    {
+      "offset": 1140265,
+      "stock": 0,
+      "patched": 255
+    },
+    {
+      "offset": 1140266,
+      "stock": 0,
+      "patched": 149
+    },
+    {
+      "offset": 1140267,
+      "stock": 0,
+      "patched": 204
+    },
+    {
+      "offset": 1140268,
+      "stock": 0,
+      "patched": 112
+    },
+    {
+      "offset": 1140269,
+      "stock": 0,
+      "patched": 17
+    },
+    {
+      "offset": 1140271,
+      "stock": 0,
+      "patched": 133
+    },
+    {
+      "offset": 1140272,
+      "stock": 0,
+      "patched": 192
+    },
+    {
+      "offset": 1140273,
+      "stock": 0,
+      "patched": 116
+    },
+    {
+      "offset": 1140274,
+      "stock": 0,
+      "patched": 27
+    },
+    {
+      "offset": 1140275,
+      "stock": 0,
+      "patched": 131
+    },
+    {
+      "offset": 1140276,
+      "stock": 0,
+      "patched": 248
+    },
+    {
+      "offset": 1140277,
+      "stock": 0,
+      "patched": 255
+    },
+    {
+      "offset": 1140278,
+      "stock": 0,
+      "patched": 116
+    },
+    {
+      "offset": 1140279,
+      "stock": 0,
+      "patched": 22
+    },
+    {
+      "offset": 1140280,
+      "stock": 0,
+      "patched": 137
+    },
+    {
+      "offset": 1140281,
+      "stock": 0,
+      "patched": 249
+    },
+    {
+      "offset": 1140282,
+      "stock": 0,
+      "patched": 41
+    },
+    {
+      "offset": 1140283,
+      "stock": 0,
+      "patched": 217
+    },
+    {
+      "offset": 1140284,
+      "stock": 0,
+      "patched": 141
+    },
+    {
+      "offset": 1140285,
+      "stock": 0,
+      "patched": 147
+    },
+    {
+      "offset": 1140286,
+      "stock": 0,
+      "patched": 240
+    },
+    {
+      "offset": 1140290,
+      "stock": 0,
+      "patched": 106
+    },
+    {
+      "offset": 1140292,
+      "stock": 0,
+      "patched": 82
+    },
+    {
+      "offset": 1140293,
+      "stock": 0,
+      "patched": 81
+    },
+    {
+      "offset": 1140294,
+      "stock": 0,
+      "patched": 83
+    },
+    {
+      "offset": 1140295,
+      "stock": 0,
+      "patched": 80
+    },
+    {
+      "offset": 1140296,
+      "stock": 0,
+      "patched": 255
+    },
+    {
+      "offset": 1140297,
+      "stock": 0,
+      "patched": 149
+    },
+    {
+      "offset": 1140298,
+      "stock": 0,
+      "patched": 152
+    },
+    {
+      "offset": 1140299,
+      "stock": 0,
+      "patched": 112
+    },
+    {
+      "offset": 1140300,
+      "stock": 0,
+      "patched": 17
+    },
+    {
+      "offset": 1140302,
+      "stock": 0,
+      "patched": 129
+    },
+    {
+      "offset": 1140303,
+      "stock": 0,
+      "patched": 196
+    },
+    {
+      "offset": 1140305,
+      "stock": 0,
+      "patched": 1
+    },
+    {
+      "offset": 1140308,
+      "stock": 0,
+      "patched": 195
+    },
+    {
+      "offset": 1140309,
+      "stock": 0,
+      "patched": 91
+    },
+    {
+      "offset": 1140310,
+      "stock": 0,
+      "patched": 75
+    },
+    {
+      "offset": 1140311,
+      "stock": 0,
+      "patched": 80
+    },
+    {
+      "offset": 1140312,
+      "stock": 0,
+      "patched": 67
+    },
+    {
+      "offset": 1140313,
+      "stock": 0,
+      "patched": 70
+    },
+    {
+      "offset": 1140314,
+      "stock": 0,
+      "patched": 105
+    },
+    {
+      "offset": 1140315,
+      "stock": 0,
+      "patched": 120
+    },
+    {
+      "offset": 1140316,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140317,
+      "stock": 0,
+      "patched": 83
+    },
+    {
+      "offset": 1140318,
+      "stock": 0,
+      "patched": 101
+    },
+    {
+      "offset": 1140319,
+      "stock": 0,
+      "patched": 114
+    },
+    {
+      "offset": 1140320,
+      "stock": 0,
+      "patched": 118
+    },
+    {
+      "offset": 1140321,
+      "stock": 0,
+      "patched": 101
+    },
+    {
+      "offset": 1140322,
+      "stock": 0,
+      "patched": 114
+    },
+    {
+      "offset": 1140323,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140324,
+      "stock": 0,
+      "patched": 84
+    },
+    {
+      "offset": 1140325,
+      "stock": 0,
+      "patched": 111
+    },
+    {
+      "offset": 1140326,
+      "stock": 0,
+      "patched": 111
+    },
+    {
+      "offset": 1140327,
+      "stock": 0,
+      "patched": 108
+    },
+    {
+      "offset": 1140328,
+      "stock": 0,
+      "patched": 115
+    },
+    {
+      "offset": 1140329,
+      "stock": 0,
+      "patched": 93
+    },
+    {
+      "offset": 1140330,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140331,
+      "stock": 0,
+      "patched": 73
+    },
+    {
+      "offset": 1140332,
+      "stock": 0,
+      "patched": 110
+    },
+    {
+      "offset": 1140333,
+      "stock": 0,
+      "patched": 118
+    },
+    {
+      "offset": 1140334,
+      "stock": 0,
+      "patched": 117
+    },
+    {
+      "offset": 1140335,
+      "stock": 0,
+      "patched": 108
+    },
+    {
+      "offset": 1140336,
+      "stock": 0,
+      "patched": 110
+    },
+    {
+      "offset": 1140337,
+      "stock": 0,
+      "patched": 101
+    },
+    {
+      "offset": 1140338,
+      "stock": 0,
+      "patched": 114
+    },
+    {
+      "offset": 1140339,
+      "stock": 0,
+      "patched": 97
+    },
+    {
+      "offset": 1140340,
+      "stock": 0,
+      "patched": 98
+    },
+    {
+      "offset": 1140341,
+      "stock": 0,
+      "patched": 105
+    },
+    {
+      "offset": 1140342,
+      "stock": 0,
+      "patched": 108
+    },
+    {
+      "offset": 1140343,
+      "stock": 0,
+      "patched": 105
+    },
+    {
+      "offset": 1140344,
+      "stock": 0,
+      "patched": 116
+    },
+    {
+      "offset": 1140345,
+      "stock": 0,
+      "patched": 121
+    },
+    {
+      "offset": 1140346,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140347,
+      "stock": 0,
+      "patched": 79
+    },
+    {
+      "offset": 1140348,
+      "stock": 0,
+      "patched": 78
+    },
+    {
+      "offset": 1140349,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140350,
+      "stock": 0,
+      "patched": 102
+    },
+    {
+      "offset": 1140351,
+      "stock": 0,
+      "patched": 111
+    },
+    {
+      "offset": 1140352,
+      "stock": 0,
+      "patched": 114
+    },
+    {
+      "offset": 1140353,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140355,
+      "stock": 0,
+      "patched": 91
+    },
+    {
+      "offset": 1140356,
+      "stock": 0,
+      "patched": 75
+    },
+    {
+      "offset": 1140357,
+      "stock": 0,
+      "patched": 80
+    },
+    {
+      "offset": 1140358,
+      "stock": 0,
+      "patched": 67
+    },
+    {
+      "offset": 1140359,
+      "stock": 0,
+      "patched": 70
+    },
+    {
+      "offset": 1140360,
+      "stock": 0,
+      "patched": 105
+    },
+    {
+      "offset": 1140361,
+      "stock": 0,
+      "patched": 120
+    },
+    {
+      "offset": 1140362,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140363,
+      "stock": 0,
+      "patched": 83
+    },
+    {
+      "offset": 1140364,
+      "stock": 0,
+      "patched": 101
+    },
+    {
+      "offset": 1140365,
+      "stock": 0,
+      "patched": 114
+    },
+    {
+      "offset": 1140366,
+      "stock": 0,
+      "patched": 118
+    },
+    {
+      "offset": 1140367,
+      "stock": 0,
+      "patched": 101
+    },
+    {
+      "offset": 1140368,
+      "stock": 0,
+      "patched": 114
+    },
+    {
+      "offset": 1140369,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140370,
+      "stock": 0,
+      "patched": 84
+    },
+    {
+      "offset": 1140371,
+      "stock": 0,
+      "patched": 111
+    },
+    {
+      "offset": 1140372,
+      "stock": 0,
+      "patched": 111
+    },
+    {
+      "offset": 1140373,
+      "stock": 0,
+      "patched": 108
+    },
+    {
+      "offset": 1140374,
+      "stock": 0,
+      "patched": 115
+    },
+    {
+      "offset": 1140375,
+      "stock": 0,
+      "patched": 93
+    },
+    {
+      "offset": 1140376,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140377,
+      "stock": 0,
+      "patched": 73
+    },
+    {
+      "offset": 1140378,
+      "stock": 0,
+      "patched": 110
+    },
+    {
+      "offset": 1140379,
+      "stock": 0,
+      "patched": 118
+    },
+    {
+      "offset": 1140380,
+      "stock": 0,
+      "patched": 117
+    },
+    {
+      "offset": 1140381,
+      "stock": 0,
+      "patched": 108
+    },
+    {
+      "offset": 1140382,
+      "stock": 0,
+      "patched": 110
+    },
+    {
+      "offset": 1140383,
+      "stock": 0,
+      "patched": 101
+    },
+    {
+      "offset": 1140384,
+      "stock": 0,
+      "patched": 114
+    },
+    {
+      "offset": 1140385,
+      "stock": 0,
+      "patched": 97
+    },
+    {
+      "offset": 1140386,
+      "stock": 0,
+      "patched": 98
+    },
+    {
+      "offset": 1140387,
+      "stock": 0,
+      "patched": 105
+    },
+    {
+      "offset": 1140388,
+      "stock": 0,
+      "patched": 108
+    },
+    {
+      "offset": 1140389,
+      "stock": 0,
+      "patched": 105
+    },
+    {
+      "offset": 1140390,
+      "stock": 0,
+      "patched": 116
+    },
+    {
+      "offset": 1140391,
+      "stock": 0,
+      "patched": 121
+    },
+    {
+      "offset": 1140392,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140393,
+      "stock": 0,
+      "patched": 79
+    },
+    {
+      "offset": 1140394,
+      "stock": 0,
+      "patched": 70
+    },
+    {
+      "offset": 1140395,
+      "stock": 0,
+      "patched": 70
+    },
+    {
+      "offset": 1140396,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140397,
+      "stock": 0,
+      "patched": 102
+    },
+    {
+      "offset": 1140398,
+      "stock": 0,
+      "patched": 111
+    },
+    {
+      "offset": 1140399,
+      "stock": 0,
+      "patched": 114
+    },
+    {
+      "offset": 1140400,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140402,
+      "stock": 0,
+      "patched": 91
+    },
+    {
+      "offset": 1140403,
+      "stock": 0,
+      "patched": 75
+    },
+    {
+      "offset": 1140404,
+      "stock": 0,
+      "patched": 80
+    },
+    {
+      "offset": 1140405,
+      "stock": 0,
+      "patched": 67
+    },
+    {
+      "offset": 1140406,
+      "stock": 0,
+      "patched": 70
+    },
+    {
+      "offset": 1140407,
+      "stock": 0,
+      "patched": 105
+    },
+    {
+      "offset": 1140408,
+      "stock": 0,
+      "patched": 120
+    },
+    {
+      "offset": 1140409,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140410,
+      "stock": 0,
+      "patched": 83
+    },
+    {
+      "offset": 1140411,
+      "stock": 0,
+      "patched": 101
+    },
+    {
+      "offset": 1140412,
+      "stock": 0,
+      "patched": 114
+    },
+    {
+      "offset": 1140413,
+      "stock": 0,
+      "patched": 118
+    },
+    {
+      "offset": 1140414,
+      "stock": 0,
+      "patched": 101
+    },
+    {
+      "offset": 1140415,
+      "stock": 0,
+      "patched": 114
+    },
+    {
+      "offset": 1140416,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140417,
+      "stock": 0,
+      "patched": 84
+    },
+    {
+      "offset": 1140418,
+      "stock": 0,
+      "patched": 111
+    },
+    {
+      "offset": 1140419,
+      "stock": 0,
+      "patched": 111
+    },
+    {
+      "offset": 1140420,
+      "stock": 0,
+      "patched": 108
+    },
+    {
+      "offset": 1140421,
+      "stock": 0,
+      "patched": 115
+    },
+    {
+      "offset": 1140422,
+      "stock": 0,
+      "patched": 93
+    },
+    {
+      "offset": 1140423,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140424,
+      "stock": 0,
+      "patched": 78
+    },
+    {
+      "offset": 1140425,
+      "stock": 0,
+      "patched": 111
+    },
+    {
+      "offset": 1140426,
+      "stock": 0,
+      "patched": 99
+    },
+    {
+      "offset": 1140427,
+      "stock": 0,
+      "patched": 108
+    },
+    {
+      "offset": 1140428,
+      "stock": 0,
+      "patched": 105
+    },
+    {
+      "offset": 1140429,
+      "stock": 0,
+      "patched": 112
+    },
+    {
+      "offset": 1140430,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140431,
+      "stock": 0,
+      "patched": 116
+    },
+    {
+      "offset": 1140432,
+      "stock": 0,
+      "patched": 111
+    },
+    {
+      "offset": 1140433,
+      "stock": 0,
+      "patched": 103
+    },
+    {
+      "offset": 1140434,
+      "stock": 0,
+      "patched": 103
+    },
+    {
+      "offset": 1140435,
+      "stock": 0,
+      "patched": 108
+    },
+    {
+      "offset": 1140436,
+      "stock": 0,
+      "patched": 101
+    },
+    {
+      "offset": 1140437,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140438,
+      "stock": 0,
+      "patched": 97
+    },
+    {
+      "offset": 1140439,
+      "stock": 0,
+      "patched": 99
+    },
+    {
+      "offset": 1140440,
+      "stock": 0,
+      "patched": 99
+    },
+    {
+      "offset": 1140441,
+      "stock": 0,
+      "patched": 101
+    },
+    {
+      "offset": 1140442,
+      "stock": 0,
+      "patched": 112
+    },
+    {
+      "offset": 1140443,
+      "stock": 0,
+      "patched": 116
+    },
+    {
+      "offset": 1140444,
+      "stock": 0,
+      "patched": 101
+    },
+    {
+      "offset": 1140445,
+      "stock": 0,
+      "patched": 100
+    },
+    {
+      "offset": 1140446,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1140447,
+      "stock": 0,
+      "patched": 102
+    },
+    {
+      "offset": 1140448,
+      "stock": 0,
+      "patched": 111
+    },
+    {
+      "offset": 1140449,
+      "stock": 0,
+      "patched": 114
+    },
+    {
+      "offset": 1140450,
+      "stock": 0,
+      "patched": 32
+    },
+    {
+      "offset": 1451938,
+      "stock": 252,
+      "patched": 0
+    },
+    {
+      "offset": 1451939,
+      "stock": 60,
+      "patched": 0
+    }
+  ]
+}
