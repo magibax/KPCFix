@@ -1,4 +1,4 @@
-# Co-op campaign: spawn-point investigation
+# Co-op campaign — research and roadmap
 
 Status: three-player R1M2B separation **live-tested successfully**; general fail-closed spawn allocator implemented and tested as a standalone policy (**not yet connected to game physics**). The map-specific prototype stays off by default. Continue experimental co-op development on `feature/coop-campaign`. The current `main` history also contains these changes following the earlier branch merge; this does not make the tagged stable Server Tools release co-op-ready.
 
@@ -54,7 +54,7 @@ Lobby/ready-up UI, synchronized films, scripted triggers, shared pickups, saves,
 
 The volume evidence gate passed its four Windows controls. The box-vs-box overlap primitive is now statically verified; next identify and verify **native full-hull against world BSP**, followed by active-player enumeration. Do not infer safe spawns from clear rays or broadphase box tests. Keep the trial at three clients and restart before reusing slots until authoritative departure and world-reset events are verified. See [allocator integration](GENERAL-ALLOCATOR.md).
 
-[Issue #8](https://github.com/magibax/KPCFix/issues/8) tracks clearance, reconnect, map transitions and Windows regression tests for the integrated build.
+**Tracking:** Maintain outstanding work in the checklist below. Keep detailed engine evidence in the linked research documents rather than expanding a GitHub issue.
 
 ## Next diagnostic: loaded WorldModel resource survey
 
@@ -92,15 +92,16 @@ two changed-vector objects. The current `spawn-list-control-v8` build
 continues the read-only investigation. These are *read-only research data*,
 not a verified collision transform, live-solid roster, or spawn gate.
 
-## Roadmap to a playable campaign
+## Outstanding work — co-op roadmap
 
-| Milestone | Windows acceptance test |
-| --- | --- |
-| Automatic spawn selection | Confirm main-world, moving-model and actor clearance against open and obstructed controls. Two players join at distinct automatically chosen positions on R1M2B and a second campaign map. |
-| Death and reconnect | Kill and respawn each player with their old spawn occupied. Disconnect and rejoin repeatedly. Slots are reclaimed and neither player is telefragged. |
-| First playable level pair | Two clients fight through one level, activate its exit and enter the next together. Objectives, pickups and player state follow the agreed co-op rules. |
-| Campaign compatibility | Play through each realm, checking scripted encounters, bosses, transitions and recovery after a wipe. Track exceptions per map. |
-| Experimental release | Repeat the two-level run on supported regional builds and verify ordinary deathmatch, disabled mode, install, upgrade and rollback. |
+- [ ] **Authoritative clearance:** Verify world BSP and live solid WorldModel collision, coordinate transforms, actor/player occupancy and hazards using open, blocked and enclosed-obstacle controls. Keep unknown results fail-closed. See [allocator research](GENERAL-ALLOCATOR.md) and [BSP evidence](BSP-VOLUME-ABI.md).
+- [ ] **Automatic spawning:** Connect the general allocator only after the collision/grounding contract is verified. Spawn two or more clients safely near campaign entry anchors on R1M2B and at least one additional map.
+- [ ] **Player lifecycle:** Verify departure, death, respawn, reconnect, world restart and reservation reuse; reject occupied positions and prevent telefrags.
+- [ ] **Campaign startup and synchronisation:** Establish original script execution timing with zero, one and multiple players; coordinate intro presentation, joining mid-sequence, reliable state replication and scripted gameplay effects. See [campaign sync design](CAMPAIGN-SYNC-DESIGN.md).
+- [ ] **Map progression:** Make right-click mirror exits and corridor triggers transition all clients exactly once, with consistent objectives, pickups and player state. Demonstrate a complete two-level playthrough before extending across realms.
+- [ ] **Windows regressions and release gate:** Test multiplayer deathmatch, disabled passthrough, supported regional 1.13 profiles, installation/upgrade/rollback, unchanged original assets and safe defaults. Document results before publishing an experimental build.
+
+Checked items should be backed by reproducible tests or linked Windows observations; keep intermediate reverse-engineering logs in the relevant research Markdown files.
 
 ### Campaign activation and first exit
 
