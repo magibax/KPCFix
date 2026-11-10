@@ -62,12 +62,54 @@ static int valid_image(U8 *b,U32 image_size){
 }
 /* Preserve the code already tested in object.lto, but install only loaded-memory
  * code/data edits. PE headers and relocation tables are never patched here. */
+
+/* Co-op research: opt-in, read-only observation of the original player-spawn
+ * position setter. This callsite is inside the *original* 1.13 object image;
+ * guard the original bytes before installing the redirect. */
+#define SPAWN_POS_CALL_RVA 0x0f13c4u
+#define SPAWN_POS_GLOBAL_RVA 0x16de80u
+static const U8 original_spawn_pos_call[6]={0xff,0x91,0xe0,0x01,0x00,0x00};
+typedef void (CDECL *SpawnSetPos)(void *,const U32 *);
+static U8 *spawn_image;
+static int spawn_trace_enabled;
+static volatile U32 spawn_trace_count;
+static void trace_append(char *out,U32 *n,const char *s){
+ while(*s&&*n<115)out[(*n)++]=*s++;
+}
+static void trace_hex(char *out,U32 *n,U32 value){
+ static const char hex[]="0123456789abcdef";int i;
+ trace_append(out,n,"0x");
+ for(i=7;i>=0&&*n<115;i--)out[(*n)++]=hex[(value>>(i*4))&15u];
+}
+/* The native game call pushes (HOBJECT, LTVector*) and cleans eight bytes
+ * in the caller. Forward it unchanged and only then write an observation. */
+static void CDECL trace_spawn_position(void *object,const U32 *pos){
+ U32 *engine=spawn_image?*(U32 **)(spawn_image+SPAWN_POS_GLOBAL_RVA):0;
+ if(!engine||!engine[0x1e0/4])fatal("[KPCFix Co-op] Missing original position-set API.");
+ ((SpawnSetPos)engine[0x1e0/4])(object,pos);
+ if(pos&&__sync_fetch_and_add(&spawn_trace_count,1)<64){
+  char line[116];U32 n=0;
+  trace_append(line,&n,"[KPCFix Co-op] spawn position obj=");
+  trace_hex(line,&n,(U32)object);
+  trace_append(line,&n," x=");trace_hex(line,&n,pos[0]);
+  trace_append(line,&n," y=");trace_hex(line,&n,pos[1]);
+  trace_append(line,&n," z=");trace_hex(line,&n,pos[2]);
+  line[n]=0;log_file(line);
+ }
+}
+static void make_spawn_call(U8 *out,U8 *site){
+ U32 relative=(U32)trace_spawn_position-((U32)site+5);
+ out[0]=0xe8;copy(out+1,(const U8 *)&relative,4);out[5]=0x90;
+}
+
 static int apply_object(HMODULE module){
- U8 *b=(U8 *)module;U8 hash[32],expected[8];U32 i,j,old,restore,already=1;
+ U8 *b=(U8 *)module;U8 hash[32],expected[8],spawn_call[6];U32 i,j,old,restore,already=1;
  U32 mbi[7],delta=(U32)b-0x10000000u;
  if(!module_hash(module,hash)||!same(hash,object_hash,32)||!valid_image(b,0x196000))return 0;
+ make_spawn_call(spawn_call,b+SPAWN_POS_CALL_RVA);
  for(i=0;i<PATCH_COUNT;i++)if(!same(b+patches[i].rva,patches[i].after,patches[i].size))already=0;
  if(already){
+  if(!same(b+SPAWN_POS_CALL_RVA,spawn_trace_enabled?spawn_call:original_spawn_pos_call,6))return 0;
   if(b[HOOK_RVA+INITIAL_OFFSET]>1||!same(b+0x116550,noclip_init,sizeof(noclip_init)))return 0;
   for(i=0;i<sizeof(hook_code);i++)if(i!=INITIAL_OFFSET&&b[HOOK_RVA+i]!=hook_code[i])return 0;
   return 1;
@@ -77,6 +119,7 @@ static int apply_object(HMODULE module){
   if(patches[i].reloc>=0)*(U32 *)(expected+patches[i].reloc)+=delta;
   if(!same(b+patches[i].rva,expected,patches[i].size))return 0;
  }
+ if(!same(b+SPAWN_POS_CALL_RVA,original_spawn_pos_call,6))return 0;
  for(i=0;i<sizeof(hook_code);i++)if(b[HOOK_RVA+i])return 0;
  for(i=0;i<sizeof(noclip_init);i++)if(b[0x116550+i])return 0;
  /* The known .data section's final page includes unused, writable padding.
@@ -91,6 +134,7 @@ static int apply_object(HMODULE module){
  b[HOOK_RVA+INITIAL_OFFSET]=(U8)initial_cheats;
  copy(b+0x116550,noclip_init,sizeof(noclip_init));
  for(i=0;i<PATCH_COUNT;i++)for(j=0;j<patches[i].size;j++)b[patches[i].rva+j]=patches[i].after[j];
+ if(spawn_trace_enabled){spawn_image=b;spawn_trace_count=0;copy(b+SPAWN_POS_CALL_RVA,spawn_call,6);}
  /* LoadLibrary has already applied relocations and may have run table init. */
  *(U32 *)(b+0x16d950)&=~3u;
  if(!VirtualProtect(b+0x1000,0x116000,old,&restore)||
@@ -149,6 +193,7 @@ static void initialize(void){
  }
  active=profile>=0&&GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"Enabled",1,ini_path)!=0;
  initial_cheats=GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"AllowCheats",0,ini_path)!=0;
+ spawn_trace_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0;
  if(active&&!hooked){
   if(!intercept_backend())fatal("[KPCFix Server Tools] ERROR: could not install engine loading hook.");
   hooked=1;
