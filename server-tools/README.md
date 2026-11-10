@@ -4,11 +4,16 @@ Windows graphical launcher and optional server cheats for KISS: Psycho Circus ga
 
 ## Install and host
 
-Extract the entire ZIP directly beside Psycho.exe, dedicated.exe and object.lto (normally C:\Games\Psycho). Run KPC-Server-Launcher.cmd. Select a category, map, server name, UDP port and player limit, then start the server. The default is eight players, 20 frags and 30 minutes. Frag/time limits, teamplay, keeping items, allowing FOV changes, and starting weapons/armour are adjustable in the window. The newly added rule controls await native Windows validation. Zero frag/time limits request unlimited rounds. Keep its console open; close it or use the server quit command to stop hosting. Run only one server instance at a time.
+1. Extract the entire ZIP directly beside `Psycho.exe`, `dedicated.exe` and `object.lto` (normally `C:\Games\Psycho\`).
+2. **For invulnerability and noclip support:** close the game and server, then run **`Enable-ServerCheats.cmd`**. This patches the host’s `object.lto` and creates a verified backup. Skip this step if you only want the graphical launcher.
+3. Run **`KPC-Server-Launcher.cmd`**. Use its graphical controls to select any map, set the server name, UDP port and player limit, and adjust frag/time limits, teamplay, item retention, FOV changes and starting weapons/armour.
+4. Start the server and keep its console open while hosting. Defaults are eight players, 20 frags and 30 minutes. Zero frag/time limits request unlimited rounds. Close the console or use the server quit command to stop hosting. Run only one server instance at a time.
+
+The newly added rule controls await native Windows validation. To remove the optional cheat patch, stop the game/server and run **`Disable-ServerCheats.cmd`**; it restores the original `object.lto`. Enabling/disabling currently requires a restart. Live cheat controls are not yet implemented.
 
 All 59 listed maps are selectable, including PM01-PM10, campaign maps, M0 introductions and the tutorial. The chosen map is the single-entry round rotation. Campaign hosting is experimental: maps can lack multiplayer spawn points and fall back to a single-player start; missing entity classes and campaign scripting may affect play. This does not implement campaign co-op or new spawn points.
 
-The server should appear in the in-game LAN browser. Direct connection uses the chosen UDP port (default 42972). Allow server traffic through Windows Firewall. Internet hosting also requires appropriate router forwarding. The launcher uses the original dedicated server, REZ archives and other installed game assets; none are redistributed.
+Connect through the in-game server browser or directly using the host’s IP address and chosen UDP port (default 42972). The launcher uses the original dedicated server, REZ archives and other installed game assets; none are redistributed.
 
 ## Optional cheats
 
