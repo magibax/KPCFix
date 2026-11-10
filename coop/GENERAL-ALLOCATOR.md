@@ -18,6 +18,8 @@ The platform-independent `server-tools/server-tools-source/src/coop_allocator.h`
 
 ## Engine-specific integration still required
 
+The legacy `IntersectSegment` line-query ABI has now been established by original object.lto static disassembly and an opt-in runtime diagnostic has been added (see [INTERSECT-ABI.md](INTERSECT-ABI.md)). **Do not mistake a segment hit for verified full-body clearance.**
+
 **Do not connect a guessed server API or issue live placement based on these tests alone.** A safe callback must establish the exact official 1.13 server interface and calling convention, then verify:
 
 1. World bounds and a floor surface beneath a proposed player-sized volume.
