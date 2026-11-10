@@ -30,7 +30,7 @@ For a 165 FPS cap, use `FpsLimiter = flipend(165)`. If a scripted sequence misbe
 
 ## Server Tools
 
-Hosting tools are a separate download: [KPCFix Server Tools](https://github.com/magibax/KPCFix/releases/tag/kpcfix-1.13-r4). The main KPCFix ZIP contains client fixes only, including the multiplayer browser connection fix.
+Hosting tools are a separate download: [KPCFix Server Tools](https://github.com/magibax/KPCFix/releases/download/server-tools-v1.0.0-r3/KPCFix-Server-Tools-1.0.0.zip). The main KPCFix ZIP contains client fixes only, including the multiplayer browser connection fix.
 
 Server Tools includes a compact graphical launcher for all 59 maps, server-rule controls, live `kpc_cheats 0/1` permission and console chat logging. Campaign maps are experimental and may be buggy in multiplayer. Cheat announcements appear in chat only.
 
