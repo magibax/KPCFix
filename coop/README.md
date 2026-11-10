@@ -1,6 +1,6 @@
 # Co-op campaign: spawn-point investigation
 
-Status: static spawn-selector analysis complete; optional read-only spawn-trace hook added in source (**off by default; no client spawn separation yet**). All changes for this experiment belong on `feature/coop-campaign`, not `main`.
+Status: first live trace confirmed identical two-player positions and telefragging; opt-in R1M2B two-player spawn separation trial built in source (**off by default; not runtime-validated**). All changes for this experiment belong on `feature/coop-campaign`, not `main`.
 
 ## Question
 
@@ -54,4 +54,4 @@ Lobby/ready-up UI, synchronized films, scripted triggers, shared pickups, saves,
 
 The DAT object-table layout, PlayerStart class, GameType property and sample world coordinates have been confirmed for 59 maps. Static reverse engineering now confirms the game-type fallback and identifies a guarded position-setting call site. The tracing wrapper is **not yet live-tested** and no collision-validating co-op offset mechanism exists. Do not enable automatic relocation until the in-game ABI and collision behavior are confirmed.
 
-**Next action:** Build the experimental Server Tools DLL from this branch, enable [Coop] TraceSpawns=1 for a disposable two-client R1M2B test, inspect KPCServerTools.log, and verify pass-through with TraceSpawns=0 and Enabled=0. Use PM01 as a control.
+**Next action:** Test the newly rebuilt experimental Server Tools DLL with [Coop] TrialSeparateSpawns=1, [Coop] TraceSpawns=1, and [ServerTools] Enabled=1, limited to two clients on R1M2B. Check survival, position, geometry, telefragging, console errors and logs; then rerun with TrialSeparateSpawns=0 to verify stock fallback. See SPAWN-ENGINE-TRACE.md.
