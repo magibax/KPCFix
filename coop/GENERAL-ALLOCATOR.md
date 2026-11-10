@@ -38,6 +38,22 @@ Some published LithTech SDKs expose `IntersectSegment` and `GetStandingOn`, but 
 
 The shipped experimental three-player R1M2B DLL remains intentionally restricted to the three manually play-tested coordinates. It is **off by default**. The new generic policy is **not** wired into that DLL until the engine collision probe contract has been met.
 
+## Player bounds recovered from the original 1.13 spawn paths
+
+The default spawn overlap box extends from (−20, −46, −20) to (+20, +46, +20) relative to the spawn position. Both original spawn paths pass the same lower and upper vectors to the overlap routine. The following addresses are RVAs in the original object.lto identified by check_spawn_site.py.
+
+| RVA | Observation |
+| --- | --- |
+| 0xEE750, 0xEE780 | Initializers write the lower and upper vectors respectively. |
+| 0xF138E–0xF13A4, 0xF1669–0xF167A | Each caller supplies those vectors and the candidate position to 0xF10C0. |
+| 0xF10D9–0xF111C | The overlap routine adds the position to both vectors component by component. |
+| 0xF1150–0xF115C | A virtual call at slot +0x104 takes an existing object's handle and two output vector addresses. The following code adds those vectors to the object's position for overlap comparisons. |
+| 0xF2A85–0xF2AD9 | During a player state change, virtual slot +0x108 receives the same lower vector and switches between the standing upper vector and (+20, +14, +20), initialized at 0xEE7B0. |
+
+On R1M2B the traced spawn centre is at Y=−256. The default box bottom is therefore −302, **18 units above** the observed floor at −320. Preserve the measured spawn height as a baseline when testing floor snapping. The box size alone cannot establish whether world geometry intrudes into it.
+
+For a live dimensions trace, observe the original +0x104 call's outputs on return and correlate the queried handle with a known player. Its receiver is the server interface instance (ECX), with dispatch through its vtable. The direct +0x90 segment API uses a different calling convention. Slot +0x108 changes object bounds and should stay out of a read-only probe. A separate world-geometry clearance query still needs verification against a deliberately obstructed candidate.
+
 ## Recommended next runtime instrumentation
 
 1. Use the [verified R1M2B segment-query results](INTERSECT-ABI.md) as the ground reference. Trace a player-volume clearance method and verify its calling convention against original call sites.
