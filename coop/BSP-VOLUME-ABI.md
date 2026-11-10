@@ -231,3 +231,43 @@ Verify the actual `KPCServerTools.ini` beside the active
 dedicated process completely and rerun `Setup-KPCServerTools.cmd`
 after replacing the new DLL and matching manifest. The known BSP
 classification lines alone cannot distinguish new from old builds.
+
+## Live Windows named-model registry validation (2026-11-10)
+
+**Passed the initial read-only resource traversal on R1M2B** using
+`[Coop] TraceModelRegistry=1`. The observed log was:
+
+```text
+[KPCFix Co-op] model registry=TRAVERSED entries=0x00000073 roots=0x00000073 attached=0x0000006d
+[KPCFix Co-op] model registry first root=0x03f36950 object=0x03d74e58
+```
+
+Decimal interpretation: **115** linked resource records successfully
+visited, **115** readable non-null candidate BSP-root pointers and
+**109** non-null associated-object pointers (six records with no
+associated-object pointer). These counts are evidence of the original
+1.13 registry's pointer-chain layout, **not** of 115 independently solid
+WorldModels or 109 currently live collision objects. The pointers do
+not establish transforms, object types, collision flags or liveness.
+
+The previous base-BSP four-control differential repeated unchanged:
+three `INTERIOR_ONLY` readings (27, 24 and 25 visits), and the known
+wall control `TOUCHES_CLASS_ZERO` (17 visits). All four shared loaded
+base-tree root `0x0330a020`. The overall gate remained three
+`UNSUPPORTED` plus one `BLOCKED` as intended.
+
+The shift in absolute root addresses between runs is expected for
+process-local allocations and does not itself imply a geometry change.
+
+### Next test contract
+
+Static original-server instructions at `se_InitWorldModel` RVA `0x22958`
+write `object+0x140 = resource_record` and
+`model+0xdc = object`. Validate this **reciprocal association** for
+all 109 candidate associations using guarded reads, and count absent,
+unreadable and mismatched back-references separately. Read-only and
+non-invasive; a reciprocal match corroborates the association but
+still does not establish current solidity or a valid world-space
+transform. After that, identify object collision and transform state
+from original engine callsites before attempting any additional BSP
+collision checks or enabling the allocator.
