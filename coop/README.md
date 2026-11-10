@@ -1,6 +1,6 @@
 # Co-op campaign: spawn-point investigation
 
-Status: research / **no game patch installed**. All changes for this experiment belong on `feature/coop-campaign`, not `main`.
+Status: static spawn-selector analysis complete; optional read-only spawn-trace hook added in source (**off by default; no client spawn separation yet**). All changes for this experiment belong on `feature/coop-campaign`, not `main`.
 
 ## Question
 
@@ -22,7 +22,9 @@ Can official 1.13 campaign worlds spawn two or more multiplayer clients at safe,
 
 The user supplied MAPDATA.zip (59 compiled v127 DAT worlds plus scripts) for **local, read-only analysis**. All world object tables parsed and validated. The corresponding results are in [SPAWN-FINDINGS.md](SPAWN-FINDINGS.md), and the reusable asset-free analyzer is [tools/analyze_spawn_points.py](tools/analyze_spawn_points.py).
 
-**Remaining runtime prerequisites:** matching official 1.13 dedicated executable, server.dll, and object.lto, or their existing Ghidra disassemblies. These are for local inspection only and must **not** be committed or distributed. Optional DEdit source maps could help research geometry but are not required for the object census.
+The user also supplied matching, original 1.13 dedicated.exe, server.original.dll and object.lto. Their checksums were verified and the server spawn-selection call graph traced. See [SPAWN-ENGINE-TRACE.md](SPAWN-ENGINE-TRACE.md) for the confirmed runtime addresses, the **opt-in, non-relocating** spawn logging prototype, how to build it, and how to decode its logs.
+
+**Remaining prerequisite:** two-client Windows runtime testing of the tracing prototype, followed by identification of safe, collision-validated co-op positions. Optional DEdit source maps could help research geometry but are not required for the current stage.
 
 Do not import or package original game maps, models, textures, sound, or artwork in KPCFix releases.
 
@@ -50,6 +52,6 @@ Lobby/ready-up UI, synchronized films, scripted triggers, shared pickups, saves,
 
 ## Research notes
 
-The DAT object-table layout, PlayerStart class, GameType property and sample world coordinates have been confirmed for 59 maps. Runtime game-mode filtering, player object layout, exact server hook sites and collision-validation API are **not yet verified**. Do not implement speculative position patches until matching 1.13 engine code is inspected and the ABI is tested.
+The DAT object-table layout, PlayerStart class, GameType property and sample world coordinates have been confirmed for 59 maps. Static reverse engineering now confirms the game-type fallback and identifies a guarded position-setting call site. The tracing wrapper is **not yet live-tested** and no collision-validating co-op offset mechanism exists. Do not enable automatic relocation until the in-game ABI and collision behavior are confirmed.
 
-**Next action:** Trace the fallback message and spawn selection in original object.lto / server.dll; use the existing multiplayer map PM01 as a control, then perform a two-client R1M2B test.
+**Next action:** Build the experimental Server Tools DLL from this branch, enable [Coop] TraceSpawns=1 for a disposable two-client R1M2B test, inspect KPCServerTools.log, and verify pass-through with TraceSpawns=0 and Enabled=0. Use PM01 as a control.
