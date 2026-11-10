@@ -24,7 +24,7 @@ The user supplied MAPDATA.zip (59 compiled v127 DAT worlds plus scripts) for **l
 
 The user also supplied matching, original 1.13 dedicated.exe, server.original.dll and object.lto. Their checksums were verified and the server spawn-selection call graph traced. See [SPAWN-ENGINE-TRACE.md](SPAWN-ENGINE-TRACE.md) for the confirmed runtime addresses, the **opt-in, non-relocating** spawn logging prototype, how to build it, and how to decode its logs.
 
-The [native BSP world-volume investigation](BSP-VOLUME-ABI.md) now identifies a read-only native point-classifier and a conservative whole-box tree traversal, still lacking live world-tree validation. The [native AABB overlap research](BOX-OVERLAP-ABI.md) documents a verified read-only box-vs-box comparator, but not world BSP clearance. The [R1M2B collision diagnostic](INTERSECT-ABI.md) recorded nine grounded ray hits and three control misses. Player-volume clearance, disconnect and map-reset handling remain open.
+The [native BSP world-volume investigation](BSP-VOLUME-ABI.md) now includes an opt-in read-only loaded-world R1M2B box traversal (TraceBspVolume=1); native live-tree results remain unverified until the Windows differential is returned. The [native AABB overlap research](BOX-OVERLAP-ABI.md) documents a verified read-only box-vs-box comparator, but not world BSP clearance. The [R1M2B collision diagnostic](INTERSECT-ABI.md) recorded nine grounded ray hits and three control misses. Player-volume clearance, disconnect and map-reset handling remain open.
 
 Do not import or package original game maps, models, textures, sound, or artwork in KPCFix releases.
 

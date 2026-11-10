@@ -42,3 +42,64 @@ The hash checker never executes/patches or redistributes original game code; its
 2. Run **read-only** full-box BSP traversal at three known navigable R1M2B positions and wall-control (1654, -256, -2944), with a strict pointer/visit budget. Report `INTERIOR_ONLY`, `TOUCHES_CLASS_ZERO` or `UNKNOWN`; these labels are **not** a gameplay SAFE verdict.
 3. Cross-check native `GetPointStatus` class mapping and whether the known wall is in the *primary BSP* versus a separate world model. Test an enclosed BSP obstruction if a safe, grounded control is available.
 4. Establish coverage of *all* solid WorldModels and active players and relevant collision flags before setting either `world_hull` or `other_actors` evidence to verified clear.
+
+## Opt-in Windows loaded-world differential (experimental)
+
+Commit after the static synthetic tests adds `[Coop] TraceBspVolume=1`
+(default off). It uses the exact **supported original 1.13 server DLL SHA-256**
+as a compatibility gate. In the loaded, original engine, the tracer follows
+the same root chain used by `GetPointStatus`:
+
+```text
+server.original.dll + 0x4a250 (live server manager pointer)
+  -> manager + 0x19c (world state)
+  -> state + 0x08 (base world BSP)
+  -> tree + 0x44 (root BSP node)
+```
+
+The memory reader validates **every** node and plane via `VirtualQuery`,
+rejects non-committed, guarded, unreadable or short regions, and caps
+visit count, traversal depth and explicit stack. It never changes
+engine state, tests no unknown native method offset, and only runs in
+the existing first-anchor R1M2B clearance trace. A failed pointer
+chain reports `UNKNOWN`; it does not crash intentionally, retry
+forever or approve a candidate.
+
+Each candidate logs `[KPCFix Co-op] base BSP box=INTERIOR_ONLY`,
+`TOUCHES_CLASS_ZERO` or `UNKNOWN` plus visited count and native
+root pointer. **Neither INTERIOR_ONLY nor a clear ray is a spawn-safe
+result.** Neither `world_hull` nor `other_actors` is promoted to
+VERIFIED_CLEAR. The main campaign map may include additional solid
+WorldModel BSPs, doors, lifts and live players outside this base-tree
+query. This is a *diagnostic* to establish whether the conservative
+box traversal agrees with the original map's geometry at the known
+open/control coordinates.
+
+### Windows live-test instructions
+
+Back up `server.dll`, `KPCServerTools.dll`, `SERVER_TOOLS_BUILD.json`
+and `KPCServerTools.ini`; stop the dedicated server before replacing.
+Install the exact DLL and manifest from this branch's CI artifact using
+the existing `Setup-KPCServerTools.cmd`. Configure:
+
+```ini
+[ServerTools]
+Enabled=1
+AllowCheats=0
+
+[Coop]
+TrialSeparateSpawns=0
+TraceCollisionABI=0
+TracePlayerClearance=1
+TraceBspVolume=1
+```
+
+Run `worlds\\realm1\\R1M2B` with `maxclients=2`, connect
+**only one client**, and paste the `candidate`, `body sample`,
+`base BSP box` and `volume gate` lines. The existing three
+`UNSUPPORTED` and one `BLOCKED` evidence-gate results are expected;
+the **base-BSP classifications are intentionally not predicted**
+until observed live. If all report `UNKNOWN`, inspect the root
+diagnostic and revisit the native pointer-chain inference. Stop and
+restore the backups if anything crashes or misbehaves. Disable the
+switch and restart to remove diagnostic traversal.

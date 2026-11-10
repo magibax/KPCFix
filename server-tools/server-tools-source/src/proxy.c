@@ -4,6 +4,7 @@
 #include "coop_spawn.h"
 #include "coop_intersect_abi.h"
 #include "coop_volume_probe.h"
+#include "coop_bsp_box.h"
 extern HANDLE WINAPI GetStdHandle(DWORD);
 extern void WINAPI ExitProcess(UINT) __attribute__((noreturn));
 extern DWORD WINAPI VirtualQuery(const void *,void *,DWORD);
@@ -116,7 +117,8 @@ typedef U8 (CDECL *KpcIntersectFn)(const KpcIntersectQuery *,KpcIntersectInfo *)
 static float collision_float(U32 bits){union{U32 bits;float value;}u;u.bits=bits;return u.value;}
 static U32 collision_bits(float value){union{U32 bits;float value;}u;u.value=value;return u.bits;}
 
-static int clearance_enabled;
+static int clearance_enabled,bsp_volume_enabled;
+static const U8 bsp_original_hash[32]={0x83,0xb7,0xbc,0xe8,0x09,0x94,0x8b,0x6f,0x70,0xed,0x3f,0x35,0xa7,0x7a,0x77,0x1b,0x60,0x87,0xf1,0x10,0x4d,0x90,0xd0,0x6a,0x62,0xac,0x3d,0xc0,0xd4,0xbd,0x37,0xd5};
 static volatile U32 clearance_started;
 static CoopSpawnReservations spawn_trial_reservations;
 static void trace_append(char *out,U32 *n,const char *s){
@@ -201,6 +203,80 @@ static int world_segment(KpcIntersectFn intersect,KpcIntersectVec from,KpcInters
  return intersect(&q,info)!=0;
 }
 
+
+/* Experimental, opt-in, read-only BASE WORLD BSP volume differential.
+ * The original 1.13 server DLL is hash-gated at initialize(). Pointer
+ * provenance was recovered from its GetPointStatus wrapper at +0x2440a.
+ * No code is patched here and no transforms or objects are modified.
+ * Not a complete world-hull probe: movable models/actors are outside scope.
+ */
+static int bsp_mem_readable(U32 addr,U32 size){
+ U32 m[7],base,extent,protect;
+ if(!addr||!size||addr>0xffffffffu-size)return 0;
+ if(VirtualQuery((const void *)addr,m,sizeof(m))!=sizeof(m))return 0;
+ base=m[0];extent=m[3];protect=m[5];
+ if(m[4]!=0x1000u||(protect&0x100u)||size>extent||
+    addr<base||addr-base>extent-size)return 0;
+ protect&=0xffu;
+ return protect==0x02u||protect==0x04u||protect==0x08u||
+        protect==0x20u||protect==0x40u||protect==0x80u;
+}
+static int bsp_read_native(void *ctx,unsigned int address,CoopBspNode *out){
+ const U32 *node;
+ U32 plane_addr;
+ const float *plane;
+ (void)ctx;
+ if(!out||!bsp_mem_readable(address,4))return 0;
+ node=(const U32 *)address;
+ out->flags=node[0];
+ out->child_neg=out->child_pos=0;
+ out->normal=(CoopBspVec){0.f,0.f,0.f};out->distance=0.f;
+ if(out->flags&3u)return 1;
+ if(!bsp_mem_readable(address,0x34))return 0;
+ plane_addr=node[0x08/4];
+ if(!bsp_mem_readable(plane_addr,0x10))return 0;
+ plane=(const float *)plane_addr;
+ out->normal=(CoopBspVec){plane[0],plane[1],plane[2]};
+ out->distance=plane[3];
+ out->child_neg=node[0x2c/4];
+ out->child_pos=node[0x30/4];
+ return out->child_neg!=0u&&out->child_pos!=0u;
+}
+static CoopBspResult bsp_probe_base_world(KpcIntersectVec centre,
+ KpcIntersectVec lo,KpcIntersectVec hi,U32 *nodes,U32 *root_out){
+ U32 manager,shared,world,root;
+ CoopBspBox candidate;
+ const U32 global_ptr=(U32)backend+0x4a250u;
+ if(root_out)*root_out=0;
+ if(nodes)*nodes=0;
+ if(!backend||!bsp_volume_enabled||
+    !bsp_mem_readable(global_ptr,4))return COOP_BSP_UNKNOWN;
+ manager=*(const U32 *)global_ptr;
+ if(!bsp_mem_readable(manager+0x19cu,4))return COOP_BSP_UNKNOWN;
+ shared=*(const U32 *)(manager+0x19cu);
+ if(!bsp_mem_readable(shared+0x08u,4))return COOP_BSP_UNKNOWN;
+ world=*(const U32 *)(shared+0x08u);
+ if(!bsp_mem_readable(world+0x44u,4))return COOP_BSP_UNKNOWN;
+ root=*(const U32 *)(world+0x44u);
+ if(!bsp_mem_readable(root,4))return COOP_BSP_UNKNOWN;
+ if(root_out)*root_out=root;
+ candidate.min=(CoopBspVec){centre.x+lo.x,centre.y+lo.y,centre.z+lo.z};
+ candidate.max=(CoopBspVec){centre.x+hi.x,centre.y+hi.y,centre.z+hi.z};
+ return coop_bsp_box_classify(&candidate,root,bsp_read_native,0,nodes);
+}
+static void bsp_log_box(KpcIntersectVec centre,KpcIntersectVec lo,KpcIntersectVec hi){
+ U32 nodes=0,root=0,n=0;
+ char msg[116];
+ CoopBspResult status=bsp_probe_base_world(centre,lo,hi,&nodes,&root);
+ trace_append(msg,&n,"[KPCFix Co-op] base BSP box=");
+ if(status==COOP_BSP_INTERIOR_ONLY)trace_append(msg,&n,"INTERIOR_ONLY");
+ else if(status==COOP_BSP_TOUCHES_CLASS_ZERO)trace_append(msg,&n,"TOUCHES_CLASS_ZERO");
+ else trace_append(msg,&n,"UNKNOWN");
+ trace_append(msg,&n," nodes=");trace_hex(msg,&n,nodes);
+ trace_append(msg,&n," root=");trace_hex(msg,&n,root);
+ msg[n]=0;log_file(msg);
+}
+
 /* Sample horizontal cross sections at three heights. An intersection is
  * evidence of obstruction. Misses leave unsampled space unknown. */
 /* Ray samples provide positive obstruction evidence only. Full-hull and
@@ -239,6 +315,7 @@ static void sample_candidate(KpcIntersectFn intersect,KpcIntersectVec center,Kpc
  }
  log_file(blocked?"[KPCFix Co-op] body sample=obstructed":"[KPCFix Co-op] body sample=no sampled hit");
  o.sampled_body_hit=blocked;
+ if(bsp_volume_enabled)bsp_log_box(center,lo,hi);
  {CoopProbeResult verdict=coop_volume_assess(&candidate,&o);
   log_file(verdict==COOP_PROBE_BLOCKED?"[KPCFix Co-op] volume gate=BLOCKED":
     verdict==COOP_PROBE_SAFE?"[KPCFix Co-op] volume gate=SAFE":
@@ -452,7 +529,13 @@ static void initialize(void){
  initial_cheats=GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"AllowCheats",0,ini_path)!=0;
  spawn_separation_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TrialSeparateSpawns",0,ini_path)!=0;
  collision_trace_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceCollisionABI",0,ini_path)!=0;
- clearance_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TracePlayerClearance",0,ini_path)!=0;
+ bsp_volume_enabled=active&&same(back_sha,bsp_original_hash,32)&&
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceBspVolume",0,ini_path)!=0;
+ if(active&&!same(back_sha,bsp_original_hash,32)&&
+    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceBspVolume",0,ini_path)!=0)
+   log_file("[KPCFix Co-op] BSP trace unsupported for this original server.dll hash; disabled.");
+ clearance_enabled=active&&(bsp_volume_enabled||
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TracePlayerClearance",0,ini_path)!=0);
  spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
  if(active&&!hooked){

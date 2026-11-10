@@ -1,4 +1,4 @@
-name: Experimental co-op player-volume evidence gate
+name: Experimental co-op base-BSP player-volume differential
 
 on:
   push:
@@ -81,7 +81,7 @@ jobs:
           mkdir -p dist
           cp server-tools/KPCServerTools.dll server-tools/SERVER_TOOLS_BUILD.json dist/
           cat > dist/TEST-INSTRUCTIONS.txt <<'TXT'
-          EXPERIMENTAL KPCFIX CO-OP PLAYER-VOLUME GATE TEST
+          EXPERIMENTAL KPCFIX CO-OP BASE-BSP VOLUME DIFFERENTIAL
           Not a stable release. No automatic spawning or collision edits.
 
           Back up server.dll, KPCServerTools.dll, SERVER_TOOLS_BUILD.json
@@ -95,6 +95,7 @@ jobs:
 
             [Coop]
             TracePlayerClearance=1
+            TraceBspVolume=1
             TrialSeparateSpawns=0
             TraceCollisionABI=0
 
@@ -102,8 +103,20 @@ jobs:
           with ONE client, inspect KPCServerTools.log:
           Three navigable candidates should give volume gate=UNSUPPORTED.
           The deliberately obstructed wall should give volume gate=BLOCKED.
-          Send all candidate/floor/body/volume gate log lines.
+          Additionally collect [KPCFix Co-op] base BSP box=... lines.
+          INTERIOR_ONLY means primary BSP tree interior only (not SAFE).
+          TOUCHES_CLASS_ZERO means the player box reaches the other
+          BSP leaf class. UNKNOWN means unsafe/unsupported data or
+          search-budget exhaustion.
+          Do not assume the known wall is in the primary BSP until
+          this live differential confirms it. Send the full diagnostic.
 
+          The native tree probe is read-only with guarded pointer reads,
+          bounded stack and per-candidate visitation budget. It runs
+          only on the exact hash-matched original 1.13 DLL, with one
+          client and the opt-in TraceBspVolume switch.
+          A BSP interior-only result still does not cover other
+          WorldModels, current players or scripted hazards.
           This test only detects positive obstructions and verifies that
           unknown hull or actor clearance is never marked SAFE.
           It does not prove arbitrary full-body clearance.
@@ -128,7 +141,7 @@ jobs:
       - name: Upload local-test files
         uses: actions/upload-artifact@v4
         with:
-          name: KPCFix-Coop-Player-Volume-Gate-Test
+          name: KPCFix-Coop-Base-BSP-Volume-Diagnostic
           path: dist/
           if-no-files-found: error
           retention-days: 14
