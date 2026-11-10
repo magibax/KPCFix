@@ -20,6 +20,8 @@ The client stages guarded edits and has protection restoration, instruction-cach
 
 ## Dedicated server
 
+Start-KPC-Selected-Server.ps1 imports the package-local Check-KPCServerVersion.ps1 and calls both its game and server checks. Running the checker file directly executes only its client and shell check. The client checker still defines a server-check helper that current client entry points do not call. Older dot-sourced launch scripts may refer to it.
+
 The separate setup script verifies the installation, preserves the engine as server.original.dll and deploys KPCServerTools.dll as server.dll. Restore-LegacyObject.ps1 recognises historical disk patches. The legacy manifest also supplies trampoline bytes at build time and test data for check_live.py.
 
 CreateServer initialises the proxy and forwards to the original engine. Known dedicated hosts must match the corresponding backend. Other hosts can forward through a recognised backend. For an active dedicated host the proxy intercepts backend lookup of ObjectDLLSetup, checks the object and installs the assembled hooks in memory. DeleteServer forwards to the backend. Missing or incompatible inputs can terminate the server through its fatal path. logging.S implements chat, console handling and player cheat state. The GUI generates its own server configuration and queues the first map.
