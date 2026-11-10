@@ -32,6 +32,7 @@ class TestSpawnSignature(unittest.TestCase):
             0xF2F5F: bytes.fromhex('c78424d000000005000000'),
             0xF2F6A: bytes.fromhex('c78424d400000030271010'),
             0xF2F75: bytes.fromhex('89b424d8000000'),
+            0xF2F7C: bytes.fromhex('66c78424dc0000000360'),
             0x3A60: bytes.fromhex('8bc133c9894824894828c3'),
             0x102730: bytes.fromhex('8b44240485c0750332c0c33b4424080f95c0c3'),
             0xEBC7: bytes.fromhex('ff909000000083c408'),
@@ -42,7 +43,7 @@ class TestSpawnSignature(unittest.TestCase):
 
     def test_known_signatures(self):
         result = inspect(bytes(self.make_fixture()), require_hash=False)
-        self.assertEqual(result['guards_passed'], 24)
+        self.assertEqual(result['guards_passed'], 25)
         self.assertEqual(result['spawn_position_call_rva'], '0x0f13c4')
 
     def test_reject_wrong_patch_site(self):
@@ -67,6 +68,12 @@ class TestSpawnSignature(unittest.TestCase):
         b = self.make_fixture()
         b[0xF2F75+1] = 0x90
         with self.assertRaisesRegex(ValueError, 'intersect filter userdata'):
+            inspect(bytes(b), require_hash=False)
+
+    def test_reject_wrong_query_extra_word(self):
+        b = self.make_fixture()
+        b[0xF2F7C+8] = 0
+        with self.assertRaisesRegex(ValueError, 'query extra word'):
             inspect(bytes(b), require_hash=False)
 
     def test_hash_gate(self):
