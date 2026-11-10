@@ -67,9 +67,9 @@ The experimental server proxy accepts this additional INI setting:
 
 When enabled with `ServerTools.Enabled=1` it retains the ordinary spawn position trace and, **after** the original engine position setter completes, performs up to nine downward line segment tests from **known R1M2B positions only**. Each ray spans Y +64 to Y -256 relative to the fixed player centre while preserving X/Z. The query uses original flags 5 and the exact original filter callback. The log records:
 
-    [KPCFix Co-op] ABI segment hit=1 obj=0x... y=0x... ny=0x...
+    [KPCFix Co-op] ABI segment hit=1 obj=0x... y=0x... ny=0x... hobj=0x... surf=0x...
 
-`y` is the raw float32 bit pattern of the hit position's Y coordinate; `ny` is the raw float32 bit pattern of the hit plane's normal Y (only logged if hit). A `hit=0` record is also valid and does not prove there is no floor: ray height, geometry type and filtering matter.
+`y` is the raw float32 bit pattern of the hit position's Y coordinate; `ny` is the raw float32 bit pattern of the hit plane's normal Y; `hobj` and `surf` are raw result fields observed at offsets +0x1C and +0x24 (only logged if hit). Their full semantics require runtime confirmation. A `hit=0` record is also valid and does not prove there is no floor: ray height, geometry type and filtering matter.
 
 The diagnostic **does not** rewrite, move or disable collision objects and is disabled by default. Its invocation has *not yet run inside a real KPC Windows server*; do not describe it as dynamically verified until the user tests it and returns logs.
 
