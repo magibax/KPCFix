@@ -19,6 +19,8 @@ class TestSpawnSignature(unittest.TestCase):
             0xF1340: bytes.fromhex('891f'),
             0xF1355: bytes.fromhex('ff92d0010000'),
             0xF13A4: bytes.fromhex('e817fdffff'),
+            0xF10C0: bytes.fromhex('81ec80000000'),
+            0xF129D: bytes.fromhex('c20c00'),
             0xF13C4: bytes.fromhex('ff91e0010000'),
             0xF13CA: bytes.fromhex('83c408'),
         }
@@ -28,7 +30,7 @@ class TestSpawnSignature(unittest.TestCase):
 
     def test_known_signatures(self):
         result = inspect(bytes(self.make_fixture()), require_hash=False)
-        self.assertEqual(result['guards_passed'], 11)
+        self.assertEqual(result['guards_passed'], 13)
         self.assertEqual(result['spawn_position_call_rva'], '0x0f13c4')
 
     def test_reject_wrong_patch_site(self):
