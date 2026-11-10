@@ -44,6 +44,8 @@ def inspect(data: bytes, require_hash=True):
     require(0xF1340, bytes.fromhex('891f'), 'restore previous game type')
     require(0xF1355, bytes.fromhex('ff92d0010000'), 'read start position via API')
     require(0xF13A4, bytes.fromhex('e817fdffff'), 'spawn transform setup')
+    require(0xF10C0, bytes.fromhex('81ec80000000'), 'spawn preparation entry')
+    require(0xF129D, bytes.fromhex('c20c00'), 'spawn preparation thiscall cleanup')
     require(SPAWN_ENGINE_CALL_RVA, SPAWN_ENGINE_CALL_ORIG, 'player placement API call')
     require(0xF13CA, bytes.fromhex('83c408'), 'caller cleans two position arguments')
     return {
@@ -53,7 +55,7 @@ def inspect(data: bytes, require_hash=True):
         'spawn_initialization_rva': '0x0f12a0',
         'spawn_position_call_rva': '0x0f13c4',
         'spawn_position_api_field_offset': '0x01e0',
-        'guards_passed': 11,
+        'guards_passed': 13,
     }
 
 
