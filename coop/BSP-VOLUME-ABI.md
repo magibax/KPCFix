@@ -302,3 +302,56 @@ observed R1M2B counts (115 resources, 109 associations) are the
 regression baseline; the reciprocal match count is intentionally
 unpredicted until live-tested. **Never use these reference checks
 to set a spawn-clearance verdict.**
+
+## Live Windows reciprocal WorldModel validation — PASS (2026-11-10)
+
+The subsequent `registry-backrefs-v3` opt-in R1M2B runtime produced:
+
+```text
+[KPCFix Co-op] model registry=TRAVERSED entries=0x00000073 roots=0x00000073 attached=0x0000006d
+[KPCFix Co-op] model refs matched=0x0000006d mismatch=0x00000000 unreadable=0x00000000
+[KPCFix Co-op] model registry first root=0x04006950 object=0x03e44e58
+```
+
+The 115 resource records and 115 readable candidate BSP roots are
+consistent with the prior Windows run. **All 109 non-null object
+associations have readable reciprocal `object+0x140` references
+matching their original resource records.** No mismatches or unreadable
+back-references were observed. Six resources still have no associated
+object. The reported pointers are process-local; changed address
+values are not by themselves a failure.
+
+The base BSP still returns `INTERIOR_ONLY` for the three previously
+navigable R1M2B trial boxes (27/24/25 nodes) and
+`TOUCHES_CLASS_ZERO` for the wall-overlapping box (17 nodes).
+The base BSP root in this run was `0x03057020`. The existing full
+volume gate correctly remains **3 × `UNSUPPORTED`, 1 × `BLOCKED`**,
+since active solidity and WorldModel coordinate transforms are
+not yet established.
+
+### Next required engine work
+
+This confirmation upgrades the candidate associations to
+**reciprocally consistent references**, not verified active solid
+objects. Never infer collidability, collision flags or world-space
+location merely from an object pointer.
+
+Relevant additional original-1.13 static observations from
+`server.original.dll` disassembly:
+- At RVA `0x2299e..0x229b6`, the `se_InitWorldModel` initializer
+  copies three DWORDs from `model+0x11c/0x120/0x124` to
+  `object+0x40/0x44/0x48`. This verifies a value-transfer
+  relationship but **not yet** its geometric semantics.
+- The code at `0x22af1..0x22b33` accesses the object's
+  `+0x13c` linked state and, conditionally for
+  `object+0x76 == 1`, copies 60 bytes beginning at
+  `object+0x14c` into a caller-provided buffer. The paired
+  `0x22b65..0x22ba6` path writes values back into model-linked
+  state and is therefore **not safe to invoke in a diagnostic**.
+  Neither path is yet confirmed as a collision-transform API.
+
+The next investigation is to identify the engine's **actual live
+object list, collision flags and world-to-model transform** from
+independent original call sites. Only once those contracts are
+verified can a read-only, transformed multi-BSP hull check be
+considered. Respawn and actor occupancy remain separate blockers.
