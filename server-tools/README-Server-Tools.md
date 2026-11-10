@@ -6,6 +6,8 @@ Windows dedicated-server tools for official game version **1.13**. Supports the 
 
 Close the game and server, copy these files into the game directory, then run **Setup-KPCServerTools.cmd** again to deploy the new DLL. Keep your existing `server.original.dll` and `KPCServerTools.ini`. The setup recognizes the preceding proxy build.
 
+If setup reports an unrecognised active `server.dll`, leave the official `server.original.dll` in place. Once you have confirmed it is the matching original, move the active `server.dll` to a separate backup folder and rerun setup. Setup verifies the original against the dedicated executable before installing the proxy. Keep the moved DLL if you need to restore your previous installation.
+
 ## Install or migrate
 
 1. Close the game and dedicated server for this one-time setup. Back up your game folder.
