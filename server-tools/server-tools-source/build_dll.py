@@ -81,7 +81,8 @@ for line in subprocess.check_output(['nm','-an',str(work/'server.unstripped.dll'
 # accepts an upgrade from the installed stable DLL to this newly built DLL.
 new_hash=hashlib.sha256(out.read_bytes()).hexdigest()
 previous_proxies=['67a6be68223efb0321d41f270ae10923f0d6073731de57a61b600794c3f0eeea',
-                  '9b6bd69e894925e6b31f1ed32b6ff82331af104e2c20fbb6aeb43dc4bef5be9a']
+                  '9b6bd69e894925e6b31f1ed32b6ff82331af104e2c20fbb6aeb43dc4bef5be9a',
+                  '66653630a0b717a70c3dd51a3b97efd75bd9b20495bd0b4d089b914b60942a37']
 old_manifest=package/'SERVER_TOOLS_BUILD.json'
 if old_manifest.is_file():
  try:
