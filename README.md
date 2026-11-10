@@ -45,18 +45,3 @@ Extract the Server Tools ZIP into the game directory, close the game/server and 
 ## Building and testing
 
 See the [client build instructions](source/BUILD.md), [architecture](ARCHITECTURE.md), [configuration reference](CONFIGURATION.md) and [verification procedures](TESTING.md).
-
-## Release source and binary provenance
-
-The current Windows client release is [KPCFix 1.13 R4](https://github.com/magibax/KPCFix/releases/tag/kpcfix-1.13-r4), and the current dedicated server release is [Server Tools 1.0.0 R2](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r2). Both release tags identify source commit `7e8a6ecbc3a7a06ef850df85fd9ec3eb1ebecb61`.
-
-GitHub's automatically generated **Source code (ZIP/tar.gz)** links are complete snapshots of the repository at each release tag. They are **not** the same as the separately uploaded, installable Windows or Server Tools ZIPs. Each installable archive contains a selected subset of files plus the release DLLs and any bundled dependencies; the repository source snapshot also contains tests and build machinery for both products.
-
-Older release tags `kpcfix-1.13-r3` and `server-tools-v1.0.0` point to earlier commits, even though their current binary ZIPs have the same checksums as the newer R4 and R2 assets. For source corresponding to the current installable packages, use R4 or R2, not those older source links.
-
-Published package SHA-256 checksums:
-
-- Windows client `KPCFix-Windows-1.13.zip`: `da2a67cda69adf8d75febf10f7915f9efcaf725ced1f2fef02a3a021f892cc55`
-- Server Tools `KPCFix-Server-Tools-1.0.0.zip`: `db8b550257a11f8a5dbdcea31512b69d19aa9922fd73979cba46478786ed4265`
-
-The source tree tracks `source/BUILD_RESULT.json`, `server-tools/SERVER_TOOLS_BUILD.json`, and package-specific checksum manifests. To prove binary provenance, rebuild from the tagged source and compare DLL SHA-256 hashes with the distributed DLLs; a matching tag alone does not establish a reproducible build.
