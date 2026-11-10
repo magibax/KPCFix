@@ -54,6 +54,14 @@ On R1M2B the traced spawn centre is at Y=−256. The default box bottom is there
 
 For a live dimensions trace, observe the original +0x104 call's outputs on return and correlate the queried handle with a known player. Its receiver is the server interface instance (ECX), with dispatch through its vtable. The direct +0x90 segment API uses a different calling convention. Slot +0x108 changes object bounds and should stay out of a read-only probe. A separate world-geometry clearance query still needs verification against a deliberately obstructed candidate.
 
+## Live R1M2B wall control (2026-11-10)
+
+The Windows run of diagnostic 291ecb4 returned player-relative bounds (−20, −46, −20) to (+20, +46, +20). At X=1600, Y=−256, the three candidate Z coordinates −2944, −2848 and −3040 each produced a floor hit at Y=−320 with normal (0, 1, 0) and no sampled body hit.
+
+The positive-X ray reached a wall at X=1664. At the control centre (1654, −256, −2944), the measured box extended to X=1674, ten units through the wall plane. The floor query still hit the same level surface. The body sample reported an obstruction.
+
+Two distinct player handles were placed at the original anchor. The diagnostic ran once and queried hypothetical candidates. Player-to-player clearance and full world-volume clearance remain unverified. The next engine investigation is a read-only box-overlap query, using these four positions as regression controls before enabling automatic placement.
+
 ## Recommended next runtime instrumentation
 
 1. Use the [verified R1M2B segment-query results](INTERSECT-ABI.md) as the ground reference. Trace a player-volume clearance method and verify its calling convention against original call sites.
