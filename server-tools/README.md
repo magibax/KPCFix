@@ -1,6 +1,6 @@
-# KPCFix Server Tools — DLL test build
+# KPCFix Server Tools 1.0.0
 
-Windows dedicated-server tools for official game version **1.13**. Supports the supplied Europe/UK, USA, German and Italian 1.13 builds. This is a local test package; the new DLL loader needs testing in Windows before publication.
+Windows dedicated-server tools for official game version **1.13**. Supports the supplied Europe/UK, USA, German and Italian 1.13 builds.
 
 ## Update an existing DLL installation
 
@@ -48,4 +48,4 @@ The small 32-bit proxy forwards the engine's two exports and intercepts its look
 
 Compiled-proxy emulation passed for Europe and US engine profiles at relocated DLL/object addresses, with cheats enabled, disabled, pass-through and altered-object rejection. Hook tests cover separate player state, live revocation, client OFF acknowledgements, chat announcements and prompt restoration. These checks supplement Windows testing; they do not replace it. The preceding on-disk hooks were tested in game, but this DLL build still needs that confirmation.
 
-Source and build/test instructions are in `source/README.md`. Published release downloads may predate this DLL conversion; use the current server-tools directory for this build.
+Source and build/test instructions are in `source/README.md`. This package includes the DLL conversion and chat-only announcements.

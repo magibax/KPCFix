@@ -36,4 +36,8 @@ For a 165 FPS cap, use `FpsLimiter = flipend(165)`. If a scripted sequence misbe
 
 ## Server Tools
 
-The [Server Tools](server-tools/README.md) provide a graphical launcher for all 59 maps, server-rule controls, console chat logging and live `kpc_cheats 0/1` permission. Copy the contents of `server-tools/` into the game directory and run **Setup-KPCServerTools.cmd** once before using **KPC-Server-Launcher.cmd**. The DLL applies the hooks in memory and leaves `object.lto` stock after migration. Campaign maps are selectable but may be buggy in multiplayer. Published release downloads are unchanged; this DLL conversion is currently available from the repository.
+Hosting tools are a separate download: [KPCFix Server Tools 1.0.0](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0). The main KPCFix ZIP contains client fixes only, including the multiplayer browser connection fix.
+
+Server Tools includes a compact graphical launcher for all 59 maps, server-rule controls, live `kpc_cheats 0/1` permission and console chat logging. Campaign maps are experimental and may be buggy in multiplayer. Cheat announcements appear in chat only.
+
+Extract the Server Tools ZIP into the game directory, close the game/server and run **Setup-KPCServerTools.cmd** once. Then use **KPC-Server-Launcher.cmd**. Its DLL preserves the original engine and leaves `object.lto` stock after migration. See the [Server Tools README](server-tools/README.md) for setup, upgrades and removal.

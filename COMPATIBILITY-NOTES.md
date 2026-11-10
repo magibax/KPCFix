@@ -40,7 +40,7 @@ Both dedicated executables pass **3** to the “Server Version” banner. They c
 
 The common patch notes list a 1.12 server crash when a jack-in-the-box exploded after its owner left, and a 1.13 UDP packet-length fix, dedicated-server diagnostics, and console access to variables such as UpdateRate. The US and European-family `server.dll` both pass the caller's packet length to the send and receive wrappers. The changelog alone cannot establish which internal packet-construction paths differ. KPCFix's fresh-start browser fix addresses a separately identified **client-side** problem: an empty local IP now binds to the wildcard address. A live cross-region match is still needed to establish network interoperability.
 
-`server.cfg` and `server_bighead.cfg` match across all four 1.13 folders. The standard file chooses game type 1 (regular deathmatch). The file named “bighead” chooses type 2 (Conquer deathmatch). Both contain two spawntype assignments. The KPCFix LAN config uses one and requests random spawning. The dedicated manual distinguishes the interactive `start` command from variables accepted in a config file. The included starter loads its config and queues a random first map in the console. The subsequent rotation uses the supplied map list.
+`server.cfg` and `server_bighead.cfg` match across all four 1.13 folders. The standard file chooses game type 1 (regular deathmatch). The file named “bighead” chooses type 2 (Conquer deathmatch). Both contain two spawntype assignments. The separate Server Tools launcher writes its own configuration with one spawn-type assignment. The dedicated manual distinguishes the interactive `start` command from variables accepted in a config file. Hosting scripts are supplied only in the separate Server Tools package. Its graphical launcher loads its generated configuration and queues the selected first map in the console.
 
 ## Validation
 
@@ -49,3 +49,4 @@ The tests load the shipped DLL and execute original 1.13 x86 routines with mocke
 Native visual presentation through DDrawCompat, actual mouse feel, Windows launcher execution and live multiplayer between server editions remain playtest items.
 
 The summary and logs under verification/runs are retained from the first KPCFix release and identify its DLL by hash. R2 adds checks for enemy bar geometry, edition-specific label placement, fullscreen movie placement and the movie filter fallback. The original client is shared across regions. Enemy HUD hooks use the separate shell layouts in profiles.h.
+
