@@ -103,6 +103,9 @@ not a verified collision transform, live-solid roster, or spawn gate.
 
 ### Campaign activation and first exit
 
+The [campaign startup and scripted-sequence synchronisation design](CAMPAIGN-SYNC-DESIGN.md) records the empty-server question, proposed server-authoritative state machine, client presentation versus game effects, late joining/reconnect policy, and required read-only engine traces. This is a **proposal**, not a working co-op sequence implementation.
+
+
 In the dedicated Windows trial the two fixed spawn positions worked, but the usual intro did not start and walking through a known transition did nothing. The developer browser's client-hosted map load provides a working intro comparison. R1M2B has WorldProperties.starting_cinematic pointing at CS2START.SCR, which also loads level scripts. CExitTrigger0.NextWorld and WORLDORDER.TXT independently identify R1M2C as the next map.
 
 The original object module checks the game-type field at RVA 0x2d455 before the exit handler can call 0x2d510. A nonzero value skips that call. The opt-in TraceCampaign switch logs this decision and the starting_cinematic lookup at 0x1045b1, preserving the native decisions. If the trace is armed but the hallway produces no exit line, trace the upstream event source and object activation. Shared transitions and per-client cinematic delivery still need separate verification.
