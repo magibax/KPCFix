@@ -100,3 +100,9 @@ not a verified collision transform, live-solid roster, or spawn gate.
 | First playable level pair | Two clients fight through one level, activate its exit and enter the next together. Objectives, pickups and player state follow the agreed co-op rules. |
 | Campaign compatibility | Play through each realm, checking scripted encounters, bosses, transitions and recovery after a wipe. Track exceptions per map. |
 | Experimental release | Repeat the two-level run on supported regional builds and verify ordinary deathmatch, disabled mode, install, upgrade and rollback. |
+
+### Campaign activation and first exit
+
+In the dedicated Windows trial the two fixed spawn positions worked, but the usual intro did not start and walking through a known transition did nothing. The developer browser's client-hosted map load provides a working intro comparison. R1M2B has WorldProperties.starting_cinematic pointing at CS2START.SCR, which also loads level scripts. CExitTrigger0.NextWorld and WORLDORDER.TXT independently identify R1M2C as the next map.
+
+The original object module checks the game-type field at RVA 0x2d455 before the exit handler can call 0x2d510. A nonzero value skips that call. The opt-in TraceCampaign switch logs this decision and the starting_cinematic lookup at 0x1045b1, preserving the native decisions. If the trace is armed but the hallway produces no exit line, trace the upstream event source and object activation. Shared transitions and per-client cinematic delivery still need separate verification.

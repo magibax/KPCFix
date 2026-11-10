@@ -648,6 +648,27 @@ static void make_spawn_call(U8 *out,U8 *site){
  out[0]=0xe8;copy(out+1,(const U8 *)&relative,4);out[5]=0x90;
 }
 
+static int campaign_trace;
+static U8 *campaign_image;
+
+/* Replace only the native six-byte game-type load. Preserve the receiver,
+ * original registers and flags, then replay the load before returning. */
+static void __attribute__((used,noinline)) campaign_exit_seen(U32 mode){
+ log_file(mode?"[KPCFix Campaign] exit handler reached: multiplayer gate closed":
+               "[KPCFix Campaign] exit handler reached: single-player gate open");
+}
+static void __attribute__((naked)) campaign_exit_load(void){
+ __asm__ volatile("pushfl; pushal; pushl 0x1d0(%eax); call campaign_exit_seen;"
+                  "addl $4,%esp; popal; popfl; movl 0x1d0(%eax),%edx; ret");
+}
+typedef void *(CDECL *CampaignLookup)(const char *);
+static void *CDECL campaign_lookup(const char *path){
+ void *result=((CampaignLookup)(campaign_image+0xc50c0))(path);
+ log_file("[KPCFix Campaign] starting_cinematic lookup");
+ log_file(path);
+ log_file(result?"[KPCFix Campaign] script object found":"[KPCFix Campaign] script lookup returned null");
+ return result;
+}
 static int apply_object(HMODULE module){
  U8 *b=(U8 *)module;U8 hash[32],expected[8],spawn_call[6],prepare_call[5];U32 i,j,old,restore,already=1;
  U32 mbi[7],delta=(U32)b-0x10000000u;
@@ -655,6 +676,13 @@ static int apply_object(HMODULE module){
  make_spawn_call(spawn_call,b+SPAWN_POS_CALL_RVA);
  make_prepare_call(prepare_call,b+SPAWN_PREPARE_CALL_RVA);
  for(i=0;i<PATCH_COUNT;i++)if(!same(b+patches[i].rva,patches[i].after,patches[i].size))already=0;
+ U8 exit_call[6]={0xe8,0,0,0,0,0x90},intro_call[5]={0xe8};
+ const U8 exit_original[]={0x8b,0x90,0xd0,0x01,0,0},intro_original[]={0xe8,0x0a,0x0b,0xfc,0xff};
+ U32 exit_rel=(U32)campaign_exit_load-(U32)(b+0x2d455+5);
+ U32 intro_rel=(U32)campaign_lookup-(U32)(b+0x1045b1+5);
+ copy(exit_call+1,(U8 *)&exit_rel,4);copy(intro_call+1,(U8 *)&intro_rel,4);
+ if(campaign_trace&&(!same(b+0x2d455,already?exit_call:exit_original,6)||
+                      !same(b+0x1045b1,already?intro_call:intro_original,5)))return 0;
  if(already){
   if(!same(b+SPAWN_POS_CALL_RVA,spawn_trace_enabled?spawn_call:original_spawn_pos_call,6))return 0;
   if(!same(b+SPAWN_PREPARE_CALL_RVA,spawn_separation_enabled?prepare_call:original_prepare_call,5))return 0;
@@ -679,6 +707,12 @@ static int apply_object(HMODULE module){
  for(i=0;i<0x90;i++)if(b[0x174f00+i])return 0;
  if(rd(b+0x16d950)!=3&&rd(b+0x16d950)!=0)return 0;
  if(!VirtualProtect(b+0x1000,0x116000,0x40,&old))return 0;
+ if(campaign_trace){
+  campaign_image=b;
+  copy(b+0x2d455,exit_call,6);
+  copy(b+0x1045b1,intro_call,5);
+  log_file("[KPCFix Campaign] startup and exit trace armed");
+ }
  copy(b+HOOK_RVA,hook_code,sizeof(hook_code));
  b[HOOK_RVA+INITIAL_OFFSET]=(U8)initial_cheats;
  copy(b+0x116550,noclip_init,sizeof(noclip_init));
@@ -754,6 +788,7 @@ static void initialize(void){
   if(!create_real||!delete_real)fatal("[KPCFix Server Tools] ERROR: missing original server exports.");
  }
  active=profile>=0&&GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"Enabled",1,ini_path)!=0;
+ campaign_trace=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceCampaign",0,ini_path)!=0;
  initial_cheats=GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"AllowCheats",0,ini_path)!=0;
  spawn_separation_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TrialSeparateSpawns",0,ini_path)!=0;
  collision_trace_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceCollisionABI",0,ini_path)!=0;
