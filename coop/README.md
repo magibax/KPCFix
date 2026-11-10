@@ -85,3 +85,8 @@ was incorrect. The updated `model-types-v5` survey reports both
 type 2 and type 1 and captures at most two read-only examples
 of mismatched model/source position vectors. See
 [BSP-VOLUME-ABI.md](BSP-VOLUME-ABI.md).
+
+The next `model-geometry-survey-v6` diagnostic adds a type histogram,
+type-2/other flag cross-tabs and raw adjacent/bounds values for the
+two changed-vector objects. These are *read-only research data*,
+not a verified collision transform, live-solid roster, or spawn gate.

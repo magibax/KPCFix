@@ -330,6 +330,36 @@ static void registry_trace_loaded(void){
   trace_append(msg,&n," unread=");trace_hex(msg,&n,raw.type_unreadable);
   msg[n]=0;log_file(msg);
   n=0;
+  {
+   unsigned i;
+   for(i=0;i<16u;i++){
+    if(!raw.type_hist[i])continue;
+    n=0;
+    trace_append(msg,&n,"[KPCFix Co-op] model type bucket=");
+    trace_hex(msg,&n,i);
+    trace_append(msg,&n," count=");trace_hex(msg,&n,raw.type_hist[i]);
+    msg[n]=0;log_file(msg);
+   }
+   if(raw.type_outside_hist){
+    n=0;
+    trace_append(msg,&n,"[KPCFix Co-op] model type bucket=OUTSIDE_0_TO_15 count=");
+    trace_hex(msg,&n,raw.type_outside_hist);
+    msg[n]=0;log_file(msg);
+   }
+  }
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] type2 masks any12000=");
+  trace_hex(msg,&n,raw.type2_flags_any12000);
+  trace_append(msg,&n," none=");trace_hex(msg,&n,raw.type2_flags_none12000);
+  trace_append(msg,&n," bit4000=");trace_hex(msg,&n,raw.type2_flags_4000);
+  msg[n]=0;log_file(msg);
+  n=0;
+  trace_append(msg,&n,"[KPCFix Co-op] other masks any12000=");
+  trace_hex(msg,&n,raw.other_flags_any12000);
+  trace_append(msg,&n," none=");trace_hex(msg,&n,raw.other_flags_none12000);
+  trace_append(msg,&n," bit4000=");trace_hex(msg,&n,raw.other_flags_4000);
+  msg[n]=0;log_file(msg);
+  n=0;
   trace_append(msg,&n,"[KPCFix Co-op] model flags 2000=");
   trace_hex(msg,&n,raw.flags_2000);
   trace_append(msg,&n," 10000=");trace_hex(msg,&n,raw.flags_10000);
@@ -357,6 +387,24 @@ static void registry_trace_loaded(void){
      const U32 *v=j?sample->object_vector:sample->model_vector;
      n=0;
      trace_append(msg,&n,j?"[KPCFix Co-op] model vector current":"[KPCFix Co-op] model vector source");
+     trace_append(msg,&n," x=");trace_hex(msg,&n,v[0]);
+     trace_append(msg,&n," y=");trace_hex(msg,&n,v[1]);
+     trace_append(msg,&n," z=");trace_hex(msg,&n,v[2]);
+     msg[n]=0;log_file(msg);
+    }
+    n=0;
+    trace_append(msg,&n,"[KPCFix Co-op] model adjacent valid=");
+    trace_hex(msg,&n,sample->adjacent_valid);
+    trace_append(msg,&n," a=");trace_hex(msg,&n,sample->adjacent_object_words[0]);
+    trace_append(msg,&n," b=");trace_hex(msg,&n,sample->adjacent_object_words[1]);
+    trace_append(msg,&n," c=");trace_hex(msg,&n,sample->adjacent_object_words[2]);
+    trace_append(msg,&n," d=");trace_hex(msg,&n,sample->adjacent_object_words[3]);
+    msg[n]=0;log_file(msg);
+    for(j=0;j<2;j++){
+     const U32 *v=&sample->resource_bounds_words[j*3];
+     n=0;
+     trace_append(msg,&n,j?"[KPCFix Co-op] model raw bounds high":"[KPCFix Co-op] model raw bounds low");
+     trace_append(msg,&n," valid=");trace_hex(msg,&n,sample->bounds_valid);
      trace_append(msg,&n," x=");trace_hex(msg,&n,v[0]);
      trace_append(msg,&n," y=");trace_hex(msg,&n,v[1]);
      trace_append(msg,&n," z=");trace_hex(msg,&n,v[2]);
@@ -645,7 +693,7 @@ static void initialize(void){
  spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
  if(active&&spawn_trace_enabled){
-  log_file("[KPCFix Co-op] diagnostics build=model-types-v5 (reads KPCServerTools.ini)");
+  log_file("[KPCFix Co-op] diagnostics build=model-geometry-survey-v6 (reads KPCServerTools.ini)");
   log_file(model_registry_enabled?
     "[KPCFix Co-op] effective TraceModelRegistry=1":
     "[KPCFix Co-op] effective TraceModelRegistry=0 (set [Coop] TraceModelRegistry=1; restart)");

@@ -523,3 +523,31 @@ rotation and world/local transform layouts, and identify the
 actual live-solid object set. Only then can the current
 read-only BSP-box classifier be applied to additional
 models without silently omitting obstacles.
+
+## V6 follow-up: type histogram and raw geometry field samples
+
+The passing v5 experiment established 57 type-2 links and 52 links
+of as-yet-unclassified types. To avoid treating **all attached
+resources as 57 distinct solid WorldModels**, the v6 read-only
+collector now logs nonzero values in the full byte-type histogram
+(`0..15`, with an overflow bucket for types `16..255`) and
+cross-tabulates `0x12000` and `0x4000` masks for type-2
+versus non-type-2 objects. Unknown type ranges remain unclassified.
+
+For the two proven changed-vector cases it also records:
+- raw DWORDs at `object+0x4c..0x58`; the object constructor
+  copies these from creation data (`0x1d4bd..0x1d4d2`)
+  but a rotation interpretation is **not yet independently
+  verified**;
+- raw source-model bounds at `model+0xe0..0xf4`; the original
+  `se_InitWorldModel` initial-bound derivation references these
+  fields (`0x229bf..0x229e3`) but does not prove they are in
+  the same coordinate frame as the player AABB.
+
+Each optional sample is individually validity-checked and
+read-only. Invalid samples are tagged `valid=0` rather than
+used. No transform is applied; no new engine method is invoked.
+The original spatial-indexing procedure RVA `0x19e06`
+continues to be forbidden for our diagnostic because it writes
+live index state. Nothing changes the `world_hull`,
+`other_actors`, or automatic-allocator evidence.

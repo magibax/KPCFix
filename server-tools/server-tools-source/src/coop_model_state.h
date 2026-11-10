@@ -9,18 +9,26 @@
  * These vectors alone do not establish a world-to-model transform.
  * Type 2 follows the WorldModel-specific native path at original server
  * RVAs 0x18435 and 0x20719; type 1 is NOT a WorldModel identifier.
- * Source/current vector samples are raw IEEE-754 bit patterns, not
- * proof of motion, world transforms, or safe placement.
+ * Source/current vectors, object-adjacent +0x4c..58 and model
+ * +0xe0..f4 bounds words are RAW samples. Their full geometric
+ * semantics and coordinate frames remain unverified.
+ * No flags/type histogram is a solid-object whitelist.
  * This is read-only observational research: NO SAFE spawn inference.
  */
 #define COOP_MODEL_VECTOR_SAMPLE_LIMIT 2u
 typedef struct {
  unsigned int object,resource,type,flags;
  unsigned int model_vector[3],object_vector[3];
+ unsigned int adjacent_object_words[4],resource_bounds_words[6];
+ unsigned int adjacent_valid,bounds_valid;
 } CoopModelVectorSample;
 typedef struct {
  unsigned int matched,skipped_unverified;
  unsigned int type_1,type_2,type_other,type_unreadable;
+ unsigned int type_hist[16],type_outside_hist;
+ unsigned int type2_flags_any12000,type2_flags_none12000;
+ unsigned int other_flags_any12000,other_flags_none12000;
+ unsigned int type2_flags_4000,other_flags_4000;
  unsigned int flags_2000,flags_10000,flags_any_12000,flags_unreadable;
  unsigned int init_vector_equal,init_vector_different,init_vector_unreadable;
  unsigned int sample_count;
@@ -40,6 +48,8 @@ static void coop_model_state_observe(void *user,
  type_ok=coop_model_read_offset(read,ctx,object,0x74u,&type_word);
  if(type_ok){
   raw_type=(type_word>>16)&255u;
+  if(raw_type<16u)s->type_hist[raw_type]++;
+  else s->type_outside_hist++;
   if(raw_type==2u)s->type_2++;
   else if(raw_type==1u)s->type_1++;
   else s->type_other++;
@@ -49,6 +59,15 @@ static void coop_model_state_observe(void *user,
   if(flags&0x2000u)s->flags_2000++;
   if(flags&0x10000u)s->flags_10000++;
   if(flags&0x12000u)s->flags_any_12000++;
+  if(type_ok&&raw_type==2u){
+   if(flags&0x12000u)s->type2_flags_any12000++;
+   else s->type2_flags_none12000++;
+   if(flags&0x4000u)s->type2_flags_4000++;
+  }else if(type_ok){
+   if(flags&0x12000u)s->other_flags_any12000++;
+   else s->other_flags_none12000++;
+   if(flags&0x4000u)s->other_flags_4000++;
+  }
  }else s->flags_unreadable++;
  for(i=0;i<3u;i++){
   if(!coop_model_read_offset(read,ctx,object,0x40u+i*4u,&object_vec[i])||
@@ -70,6 +89,16 @@ static void coop_model_state_observe(void *user,
     sample->model_vector[i]=model_vec[i];
     sample->object_vector[i]=object_vec[i];
    }
+   sample->adjacent_valid=1;
+   for(i=0;i<4u;i++)
+    if(!coop_model_read_offset(read,ctx,object,0x4cu+4u*i,
+                              &sample->adjacent_object_words[i]))
+     sample->adjacent_valid=0;
+   sample->bounds_valid=1;
+   for(i=0;i<6u;i++)
+    if(!coop_model_read_offset(read,ctx,model,0xe0u+4u*i,
+                              &sample->resource_bounds_words[i]))
+     sample->bounds_valid=0;
   }
  }
 }

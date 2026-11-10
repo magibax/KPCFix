@@ -34,6 +34,8 @@ int main(void){
  assert(st==COOP_MODEL_REGISTRY_TRAVERSED);
  assert(r.entries==1&&r.reciprocal_matches==1);
  assert(s.matched==1&&s.type_2==1&&s.type_1==0&&s.type_other==0);
+ assert(s.type_hist[2]==1&&s.type_hist[1]==0&&s.type_outside_hist==0);
+ assert(s.type2_flags_any12000==1&&s.other_flags_any12000==0);
  assert(s.flags_2000==1&&s.flags_10000==1&&s.flags_any_12000==1);
  assert(s.init_vector_equal==1&&s.init_vector_different==0&&s.sample_count==0);
  /* The constructor places a byte at object+0x76; preserve its exact code.
@@ -42,10 +44,16 @@ int main(void){
  st=coop_model_state_scan(0x1000,get,&f,&r,&s);
  assert(st==COOP_MODEL_REGISTRY_TRAVERSED);
  assert(s.type_1==1&&s.type_2==0&&s.type_other==0);
+ assert(s.type_hist[1]==1&&s.type_hist[2]==0);
+ assert(s.other_flags_any12000==1&&s.type2_flags_any12000==0);
  set(&f,0x6074,0x00030000);
  st=coop_model_state_scan(0x1000,get,&f,&r,&s);
  assert(st==COOP_MODEL_REGISTRY_TRAVERSED);
  assert(s.type_other==1&&s.type_1==0&&s.type_2==0);
+ assert(s.type_hist[3]==1&&s.type_hist[2]==0);
+ set(&f,0x6074,0x00110000);
+ st=coop_model_state_scan(0x1000,get,&f,&r,&s);
+ assert(s.type_outside_hist==1&&s.type_other==1);
  set(&f,0x6074,0x00020000);
  /* Raw flags masked independently, and a changed initial vector is
   * evidence of divergence only, NOT a verified world transform. */
@@ -58,6 +66,18 @@ int main(void){
  assert(s.samples[0].resource==0x3000&&s.samples[0].type==2);
  assert(s.samples[0].flags==0&&s.samples[0].model_vector[0]==1);
  assert(s.samples[0].object_vector[0]==4);
+ assert(s.type2_flags_none12000==1&&s.type2_flags_any12000==0);
+ assert(!s.samples[0].adjacent_valid&&!s.samples[0].bounds_valid);
+ /* Supply all optional bounded sample words. */
+ set(&f,0x604c,1);set(&f,0x6050,2);
+ set(&f,0x6054,3);set(&f,0x6058,4);
+ set(&f,0x40e0,11);set(&f,0x40e4,12);set(&f,0x40e8,13);
+ set(&f,0x40ec,21);set(&f,0x40f0,22);set(&f,0x40f4,23);
+ st=coop_model_state_scan(0x1000,get,&f,&r,&s);
+ assert(st==COOP_MODEL_REGISTRY_TRAVERSED&&s.samples[0].adjacent_valid);
+ assert(s.samples[0].bounds_valid);
+ assert(s.samples[0].adjacent_object_words[3]==4);
+ assert(s.samples[0].resource_bounds_words[5]==23);
  /* Broken reciprocal links are never evaluated as valid object state. */
  set(&f,0x6140,0x9999);
  st=coop_model_state_scan(0x1000,get,&f,&r,&s);
