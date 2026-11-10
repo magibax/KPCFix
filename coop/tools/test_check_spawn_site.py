@@ -26,6 +26,15 @@ class TestSpawnSignature(unittest.TestCase):
             0xF167A: bytes.fromhex('e841faffff'),
             0xF16C7: bytes.fromhex('ff92e0010000'),
             0xF13CA: bytes.fromhex('83c408'),
+
+            0xF2FAE: bytes.fromhex('ff9090000000'),
+            0xF2FB4: bytes.fromhex('83c4083c01'),
+            0xF2F5F: bytes.fromhex('c78424d000000005000000'),
+            0xF2F6A: bytes.fromhex('c78424d400000030271010'),
+            0xF2F75: bytes.fromhex('89b424d8000000'),
+            0x3A60: bytes.fromhex('8bc133c9894824894828c3'),
+            0x102730: bytes.fromhex('8b44240485c0750332c0c33b4424080f95c0c3'),
+            0xEBC7: bytes.fromhex('ff909000000083c408'),
         }
         for off, raw in fragments.items():
             buf[off:off+len(raw)] = raw
@@ -33,7 +42,7 @@ class TestSpawnSignature(unittest.TestCase):
 
     def test_known_signatures(self):
         result = inspect(bytes(self.make_fixture()), require_hash=False)
-        self.assertEqual(result['guards_passed'], 16)
+        self.assertEqual(result['guards_passed'], 24)
         self.assertEqual(result['spawn_position_call_rva'], '0x0f13c4')
 
     def test_reject_wrong_patch_site(self):
@@ -46,6 +55,18 @@ class TestSpawnSignature(unittest.TestCase):
         b = self.make_fixture()
         b[0xF1333] = 0x90
         with self.assertRaisesRegex(ValueError, 'temporary zero'):
+            inspect(bytes(b), require_hash=False)
+
+    def test_reject_wrong_intersect_call(self):
+        b = self.make_fixture()
+        b[0xF2FAE] = 0x90
+        with self.assertRaisesRegex(ValueError, 'intersect interface'):
+            inspect(bytes(b), require_hash=False)
+
+    def test_reject_wrong_query_layout(self):
+        b = self.make_fixture()
+        b[0xF2F75+1] = 0x90
+        with self.assertRaisesRegex(ValueError, 'intersect filter userdata'):
             inspect(bytes(b), require_hash=False)
 
     def test_hash_gate(self):
