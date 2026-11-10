@@ -9,9 +9,10 @@ def fixture():
     b,_,raw=example_pe()
     # The shared synthetic AABB fixture originally maps only a 0x20000-byte
     # text section. BSP's GetPointStatus wrapper is at RVA 0x2440a.
-    b.extend(b"\\0"*0x30000)
+    b.extend(bytes(0x30000))
     section=0x80+24+0xe0
-    struct.pack_into("<II",b,section+8,0x50000,0x50000)
+    struct.pack_into("<I",b,section+8,0x50000)  # VirtualSize
+    struct.pack_into("<I",b,section+16,0x50000) # SizeOfRawData
     fn=b"\x8b\x54\x24\x08"+b"\x90"*(bsp.WALKER_SIZE-5)+b"\xc3"
     b[raw(bsp.WALKER_RVA):raw(bsp.WALKER_RVA)+len(fn)]=fn
     for site in bsp.CALLSITE_RVAS:
