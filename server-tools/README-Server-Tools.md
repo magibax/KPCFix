@@ -53,3 +53,18 @@ Source and build/test instructions are in `server-tools-source/README.md`. This 
 ## Installing alongside KPCFix
 
 Server Tools uses its own README, license, checksums, compatibility checker, build list and source directory. Extracting either release over the other does not overwrite those files. Run `Check-KPCVersion.cmd` for the client; the server launcher automatically runs its separate `Check-KPCServerVersion.ps1` checks.
+
+## Experimental co-op branch: spawn-point instrumentation
+
+This section applies **only** to the `feature/coop-campaign` branch, not to the stable Server Tools release. Source now includes a conditional, read-only spawn position trace at the verified official 1.13 object callsite. No position relocation or co-op spawning is implemented yet.
+
+The current tracked `KPCServerTools.dll` was **not rebuilt** for this research step. To test, build from this branch with the documented GCC/binutils toolchain, then deploy the resulting DLL using the usual setup script. Add the following to the existing `KPCServerTools.ini` and restart the server:
+
+```ini
+[Coop]
+TraceSpawns=1
+```
+
+Run a two-player campaign map such as R1M2B, then inspect `KPCServerTools.log`. The first 64 candidate position requests are written only to the log; no user-facing chat or screen text is generated. Disable by setting `TraceSpawns=0` or remove the key. `Enabled=0` continues to pass through to the original engine. Do not ship a new release without rebuilding the tracked binary and build manifest, checking hashes, and performing Windows runtime verification.
+
+See [engine trace findings](../coop/SPAWN-ENGINE-TRACE.md), [site verifier](../coop/tools/check_spawn_site.py) and [log decoder](../coop/tools/decode_spawn_log.py).
