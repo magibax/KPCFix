@@ -3,7 +3,7 @@
 **Scope:** original, user-provided official 1.13 object.lto, SHA-256
 `3a03f8796c482b1a7ad72755df33ee8f1f8056bb10957f6f700e64bd006b3e5b`.
 
-**Status:** original calling convention is statically supported by independent callsites. The first wrapper build ran on Windows with three `hit=0` results, but produced no positive-hit evidence. Further disassembly identified a 16-bit query field at +0x30 that our initial wrapper omitted; a differential test now compares both forms. The info layout beyond fields actually observed remains tentative. This API is a *segment intersection*, not a player-size sweep or full collision validation.
+**Status:** original calling convention supported by independent callsites and a successful three-position Windows differential test. Adding the original 16-bit value `0x6003` at query offset +0x30 changed all three ground rays from misses to hits. The query field's semantic name and the completeness of full-player-volume validation remain unknown. The info layout beyond fields actually observed remains tentative. This API is a *segment intersection*, not a player-size sweep or full collision validation.
 
 No original commercial binary or assets are committed.
 
@@ -65,7 +65,7 @@ On 2026-11-10 the user tested the initial collision diagnostic at three previous
 
 Further disassembly exposed a concrete difference in the original engine caller: at RVA `0xF2F7C` the original writes `WORD 0x6003` into its query structure at offset **+0x30**. The old diagnostic zeroed this field. The original write is guarded by exact bytes `66c78424dc0000000360` and synthetic tests. Another original callsite (`0xEBC7`) also uses this field within its call-site structure.
 
-The semantic name of this 16-bit field is not yet established. In particular, no claim is made that `0x6003` is definitively a floor/world collision mask. We need direct differential evidence before treating it as a necessary setting.
+The semantic name of this 16-bit field is not yet established. The controlled runtime comparison below now confirms that `0x6003` is required to register these floor intersections with this query setup. We still cannot conclude that the field is definitively a general-purpose floor/world collision mask.
 
 ## Four-mode runtime diagnostic (read-only)
 
@@ -88,7 +88,28 @@ Example output:
 [KPCFix Co-op] ray+ m=1 y=0x... ny=0x... obj=0x... surf=0x...
 ```
 
-The example is illustrative and **not an observed hit**. Result fields beyond the hit point remain tentative until a positive-hit run. If the server misbehaves, disable `TraceCollisionABI`, restart, and restore the previous DLL if needed. Do not use any mode as automatic spawn approval; a raycast cannot prove character body clearance.
+## Observed Windows differential results (2026-11-10)
+
+The user ran the four-mode differential build in the dedicated 1.13 server on `R1M2B` with three clients. At **all three known-good spawn positions**, the results were identical:
+
+| Mode | Field +0x30 | Hit count | Reported floor Y | Reported normal Y |
+| --- | --- | ---: | ---: | ---: |
+| 0 (control) | `0` | **0/3** | — | — |
+| 1 (native word) | `0x6003` | **3/3** | −320 | +1 |
+| 2 (flags=4) | `0x6003` | **3/3** | −320 | +1 |
+| 3 (extended ray) | `0x6003` | **3/3** | −320 | +1 |
+
+Raw result fields for every hit were `y=0xc3a00000` (−320), `ny=0x3f800000` (+1), `hobj=0x03cfebd0`, and `surf=0x00000008`. The current player-spawn centre Y coordinate is −256, so the ray intersects an upward-facing surface 64 units below those centres. The identical `hobj` is consistent with all three rays reaching the same world-model object, but the object's identity and `surf=8` semantics are not independently established.
+
+**Conclusion:** the omitted `0x6003` word caused the previously observed `hit=0` results under the test conditions. Modes 1 and 2 both hitting suggest the object-intersection flag is not necessary to detect this surface. The original short ray already reaches the surface; the extended ray is not needed for these three points.
+
+The result supports using the *verified native field value* for subsequent ground probes. **It does not prove a 3D player hull can fit, rule out hazards, or validate unknown maps.** Neither experimental diagnostic nor generic allocator uses the ray result to approve live spawn positions yet. If the server misbehaves, disable `TraceCollisionABI`, restart, and restore the previous DLL if needed.
+
+## Configuration prerequisite
+
+The graphical server launch script `Start-KPC-Selected-Server.ps1` requires `AllowCheats` to be present under `[ServerTools]` in `KPCServerTools.ini`; it throws an error and refuses startup if missing. Always preserve both `Enabled=1` and `AllowCheats=0` when adding `[Coop]` diagnostics. See `server-tools/README-Server-Tools.md`.
+
+
 
 ## Next ABI research — player-volume clearance
 
