@@ -121,7 +121,7 @@ static void __attribute__((thiscall)) coop_before_telefrag(void *player,U32 *pos
     line[n]=0;log_file(line);
    }
   }else{
-   log_file("[KPCFix Co-op] trial has only 2 reserved slots; leaving original spawn unchanged.");
+   log_file("[KPCFix Co-op] WARNING: trial full (3 slots). Set maxclients=3; original fallback may telefrag.");
   }
  }
  ((SpawnPrepareFn)(spawn_image+SPAWN_PREPARE_TARGET_RVA))(player,pos,a,b);
@@ -172,7 +172,8 @@ static int apply_object(HMODULE module){
  copy(b+0x116550,noclip_init,sizeof(noclip_init));
  for(i=0;i<PATCH_COUNT;i++)for(j=0;j<patches[i].size;j++)b[patches[i].rva+j]=patches[i].after[j];
  if(spawn_trace_enabled||spawn_separation_enabled){
-  spawn_image=b;spawn_trace_count=0;spawn_trial_reservations.player[0]=spawn_trial_reservations.player[1]=0;
+  spawn_image=b;spawn_trace_count=0;
+  for(i=0;i<COOP_TRIAL_SLOTS;i++)spawn_trial_reservations.player[i]=0;
   if(spawn_trace_enabled)copy(b+SPAWN_POS_CALL_RVA,spawn_call,6);
   if(spawn_separation_enabled)copy(b+SPAWN_PREPARE_CALL_RVA,prepare_call,5);
  }
