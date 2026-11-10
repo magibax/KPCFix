@@ -11,7 +11,7 @@ static HMODULE self,backend;
 static CreateFn create_real;
 static DeleteFn delete_real;
 static WCHAR backend_path[1024],ini_path[1024],log_path[1024];
-static int paths_ready,hooked,active,initial_cheats;
+static int paths_ready,hooked,active,initial_cheats,spawn_warning_checked;
 static U32 object_installs;
 static U32 len(const char *s){U32 n=0;while(s[n])n++;return n;}
 static int eq(const char *a,const char *b){while(*a&&*a==*b){a++;b++;}return *a==*b;}
@@ -60,6 +60,37 @@ static int valid_image(U8 *b,U32 image_size){
  U32 p;if(*(U16 *)b!=0x5a4d)return 0;p=rd(b+60);
  return p<0x1000&&rd(b+p)==0x4550&&*(U16 *)(b+p+4)==0x14c&&rd(b+p+24+56)==image_size;
 }
+/* Some stock campaign-map spawn warnings contain a literal trailing newline.
+ * The engine appends its own line ending, so trim only that exact suffix in
+ * the already-validated in-memory object image. Never change object.lto on disk.
+ * A warning without an embedded newline is deliberately left untouched. */
+static int trim_spawn_warning(U8 *b){
+ static const U8 message[]="Error!! Could not find any multiplayer start points. Looking for a singleplayer start point.";
+ U32 pe=rd(b+60),sections,count,s,start,size,i,n=sizeof(message)-1;
+ if(pe>0x1000-0x100)return -1;
+ count=*(U16 *)(b+pe+6);
+ sections=pe+24+*(U16 *)(b+pe+20);
+ if(!count||count>32||sections>0x1000-count*40)return -1;
+ for(s=0;s<count;s++){
+  const U8 *header=b+sections+s*40;
+  start=rd(header+12);size=rd(header+8);
+  if(start>=0x196000||size>0x196000-start||size<n+5)continue;
+  for(i=0;i+n+5<=size;i++){
+   U8 *at=b+start+i,*tail;U32 extra=0,old,restore;
+   if(!same(at,message,n))continue;
+   tail=at+n;
+   while(extra<4&&(tail[extra]=='\r'||tail[extra]=='\n'))extra++;
+   if(!extra||tail[extra]!=0)return 2;
+   if(!VirtualProtect(tail,1,0x40,&old))return -1;
+   tail[0]=0;
+   if(!VirtualProtect(tail,1,old,&restore))
+    fatal("[KPCFix Server Tools] ERROR: cannot restore spawn warning memory protection.");
+   return 1;
+  }
+ }
+ return 0;
+}
+
 /* Preserve the code already tested in object.lto, but install only loaded-memory
  * code/data edits. PE headers and relocation tables are never patched here. */
 static int apply_object(HMODULE module){
@@ -105,6 +136,14 @@ static FARPROC WINAPI proxy_get_proc(HMODULE module,const char *name){
  FARPROC p=GetProcAddress(module,name);
  if(active&&(U32)name>65535&&eq(name,"ObjectDLLSetup")){
   if(!p||!apply_object(module))fatal("[KPCFix Server Tools] ERROR: unsupported or altered object.lto; run Setup-KPCServerTools.cmd.");
+  if(!spawn_warning_checked){
+   int trim=trim_spawn_warning((U8 *)module);
+   spawn_warning_checked=1;
+   if(trim==1)log_file("[KPCFix Server Tools] Removed embedded newline from stock spawn warning (memory only).");
+   else if(trim==2)log_file("[KPCFix Server Tools] Stock spawn warning has no embedded newline; spacing unchanged.");
+   else if(trim==0)log_file("[KPCFix Server Tools] Stock spawn warning not found in object module; spacing unchanged.");
+   else log_file("[KPCFix Server Tools] Could not inspect stock spawn warning; spacing unchanged.");
+  }
  }
  return p;
 }
