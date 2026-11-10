@@ -6,6 +6,7 @@
 #include "coop_volume_probe.h"
 #include "coop_bsp_box.h"
 #include "coop_model_registry.h"
+#include "coop_aabb_overlap.h"
 #include "coop_model_state.h"
 extern HANDLE WINAPI GetStdHandle(DWORD);
 extern void WINAPI ExitProcess(UINT) __attribute__((noreturn));
@@ -290,6 +291,53 @@ static int registry_read32(void *ctx,unsigned int address,unsigned int *out){
  if(!out||!bsp_mem_readable(address,4))return 0;
  *out=*(const U32 *)address;return 1;
 }
+typedef struct {
+ CoopAabb player;
+ U32 disjoint,overlap,unknown;
+} ModelOverlapSurvey;
+
+/* Inspect the same object boxes passed by the native spatial visitor to
+ * its AABB comparator (EU RVA 0x19d73..0x19d81). Include both types and
+ * every mask. This is a resource-linked subset of the active scene. */
+static void observe_model_box(void *user,U32 entry,U32 model,U32 object,
+ int matched,CoopModelRead32 read,void *ctx){
+ ModelOverlapSurvey *survey=user;
+ float coords[6];
+ CoopAabb box;
+ (void)entry;(void)model;
+ if(!matched){survey->unknown++;return;}
+ for(U32 i=0;i<6;i++){
+  U32 bits;
+  if(!coop_model_read_offset(read,ctx,object,0xacu+4*i,&bits)){
+   survey->unknown++;return;
+  }
+  coords[i]=collision_float(bits);
+ }
+ box.min=(CoopVec3){coords[0],coords[1],coords[2]};
+ box.max=(CoopVec3){coords[3],coords[4],coords[5]};
+ switch(coop_aabb_overlap(&survey->player,&box,0.f)){
+  case COOP_AABB_OVERLAP:survey->overlap++;break;
+  case COOP_AABB_DISJOINT:survey->disjoint++;break;
+  default:survey->unknown++;break;
+ }
+}
+
+static void survey_candidate_boxes(CoopVec3 center,CoopVec3 lo,CoopVec3 hi){
+ ModelOverlapSurvey survey={0};
+ CoopModelRegistrySnapshot snapshot={0};
+ U32 manager,state,n=0;
+ char line[116];
+ if(!coop_aabb_from_relative(&center,&lo,&hi,&survey.player)||
+    !registry_read32(0,(U32)backend+0x4a250u,&manager)||
+    !coop_model_read_offset(registry_read32,0,manager,0x19cu,&state)||
+    coop_model_registry_scan_visit(state,registry_read32,0,&snapshot,observe_model_box,&survey)!=COOP_MODEL_REGISTRY_TRAVERSED){
+  log_file("[KPCFix Co-op] linked boxes=incomplete");return;
+ }
+ trace_append(line,&n,"[KPCFix Co-op] linked boxes overlap=");trace_hex(line,&n,survey.overlap);
+ trace_append(line,&n," disjoint=");trace_hex(line,&n,survey.disjoint);
+ trace_append(line,&n," unknown=");trace_hex(line,&n,survey.unknown);
+ line[n]=0;log_file(line);
+}
 static void registry_trace_loaded(void){
  const U32 global_ptr=(U32)backend+0x4a250u;
  U32 manager=0,state=0,n=0;
@@ -439,6 +487,7 @@ static void sample_candidate(KpcIntersectFn intersect,KpcIntersectVec center,Kpc
  o.world_hull=COOP_VOLUME_UNKNOWN;
  o.other_actors=COOP_VOLUME_UNKNOWN;
  log_vector("candidate",center);
+ if(model_registry_enabled&&model_state_enabled)survey_candidate_boxes(candidate,o.bounds_min,o.bounds_max);
  floor_end.y-=256.f;
  if(world_segment(intersect,center,floor_end,&hit)){
   o.ground_hit=1;
@@ -693,7 +742,7 @@ static void initialize(void){
  spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
  if(active&&spawn_trace_enabled){
-  log_file("[KPCFix Co-op] diagnostics build=model-geometry-survey-v6 (reads KPCServerTools.ini)");
+  log_file("[KPCFix Co-op] diagnostics build=linked-box-survey-v7 (reads KPCServerTools.ini)");
   log_file(model_registry_enabled?
     "[KPCFix Co-op] effective TraceModelRegistry=1":
     "[KPCFix Co-op] effective TraceModelRegistry=0 (set [Coop] TraceModelRegistry=1; restart)");

@@ -551,3 +551,9 @@ The original spatial-indexing procedure RVA `0x19e06`
 continues to be forbidden for our diagnostic because it writes
 live index state. Nothing changes the `world_hull`,
 `other_actors`, or automatic-allocator evidence.
+
+## R1M2B v6 result and linked-object box survey
+
+The Windows run had 115 entries, 109 matched associations, 57 type 2 and 52 type 9. Of the type-2 entries, 49 had some bit in 0x12000 and 8 had neither. Of the type-9 entries, 18 had some bit in the mask and 34 had neither. The EU spatial visitor explicitly considers type 9 even when the mask is absent (RVAs 0x19d0c through 0x19d1f). Both differing position samples were type 2 with flags 0x00204001. The named GetObjectRotation path copies object offsets 0x4c through 0x58 to the result (0x28439 through 0x28451).
+
+For a candidate's first comparison with linked geometry, v7 uses the same pair of bounds the native visitor supplies to its overlap comparator at 0x19d73 through 0x19d81. It reads the six values at object+0xac through +0xc0 for every reciprocal association and counts overlap, disjoint and unknown. An incomplete registry scan is logged separately. This broadphase can include false positives and excludes actors outside the registry. The result is observational and cannot authorize automatic placement.
