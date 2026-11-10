@@ -1,4 +1,4 @@
-name: Experimental co-op two-player spawn trial build
+name: Experimental co-op three-player spawn trial build
 
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
         run: python3 server-tools/server-tools-source/build_dll.py
       - name: Run asset-free co-op tests
         run: python3 -m unittest discover -s coop/tools -p 'test_*.py' -v
-      - name: Run native 2-player spawn slot unit tests
+      - name: Run native 3-player spawn slot unit tests
         shell: bash
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
@@ -39,6 +39,7 @@ jobs:
           assert hashlib.sha256(binary.read_bytes()).hexdigest()==manifest['proxy_sha256']
           assert 'bac7696bc79f10b637134b7bbffea1ead01e67c8207452f5c3f339a8b5a353d4' in manifest['previous_proxy_hashes']
           assert '9b6bd69e894925e6b31f1ed32b6ff82331af104e2c20fbb6aeb43dc4bef5be9a' in manifest['previous_proxy_hashes']
+          assert '66653630a0b717a70c3dd51a3b97efd75bd9b20495bd0b4d089b914b60942a37' in manifest['previous_proxy_hashes']
           print('PASS:', binary.stat().st_size, 'bytes;', manifest['proxy_sha256'])
           PY
           objdump -p server-tools/KPCServerTools.dll | grep -A12 'Export Table'
@@ -48,56 +49,61 @@ jobs:
           mkdir -p dist
           cp server-tools/KPCServerTools.dll server-tools/SERVER_TOOLS_BUILD.json dist/
           cat > dist/TEST-INSTRUCTIONS.txt <<'TXT'
-          KPCFIX CO-OP SPAWN SEPARATION TRIAL - EXPERIMENTAL
+          KPCFIX CO-OP THREE-PLAYER SPAWN TRIAL (EXPERIMENTAL)
+          Branch: feature/coop-campaign. Not a stable release.
 
-          This build is for the official KISS: Psycho Circus 1.13 dedicated
-          server, using the existing KPCFix Server Tools installation.
-          It can assign a distinct trial spawn to the SECOND player entering
-          R1M2B. Player 1 stays at the original start. Player 2 is shifted
-          +96 world units on the Z axis BEFORE the original near-object
-          handling routine executes. The positions are NOT collision-validated,
-          so this test is ONLY intended for a disposable two-client session.
-          It does not implement full co-op, respawn handling, reconnects,
-          synchronized scripting or map transitions.
+          Original KISS: Psycho Circus dedicated server 1.13 required.
+          Player 1: (1600, -256, -2944) — previously tested
+          Player 2: (1600, -256, -2848) — previously tested
+          Player 3: (1600, -256, -3040) — NOT YET COLLISION-TESTED
 
-          Before installation:
-          1. Close the game and dedicated server.
-          2. Back up your existing server.dll, KPCServerTools.dll,
-             SERVER_TOOLS_BUILD.json and KPCServerTools.ini.
-          3. Confirm the original server.original.dll and object.lto are intact.
-          4. Copy ONLY the supplied KPCServerTools.dll and
-             SERVER_TOOLS_BUILD.json into the game folder alongside the
-             existing Setup-KPCServerTools.cmd.
-          5. Run the existing Setup-KPCServerTools.cmd (it will verify versions
-             and install the newly built DLL as server.dll).
-          6. In the existing KPCServerTools.ini, add:
+          WARNING: Set server maxclients=3 before testing.
+          This build reserves only three player-object pointers. More than
+          three unique pointers (including a reconnect that reallocates one)
+          are NOT supported; original fallback could telefrag another player.
+          No reservation recycling or map-transition support is implemented.
+          This trial is exclusive to the exact R1M2B start point. The
+          original spawn/telefrag engine remains active.
+          DO NOT use on a public server or with unsaved multiplayer progress.
+
+          INSTALL
+          1. Close game and server.
+          2. Back up these four game-directory files:
+             server.dll, KPCServerTools.dll, SERVER_TOOLS_BUILD.json,
+             KPCServerTools.ini.
+          3. Extract KPCServerTools.dll and SERVER_TOOLS_BUILD.json from
+             this archive to your KPC game folder, overwriting those two
+             files only. Do not replace the original server.original.dll
+             or object.lto.
+          4. Run your existing Setup-KPCServerTools.cmd.
+          5. In KPCServerTools.ini use:
+                [ServerTools]
+                Enabled=1
+
                 [Coop]
                 TraceSpawns=1
                 TrialSeparateSpawns=1
-          7. Start R1M2B and connect ONLY two clients.
-          8. Confirm both clients remain alive and can move separately,
-             that neither spawns in walls, and whether either telefrags.
-          9. Send KPCServerTools.log and server console output for analysis.
-          If the second spawn is stuck or unsafe, stop the server and report it.
-          If the server unexpectedly crashes, restore the backup files.
+          6. In the game server launcher/rules, SET MAX PLAYERS TO 3.
+          7. Start R1M2B and JOIN THREE CLIENTS ONCE, IN ORDER.
+          8. Check all three can move, remain alive, and avoid solid
+             walls/floor voids and unintended triggers. Report any damage
+             or scripted sequence activation on spawn.
+          9. Do not test reconnects with a fourth distinct object pointer
+             yet: allocation reclamation has not been implemented.
+          10. Send KPCServerTools.log and relevant server console output.
 
-          To disable the spawn trial, set TrialSeparateSpawns=0 and restart
-          the server; TraceSpawns=1 alone remains read-only.
-          To restore the previous stable installation, stop the server and
-          restore all backed-up server.dll, KPCServerTools.dll,
-          SERVER_TOOLS_BUILD.json and KPCServerTools.ini. No setup rerun is
-          required because the old working server.dll is restored directly.
-          Do not just restore the old manifest and rerun setup: the old hash
-          list may not recognize the experimental installed server.dll.
-          This research build supports two reserved player objects on the
-          specified R1M2B spawn anchor only. It does not recycle disconnected
-          player slots. Do not use it as a normal multiplayer/co-op server.
-          Only the first 64 setter events are logged.
+          To disable the trial, set TrialSeparateSpawns=0 and restart the
+          server; TraceSpawns=1 alone leaves spawn positions unchanged.
+          To roll back, stop the server and restore all four backed-up
+          files, including server.dll. Do NOT restore only the old manifest
+          and rerun setup: it may reject the experimental proxy hash.
+
+          No copyrighted original game assets are included.
           TXT
       - name: Upload local-test files
         uses: actions/upload-artifact@v4
         with:
-          name: KPCFix-Coop-Two-Player-SpawnTrial
+          name: KPCFix-Coop-Three-Player-SpawnTrial
           path: dist/
           if-no-files-found: error
           retention-days: 14
