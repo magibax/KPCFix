@@ -65,8 +65,12 @@ jobs:
           8. Send KPCServerTools.log and server console output for analysis.
 
           To disable logging, set TraceSpawns=0 and restart the server.
-          To restore stable code, restore your backup KPCServerTools.dll and
-          SERVER_TOOLS_BUILD.json, then re-run Setup-KPCServerTools.cmd.
+          To restore the previous stable installation, stop the server and
+          restore all backed-up server.dll, KPCServerTools.dll,
+          SERVER_TOOLS_BUILD.json and KPCServerTools.ini. No setup rerun is
+          required because the old working server.dll is restored directly.
+          Do not just restore the old manifest and rerun setup: the old hash
+          list may not recognize the experimental installed server.dll.
           This test build is limited to the first 64 position events.
           TXT
       - name: Upload local-test files
