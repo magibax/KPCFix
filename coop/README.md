@@ -24,7 +24,7 @@ The user supplied MAPDATA.zip (59 compiled v127 DAT worlds plus scripts) for **l
 
 The user also supplied matching, original 1.13 dedicated.exe, server.original.dll and object.lto. Their checksums were verified and the server spawn-selection call graph traced. See [SPAWN-ENGINE-TRACE.md](SPAWN-ENGINE-TRACE.md) for the confirmed runtime addresses, the **opt-in, non-relocating** spawn logging prototype, how to build it, and how to decode its logs.
 
-**Next prerequisite:** identify and ABI-verify the LithTech 1.13 collision/ground API and player departure/map reset events before integrating the [generic allocation policy](GENERAL-ALLOCATOR.md) into live spawn hooks. Optional DEdit source maps could help research geometry but are not required for the current stage.
+**Next prerequisite:** dynamically verify the statically identified [LithTech 1.13 IntersectSegment ABI](INTERSECT-ABI.md), then identify a player-volume collision/ground API and player departure/map reset events before integrating the [generic allocation policy](GENERAL-ALLOCATOR.md) into live spawn hooks. Optional DEdit source maps could help research geometry but are not required for the current stage.
 
 Do not import or package original game maps, models, textures, sound, or artwork in KPCFix releases.
 
