@@ -115,6 +115,8 @@ typedef U8 (CDECL *KpcIntersectFn)(const KpcIntersectQuery *,KpcIntersectInfo *)
 static float collision_float(U32 bits){union{U32 bits;float value;}u;u.bits=bits;return u.value;}
 static U32 collision_bits(float value){union{U32 bits;float value;}u;u.value=value;return u.bits;}
 
+static int clearance_enabled;
+static volatile U32 clearance_started;
 static CoopSpawnReservations spawn_trial_reservations;
 static void trace_append(char *out,U32 *n,const char *s){
  while(*s&&*n<115)out[(*n)++]=*s++;
@@ -178,12 +180,100 @@ static void diagnostic_intersect_segment(const U32 *object_pos,void *object){
   }
  }
 }
+/* Original overlap code at 0xf1157 supplies ECX=this and pushes upper,
+ * lower, HOBJECT. The callee pops its three stack arguments. */
+typedef void (__attribute__((thiscall)) *ReadBounds)(void *,void *,KpcIntersectVec *,KpcIntersectVec *);
+
+static void log_vector(const char *label,KpcIntersectVec v){
+ char line[116];U32 n=0;
+ trace_append(line,&n,"[KPCFix Co-op] ");trace_append(line,&n,label);
+ trace_append(line,&n," x=");trace_hex(line,&n,collision_bits(v.x));
+ trace_append(line,&n," y=");trace_hex(line,&n,collision_bits(v.y));
+ trace_append(line,&n," z=");trace_hex(line,&n,collision_bits(v.z));
+ line[n]=0;log_file(line);
+}
+
+static int world_segment(KpcIntersectFn intersect,KpcIntersectVec from,KpcIntersectVec to,KpcIntersectInfo *info){
+ KpcIntersectQuery q={0};
+ q.from=from;q.to=to;q.flags=KPC_INTERSECT_HPOLY;
+ q.legacy_word_30=KPC_INTERSECT_ORIGINAL_WORD_30;
+ return intersect(&q,info)!=0;
+}
+
+/* Sample horizontal cross sections at three heights. An intersection is
+ * evidence of obstruction. Misses leave unsampled space unknown. */
+static void sample_candidate(KpcIntersectFn intersect,KpcIntersectVec center,KpcIntersectVec lo,KpcIntersectVec hi){
+ KpcIntersectVec floor_end=center;
+ KpcIntersectInfo hit={0};
+ float levels[]={lo.y+1.f,(lo.y+hi.y)*0.5f,hi.y-1.f};
+ unsigned level;
+ int blocked=0;
+ log_vector("candidate",center);
+ floor_end.y-=256.f;
+ if(world_segment(intersect,center,floor_end,&hit)){
+  log_vector("floor",hit.point);
+  log_vector("floor normal",hit.plane.normal);
+ }else log_file("[KPCFix Co-op] floor missed");
+ for(level=0;level<3;level++){
+  KpcIntersectVec a=center,b=center;
+  a.y=b.y=center.y+levels[level];
+  a.x+=lo.x;b.x+=hi.x;
+  blocked|=world_segment(intersect,a,b,&hit);
+  blocked|=world_segment(intersect,b,a,&hit);
+  a.x=b.x=center.x;
+  a.z+=lo.z;b.z+=hi.z;
+  blocked|=world_segment(intersect,a,b,&hit);
+  blocked|=world_segment(intersect,b,a,&hit);
+ }
+ log_file(blocked?"[KPCFix Co-op] body sample=obstructed":"[KPCFix Co-op] body sample=no sampled hit");
+}
+
+static void trace_clearance(U32 *engine,void *object){
+ U32 *vtable=(U32 *)engine[0];
+ KpcIntersectFn intersect=(KpcIntersectFn)engine[KPC_INTERSECT_SERVER_SLOT/4];
+ KpcIntersectVec lo={0},hi={0},anchor={1600.f,-256.f,-2944.f};
+ static const int directions[][2]={{1,0},{-1,0},{0,1},{0,-1}};
+ unsigned i;
+ if(!object||!vtable||!vtable[0x104/4]||!intersect){
+  log_file("[KPCFix Co-op] bounds or segment API unavailable");return;
+ }
+ ((ReadBounds)vtable[0x104/4])(engine,object,&lo,&hi);
+ log_vector("bounds min",lo);log_vector("bounds max",hi);
+ if(!(lo.x<0&&lo.y<-1&&lo.z<0&&hi.x>0&&hi.y>1&&hi.z>0&&
+      lo.x>=-128&&lo.y>=-128&&lo.z>=-128&&hi.x<=128&&hi.y<=128&&hi.z<=128)){
+  log_file("[KPCFix Co-op] bounds outside diagnostic range");return;
+ }
+ for(i=0;i<3;i++){
+  KpcIntersectVec candidate=anchor;
+  if(i==1)candidate.z+=96.f;
+  if(i==2)candidate.z-=96.f;
+  sample_candidate(intersect,candidate,lo,hi);
+ }
+ for(i=0;i<4;i++){
+  int dx=directions[i][0],dz=directions[i][1];
+  KpcIntersectVec end=anchor;
+  KpcIntersectInfo hit={0};
+  float reach=dx>0?hi.x:dx<0?-lo.x:dz>0?hi.z:-lo.z;
+  end.x+=512.f*dx;end.z+=512.f*dz;
+  if(world_segment(intersect,anchor,end,&hit)&&
+     hit.plane.normal.x*dx+hit.plane.normal.z*dz < -0.9f){
+   KpcIntersectVec candidate=hit.point;
+   log_vector("wall reference",hit.point);
+   candidate.x-=0.5f*reach*dx;candidate.z-=0.5f*reach*dz;
+   sample_candidate(intersect,candidate,lo,hi);
+   return;
+  }
+ }
+ log_file("[KPCFix Co-op] wall control unavailable within 512 units");
+}
 /* The native game call pushes (HOBJECT, LTVector*) and cleans eight bytes
  * in the caller. Forward it unchanged and only then write an observation. */
 static void CDECL trace_spawn_position(void *object,const U32 *pos){
  U32 *engine=spawn_image?*(U32 **)(spawn_image+SPAWN_POS_GLOBAL_RVA):0;
  if(!engine||!engine[0x1e0/4])fatal("[KPCFix Co-op] Missing original position-set API.");
  ((SpawnSetPos)engine[0x1e0/4])(object,pos);
+ if(clearance_enabled&&coop_is_r1m2b_anchor(pos)&&
+    __sync_bool_compare_and_swap(&clearance_started,0,1))trace_clearance(engine,object);
  if(pos&&__sync_fetch_and_add(&spawn_trace_count,1)<64){
   char line[116];U32 n=0;
   trace_append(line,&n,"[KPCFix Co-op] spawn position obj=");
@@ -272,7 +362,7 @@ static int apply_object(HMODULE module){
  copy(b+0x116550,noclip_init,sizeof(noclip_init));
  for(i=0;i<PATCH_COUNT;i++)for(j=0;j<patches[i].size;j++)b[patches[i].rva+j]=patches[i].after[j];
  if(spawn_trace_enabled||spawn_separation_enabled){
-  spawn_image=b;spawn_trace_count=0;collision_trace_count=0;
+  spawn_image=b;clearance_started=0;spawn_trace_count=0;collision_trace_count=0;
   for(i=0;i<COOP_TRIAL_SLOTS;i++)spawn_trial_reservations.player[i]=0;
   if(spawn_trace_enabled)copy(b+SPAWN_POS_CALL_RVA,spawn_call,6);
   if(spawn_separation_enabled)copy(b+SPAWN_PREPARE_CALL_RVA,prepare_call,5);
@@ -345,7 +435,8 @@ static void initialize(void){
  initial_cheats=GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"AllowCheats",0,ini_path)!=0;
  spawn_separation_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TrialSeparateSpawns",0,ini_path)!=0;
  collision_trace_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceCollisionABI",0,ini_path)!=0;
- spawn_trace_enabled=active&&(spawn_separation_enabled||collision_trace_enabled||
+ clearance_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TracePlayerClearance",0,ini_path)!=0;
+ spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
  if(active&&!hooked){
   if(!intercept_backend())fatal("[KPCFix Server Tools] ERROR: could not install engine loading hook.");
