@@ -56,7 +56,7 @@ Server Tools uses its own README, license, checksums, compatibility checker, bui
 
 ## Experimental co-op branch: spawn-point instrumentation
 
-This section applies **only** to the `feature/coop-campaign` branch, not to the stable Server Tools release. Source now includes a conditional spawn-position trace plus an **opt-in, R1M2B-only two-client spawn trial**. Both hooks are off by default. The trial is not collision-validated and must not be used on public servers.
+This section applies **only** to the `feature/coop-campaign` branch, not to the stable Server Tools release. Source now includes a conditional spawn-position trace plus an **opt-in, R1M2B-only three-client spawn trial**. Both hooks are off by default. The trial is not collision-validated and must not be used on public servers.
 
 The current tracked `KPCServerTools.dll` was **not rebuilt** for this research step. To test, build from this branch with the documented GCC/binutils toolchain, then deploy the resulting DLL using the usual setup script. Add the following to the existing `KPCServerTools.ini` and restart the server:
 
