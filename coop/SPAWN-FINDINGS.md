@@ -29,7 +29,7 @@ The PlayerStart.GameType field has property type 6 and is serialized as a 32-bit
 
 | Map | PlayerStart Type 0 | PlayerStart Type 1 | GameStartPoint | Notes |
 | --- | ---: | ---: | ---: | --- |
-| R1M2B | 1 | 0 | 0 | Reproduced user-reported multiplayer start fallback |
+| R1M2B | 1 | 0 | 0 | Matches user-reported multiplayer start fallback |
 | R1M1A | 2 | 9 | 0 | Existing MP starts are geographically dispersed |
 | R1M1B | 1 | 16 | 0 | Existing MP starts are geographically dispersed |
 | PM01 | 1 | 8 | 0 | Deathmatch control |
