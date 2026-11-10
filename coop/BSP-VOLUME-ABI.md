@@ -205,3 +205,29 @@ requires re-investigation; do **not** enable automatic spawning.
 **Next after live confirmation:** prove the model transform/lifecycle
 and object flags, then enumerate the authoritative list of solid live
 WorldModels; only then add a read-only multi-BSP hull differential.
+
+## Diagnosing a missing registry log (registry-status-v2)
+
+A Windows test of the first WorldModel registry build returned all four
+expected base-BSP classifications but **no `model registry=` line**.
+That means the registry read was not invoked, rather than that an
+empty registry was successfully traversed. The first survey build
+silently skipped its call when `model_registry_enabled=0`.
+
+The revised experimental build emits:
+
+```text
+[KPCFix Co-op] diagnostics build=registry-status-v2 (reads KPCServerTools.ini)
+[KPCFix Co-op] effective TraceModelRegistry=1
+```
+
+If enabled, one `model registry=TRAVERSED` or
+`model registry=UNKNOWN` line follows the bounds observation.
+If disabled, the build instead emits `effective TraceModelRegistry=0`
+at startup and `model registry=DISABLED` after the bounds. If **neither
+new status line appears**, the wrong/old proxy DLL may be in use.
+Verify the actual `KPCServerTools.ini` beside the active
+`server.dll` (not only `KPCServerTools-default.ini`), stop the
+dedicated process completely and rerun `Setup-KPCServerTools.cmd`
+after replacing the new DLL and matching manifest. The known BSP
+classification lines alone cannot distinguish new from old builds.

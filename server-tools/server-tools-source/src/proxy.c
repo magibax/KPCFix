@@ -370,6 +370,7 @@ static void trace_clearance(U32 *engine,void *object){
  ((ReadBounds)vtable[0x104/4])(engine,object,&lo,&hi);
  log_vector("bounds min",lo);log_vector("bounds max",hi);
  if(model_registry_enabled)registry_trace_loaded();
+ else log_file("[KPCFix Co-op] model registry=DISABLED (check effective KPCServerTools.ini; restart)");
  if(!(lo.x<0&&lo.y<-1&&lo.z<0&&hi.x>0&&hi.y>1&&hi.z>0&&
       lo.x>=-128&&lo.y>=-128&&lo.z>=-128&&hi.x<=128&&hi.y<=128&&hi.z<=128)){
   log_file("[KPCFix Co-op] bounds outside diagnostic range");return;
@@ -580,6 +581,12 @@ static void initialize(void){
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TracePlayerClearance",0,ini_path)!=0);
  spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
+ if(active&&spawn_trace_enabled){
+  log_file("[KPCFix Co-op] diagnostics build=registry-status-v2 (reads KPCServerTools.ini)");
+  log_file(model_registry_enabled?
+    "[KPCFix Co-op] effective TraceModelRegistry=1":
+    "[KPCFix Co-op] effective TraceModelRegistry=0 (set [Coop] TraceModelRegistry=1; restart)");
+ }
  if(active&&!hooked){
   if(!intercept_backend())fatal("[KPCFix Server Tools] ERROR: could not install engine loading hook.");
   hooked=1;
