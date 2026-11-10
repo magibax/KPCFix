@@ -3,7 +3,7 @@ $ErrorActionPreference='Stop'
 try {
  Set-Location -LiteralPath $PSScriptRoot
  if(Get-Process -Name @('dedicated','DEDICA~1','client') -ErrorAction SilentlyContinue){throw 'Close the game and server for this one-time setup.'}
- $builds=Get-Content (Join-Path $PSScriptRoot 'SUPPORTED_BUILDS.json') -Raw | ConvertFrom-Json
+ $builds=Get-Content (Join-Path $PSScriptRoot 'SERVER_TOOLS_SUPPORTED_BUILDS.json') -Raw | ConvertFrom-Json
  $meta=Get-Content (Join-Path $PSScriptRoot 'SERVER_TOOLS_BUILD.json') -Raw | ConvertFrom-Json
  $exe=@('dedicated.exe','DEDICA~1.EXE') | Where-Object {Test-Path -LiteralPath (Join-Path $PSScriptRoot $_)} | Select-Object -First 1
  if(-not $exe){throw 'Dedicated executable missing. Extract beside Psycho.exe and dedicated.exe.'}

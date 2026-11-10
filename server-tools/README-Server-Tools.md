@@ -48,4 +48,8 @@ The small 32-bit proxy forwards the engine's two exports and intercepts its look
 
 Compiled-proxy emulation passed for Europe and US engine profiles at relocated DLL/object addresses, with cheats enabled, disabled, pass-through and altered-object rejection. Hook tests cover separate player state, live revocation, client OFF acknowledgements, chat announcements and prompt restoration. These checks supplement Windows testing; they do not replace it. The preceding on-disk hooks were tested in game, but this DLL build still needs that confirmation.
 
-Source and build/test instructions are in `source/README.md`. This package includes the DLL conversion and chat-only announcements.
+Source and build/test instructions are in `server-tools-source/README.md`. This package includes the DLL conversion and chat-only announcements.
+
+## Installing alongside KPCFix
+
+Server Tools uses its own README, license, checksums, compatibility checker, build list and source directory. Extracting either release over the other does not overwrite those files. Run `Check-KPCVersion.cmd` for the client; the server launcher automatically runs its separate `Check-KPCServerVersion.ps1` checks.

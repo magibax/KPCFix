@@ -7,7 +7,7 @@ Set-Location -LiteralPath $PSScriptRoot
 if ($Map -notmatch '^worlds\\(deathmatch\\PM(0[1-9]|10)|realm[0-5]\\(R[1-5]M[0-4][ABC]?|TUTORIAL))$') { throw 'Invalid map path.' }
 $Exe = @('dedicated.exe','DEDICA~1.EXE') | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $Exe) { throw 'Dedicated EXE missing: put these files in the installed game folder.' }
-. (Join-Path $PSScriptRoot 'Check-KPCVersion.ps1')
+. (Join-Path $PSScriptRoot 'Check-KPCServerVersion.ps1')
 $GameProfile = Assert-KPCGameVersion
 Assert-KPCServerVersion $Exe $GameProfile
 foreach ($Required in @('kpc-gui-server.cfg','kpc-gui-maps.txt','KPCServerTools.ini')) {

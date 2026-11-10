@@ -13,7 +13,7 @@ for c in m['changes']:b[c['offset']]=c[mode]
 assert hashlib.sha256(b).hexdigest()==m[mode]
 # Exercise the current DLL hook payload over the legacy restoration fixture.
 current=json.loads((root/'SERVER_TOOLS_BUILD.json').read_text())
-hook=(root/'source/build/hooks.bin').read_bytes()
+hook=(root/'server-tools-source/build/hooks.bin').read_bytes()
 b[0x116580:0x116580+len(hook)]=hook
 b[current['hook_symbols']['initial_mode']]=0 if mode=='disabled' else 1
 

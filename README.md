@@ -40,4 +40,5 @@ Hosting tools are a separate download: [KPCFix Server Tools 1.0.0](https://githu
 
 Server Tools includes a compact graphical launcher for all 59 maps, server-rule controls, live `kpc_cheats 0/1` permission and console chat logging. Campaign maps are experimental and may be buggy in multiplayer. Cheat announcements appear in chat only.
 
-Extract the Server Tools ZIP into the game directory, close the game/server and run **Setup-KPCServerTools.cmd** once. Then use **KPC-Server-Launcher.cmd**. Its DLL preserves the original engine and leaves `object.lto` stock after migration. See the [Server Tools README](server-tools/README.md) for setup, upgrades and removal.
+Extract the Server Tools ZIP into the game directory, close the game/server and run **Setup-KPCServerTools.cmd** once. Then use **KPC-Server-Launcher.cmd**. Its DLL preserves the original engine and leaves `object.lto` stock after migration. See the [Server Tools README](server-tools/README-Server-Tools.md) for setup, upgrades and removal.
+

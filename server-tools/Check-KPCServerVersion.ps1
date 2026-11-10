@@ -6,7 +6,7 @@ function Read-KPCSignature([string]$Name) {
 }
 
 function Assert-KPCGameVersion {
-    $builds = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'SUPPORTED_BUILDS.json') | ConvertFrom-Json
+    $builds = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'SERVER_TOOLS_SUPPORTED_BUILDS.json') | ConvertFrom-Json
     if ((Read-KPCSignature 'client.exe') -ne $builds.client.sha256) {
         throw 'KPCFix requires the original client.exe from official game version 1.13. Apply the update for your edition first.'
     }
@@ -18,7 +18,7 @@ function Assert-KPCGameVersion {
 }
 
 function Assert-KPCServerVersion([string]$Exe,$GameProfile) {
-    $builds = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'SUPPORTED_BUILDS.json') | ConvertFrom-Json
+    $builds = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'SERVER_TOOLS_SUPPORTED_BUILDS.json') | ConvertFrom-Json
     $exeHash = Read-KPCSignature $Exe
     $dllHash = Read-KPCSignature 'server.dll'
     $objectHash = Read-KPCSignature 'object.lto'

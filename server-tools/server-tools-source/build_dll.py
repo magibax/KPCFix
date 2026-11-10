@@ -1,5 +1,5 @@
 """Build the x86 server.dll proxy, without redistributing original game binaries.
-Usage: python source/build_dll.py
+Usage: python server-tools-source/build_dll.py
 Requires gcc with -m32 support and GNU binutils.
 """
 from pathlib import Path
@@ -27,7 +27,7 @@ patch(0xfa540,'8b4424046a2c','noclip_request',0xe9);patch(0xfced1,'a160de1610','
 patch(0xfd4f0,'8b4c240485c9','leave_hook',0xe9)
 patches.append(dict(rva=0xfbcfa,before='890d50d91610',after=(b'\xe9'+struct.pack('<i',0x116550-0xfbcfa-5)+b'\x90').hex(),size=6,reloc=2))
 def array(data):return '{'+','.join('0x%02x'%v for v in data)+'}'
-supported=json.loads((package/'SUPPORTED_BUILDS.json').read_text())
+supported=json.loads((package/'SERVER_TOOLS_SUPPORTED_BUILDS.json').read_text())
 h='#define HOOK_RVA 0x116580u\n#define INITIAL_OFFSET %du\n'%(symbols['initial_mode']-0x116580)
 h+='static const U8 hook_code[]='+array(code)+';\nstatic const U8 noclip_init[]='+array(trampoline)+';\n'
 h+='typedef struct {U32 rva,size;I32 reloc;U8 before[8],after[8];} RuntimePatch;\nstatic const RuntimePatch patches[]={\n'
