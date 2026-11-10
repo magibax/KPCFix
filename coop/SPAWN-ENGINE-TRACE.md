@@ -90,6 +90,20 @@ The first two positions have now been tested by the user in-game. Both players s
 
 This remains a research-only, non-collision-validating allocator. Existing engine telefrag logic is not disabled.
 
+## Three-client trace: three unique position requests
+
+The user's subsequent three-player R1M2B server log shows the opt-in trial assigned three distinct player pointers to three distinct positions:
+
+| Slot | Player pointer | Engine object handle | X | Y | Z |
+| --- | --- | --- | ---: | ---: | ---: |
+| 0 | `0x02ecb428` | `0x02e68284` | 1600 | -256 | -2944 |
+| 1 | `0x02ecb170` | `0x02e680d8` | 1600 | -256 | -2848 |
+| 2 | `0x02ecaeb8` | `0x02e67f2c` | 1600 | -256 | -3040 |
+
+The log reported successful runtime hook installation and emitted all three modified positions at the engine position setter; no allocation-capacity warning appears. **This confirms three-slot assignment and forwarding, not actual player survival, wall/floor safety, or absence of telefragging.** Await direct in-game confirmation for all three, especially slot 2.
+
+Do not enable more than three players, assume safe reconnect replacement, or generalize this hard-coded coordinate trial to other levels.
+
 ## Next gate
 
 After the third-player test, the next engineering gate is robust disconnect/reconnect slot reclamation, then collision-validated nearby spawn selection, all-map entry anchors, and regressions against PM01 and normal server mode.
