@@ -2,6 +2,10 @@ typedef unsigned int U32;
 #include "coop_aabb_overlap.h"
 #include "coop_volume_probe.h"
 #include <assert.h>
+static CoopProbeResult unverified_world(void *ctx,const CoopVec3 *p,CoopVec3 *out){
+ (void)ctx;(void)p;(void)out;
+ return COOP_PROBE_UNSUPPORTED;
+}
 int main(void){
  CoopVec3 centre={1600.f,-256.f,-2944.f};
  CoopVec3 lo={-20.f,-46.f,-20.f},hi={20.f,46.f,20.f};
@@ -40,6 +44,15 @@ int main(void){
  lo.y=1.f;
  assert(!coop_aabb_from_relative(&centre,&lo,&hi,&other));
  assert(coop_aabb_overlap(0,&player,0)==COOP_AABB_UNKNOWN);
+ /* Exercise the generic allocator's conservative UNKNOWN path as well. */
+ {CoopAllocator allocator;
+  CoopVec3 out;
+  coop_allocator_reset(&allocator,3);
+  assert(coop_allocator_count(&allocator)==0);
+  assert(coop_allocator_assign(&allocator,456,&centre,unverified_world,0,&out,0)==COOP_ALLOC_NO_SAFE_POSITION);
+  assert(coop_allocator_release(&allocator,456)==0);
+  assert(coop_allocator_count(&allocator)==0);
+ }
  /* Box-to-box checks cannot certify full world/BSP clearance. */
  {CoopVolumeObservation v={0};
   v.bounds_min=(CoopVec3){-20,-46,-20};
