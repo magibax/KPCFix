@@ -12,7 +12,7 @@ foreach($entry in $parsedMaps) {
 if($maps.Count -ne 59 -or $maps[0].Name -ne 'PM01') { throw 'Map catalog did not load correctly. Expected 59 individual maps.' }
 $form=New-Object Windows.Forms.Form
 $form.Text='KPCFix Server Tools'
-$form.ClientSize=New-Object Drawing.Size(620,400)
+$form.ClientSize=New-Object Drawing.Size(620,680)
 $form.StartPosition='CenterScreen'
 $form.FormBorderStyle='FixedDialog'
 $form.MaximizeBox=$false
@@ -35,9 +35,28 @@ Label 'Server name' 20 145
 $name=New-Object Windows.Forms.TextBox; $name.Location=New-Object Drawing.Point(20,170); $name.Width=580; $name.Text='KPC LAN Server'; $form.Controls.Add($name)
 Label 'UDP port                                      Maximum players' 20 210
 $port=New-Object Windows.Forms.NumericUpDown; $port.Location=New-Object Drawing.Point(20,235); $port.Minimum=1; $port.Maximum=65535; $port.Value=42972; $form.Controls.Add($port)
-$players=New-Object Windows.Forms.NumericUpDown; $players.Location=New-Object Drawing.Point(280,235); $players.Minimum=1; $players.Maximum=16; $players.Value=4; $form.Controls.Add($players)
+$players=New-Object Windows.Forms.NumericUpDown; $players.Location=New-Object Drawing.Point(280,235); $players.Minimum=1; $players.Maximum=16; $players.Value=8; $form.Controls.Add($players)
 Label 'Campaign maps are experimental multiplayer maps. This does not add co-op.' 20 280
-$button=New-Object Windows.Forms.Button; $button.Text='Start selected map'; $button.Location=New-Object Drawing.Point(390,325); $button.Size=New-Object Drawing.Size(210,40); $form.Controls.Add($button)
+Label 'Frag limit (0 = unlimited)             Time limit in minutes (0 = unlimited)' 20 320
+$frags=New-Object Windows.Forms.NumericUpDown; $frags.Location=New-Object Drawing.Point(20,345); $frags.Maximum=10000; $frags.Value=20; $form.Controls.Add($frags)
+$minutes=New-Object Windows.Forms.NumericUpDown; $minutes.Location=New-Object Drawing.Point(280,345); $minutes.Maximum=1440; $minutes.Value=30; $form.Controls.Add($minutes)
+$settings=@{}
+$choices=@(
+ @('teamplay','Teamplay',0),@('keepitems','Keep items',0),@('fovchange','Allow FOV changes',1),
+ @('startgauntlets','Start with gauntlets',1),@('startbelt','Start with belt',1),@('startboots','Start with boots',0),
+ @('startshoulderplates','Start with shoulders',0),@('startbreastplate','Start with breastplate',0),@('startmask','Start with mask',0),
+ @('startscourge','Start with Scourge',0),@('startzero','Start with Zero Cannon',0),@('startmagma','Start with Magma',0),
+ @('startwindblade','Start with Windblade',0),@('startultimate','Start with ultimate',0)
+)
+$i=0
+foreach($choice in $choices) {
+ $box=New-Object Windows.Forms.CheckBox
+ $box.Text=[string]$choice[1]; $box.Checked=[bool]$choice[2]
+ $box.Location=New-Object Drawing.Point((20+($i%3)*195),(390+[int][math]::Floor($i/3)*38))
+ $box.Size=New-Object Drawing.Size(190,30)
+ $form.Controls.Add($box); $settings[[string]$choice[0]]=$box; $i++
+}
+$button=New-Object Windows.Forms.Button; $button.Text='Start selected map'; $button.Location=New-Object Drawing.Point(390,620); $button.Size=New-Object Drawing.Size(210,40); $form.Controls.Add($button)
 $group.Items.Add('All maps') | Out-Null
 $categories=New-Object 'System.Collections.Generic.List[string]'
 foreach($entry in $maps) {
@@ -62,6 +81,13 @@ $button.add_Click({
   $config=[regex]::Replace($config,'(?m)^"hostname".*$',{param($m) '"hostname" "'+$name.Text+'"'})
   $config=[regex]::Replace($config,'(?m)^"port".*$',('"port" "'+$port.Value+'"'))
   $config=[regex]::Replace($config,'(?m)^"maxclients".*$',('"maxclients" "'+$players.Value+'"'))
+  $config=[regex]::Replace($config,'(?m)^"fraglimit".*$',('"fraglimit" "'+$frags.Value+'"'))
+  $config=[regex]::Replace($config,'(?m)^"timelimit".*$',('"timelimit" "'+$minutes.Value+'"'))
+  foreach($key in $settings.Keys) {
+   $value=if($settings[$key].Checked){'1'}else{'0'}
+   $pattern='(?m)^"'+[regex]::Escape($key)+'".*$'
+   $config=[regex]::Replace($config,$pattern,('"'+$key+'" "'+$value+'"'))
+  }
   Set-Content (Join-Path $PSScriptRoot 'kpc-gui-server.cfg') $config -Encoding ASCII
   Set-Content (Join-Path $PSScriptRoot 'kpc-gui-maps.txt') $chosen.Path -Encoding ASCII
   $worker=Join-Path $PSScriptRoot 'Start-KPC-Selected-Server.ps1'

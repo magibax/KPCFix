@@ -4,7 +4,7 @@ Windows graphical launcher and optional server cheats for KISS: Psycho Circus ga
 
 ## Install and host
 
-Extract the entire ZIP directly beside Psycho.exe, dedicated.exe and object.lto (normally C:\Games\Psycho). Run KPC-Server-Launcher.cmd. Select a category, map, server name, UDP port and player limit, then start the server. Keep its console open; close it or use the server quit command to stop hosting. Run only one server instance at a time.
+Extract the entire ZIP directly beside Psycho.exe, dedicated.exe and object.lto (normally C:\Games\Psycho). Run KPC-Server-Launcher.cmd. Select a category, map, server name, UDP port and player limit, then start the server. The default is eight players, 20 frags and 30 minutes. Frag/time limits, teamplay, keeping items, allowing FOV changes, and starting weapons/armour are adjustable in the window. The newly added rule controls await native Windows validation. Zero frag/time limits request unlimited rounds. Keep its console open; close it or use the server quit command to stop hosting. Run only one server instance at a time.
 
 All 59 listed maps are selectable, including PM01-PM10, campaign maps, M0 introductions and the tutorial. The chosen map is the single-entry round rotation. Campaign hosting is experimental: maps can lack multiplayer spawn points and fall back to a single-player start; missing entity classes and campaign scripting may affect play. This does not implement campaign co-op or new spawn points.
 
@@ -36,3 +36,7 @@ Common original object.lto SHA256: 3a03f8796c482b1a7ad72755df33ee8f1f8056bb10957
 This 0.1.0 package retains the working gameplay changes and cleans up their console output: consistent prefix, no duplicate original invulnerability diagnostic, and no launcher status line after console-input submission. Those final output changes have static validation and await native confirmation. Earlier runtime tests succeeded with the prior logging build. The original engine's own messages retain their original text.
 
 patch.json describes every changed byte; source/logging.S contains the additional console hooks. The patcher checks input and output hashes and rollback normalization. The launcher requires Windows PowerShell and Windows Forms, already supplied with supported Windows installations. See LICENSE for the MIT license. KPCFix client configuration is separate.
+
+## Configuration files
+
+The launcher reads server-template.cfg and writes its own kpc-gui-server.cfg plus kpc-gui-maps.txt. It explicitly executes that generated config; the shipped server.cfg is not edited. GUI values override the corresponding template values for that launch. Other template values remain available for manual editing, including hostname location/MOTD, gib detail, friendlykill and suicide multipliers. Teamplay is the original teamplay flag; the game type remains regular deathmatch (1). Spawn type remains the established value 0; the duplicate spawntype=2 line from the stock config is omitted. Starting equipment follows the stock defaults (gauntlets and belt). Configuration is regenerated each time you start a server; edit the template for settings not exposed in the UI.
