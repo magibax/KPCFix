@@ -1,4 +1,4 @@
-# KPCFix Server Tools
+# KPCFix Server Tools 1.0.0
 
 Windows dedicated-server tools for official game version **1.13**. Supports the supplied Europe/UK, USA, German and Italian 1.13 builds.
 

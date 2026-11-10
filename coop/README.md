@@ -16,7 +16,7 @@ Can official 1.13 campaign worlds spawn two or more multiplayer clients at safe,
 
 - The same message was reported with `[ServerTools] Enabled=0`. It therefore cannot be attributed to the current Server Tools runtime hooks alone.
 - The launcher indexes 59 maps in `server-tools/maps.json`, including campaign and deathmatch maps. Exposing a map in the launcher does **not** establish co-op compatibility.
-- Current Server Tools hooks are restricted to cheats/chat/player disconnect handling. They do **not** implement campaign spawn selection.
+- Stable Server Tools hooks are restricted to cheats/chat/player disconnect handling. They do **not** implement campaign spawn selection.
 
 ## Evidence now available
 
@@ -24,7 +24,7 @@ The user supplied MAPDATA.zip (59 compiled v127 DAT worlds plus scripts) for **l
 
 The user also supplied matching, original 1.13 dedicated.exe, server.original.dll and object.lto. Their checksums were verified and the server spawn-selection call graph traced. See [SPAWN-ENGINE-TRACE.md](SPAWN-ENGINE-TRACE.md) for the confirmed runtime addresses, the **opt-in, non-relocating** spawn logging prototype, how to build it, and how to decode its logs.
 
-**Next prerequisite:** dynamically verify the statically identified [LithTech 1.13 IntersectSegment ABI](INTERSECT-ABI.md), then identify a player-volume collision/ground API and player departure/map reset events before integrating the [generic allocation policy](GENERAL-ALLOCATOR.md) into live spawn hooks. Optional DEdit source maps could help research geometry but are not required for the current stage.
+The [R1M2B collision diagnostic](INTERSECT-ABI.md) recorded nine grounded ray hits and three control misses. Player-volume clearance, disconnect and map-reset handling remain open.
 
 Do not import or package original game maps, models, textures, sound, or artwork in KPCFix releases.
 
@@ -50,8 +50,6 @@ Do not import or package original game maps, models, textures, sound, or artwork
 
 Lobby/ready-up UI, synchronized films, scripted triggers, shared pickups, saves, campaign progression, and complete co-op playability. These require separate gates after basic player spawning is proven.
 
-## Research notes
+## Next live test
 
-The DAT object-table layout, PlayerStart class, GameType property and sample world coordinates have been confirmed for 59 maps. Static reverse engineering now confirms the game-type fallback and identifies a guarded position-setting call site. The tracing wrapper is **not yet live-tested** and no collision-validating co-op offset mechanism exists. Do not enable automatic relocation until the in-game ABI and collision behavior are confirmed.
-
-**Next action:** Complete the engine-side collision/floor probe and verified disconnect handler described in [GENERAL-ALLOCATOR.md](GENERAL-ALLOCATOR.md). The tested R1M2B three-player build is unchanged in behaviour. **Do not connect a fourth client or cycle three distinct player pointers through reconnects** until slot reclamation is wired to player departure events. See SPAWN-ENGINE-TRACE.md.
+Verify a player-sized clearance query against known open and blocked positions. Keep the trial at three clients and restart before reusing slots until authoritative departure and world-reset events are verified. See [allocator integration](GENERAL-ALLOCATOR.md).

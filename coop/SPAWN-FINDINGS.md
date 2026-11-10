@@ -52,11 +52,6 @@ Also, original CExitTrigger objects refer to NextWorld and sometimes StartPointN
 
 Matching official European-family 1.13 dedicated.exe, server.original.dll, and original object.lto were provided and SHA-256 verified. The start selector, explicit single-player fallback, and spawn-position setter callsite have now been traced. See [SPAWN-ENGINE-TRACE.md](SPAWN-ENGINE-TRACE.md) for exact addresses, the optional tracing hook, and the next Windows runtime test.
 
-## Recommended next technical experiment
+## Runtime follow-up
 
-1. **Completed (static):** verify matching official 1.13 binaries; locate the exact warning and trace spawn start selection, temporary single-player filter, and engine position-setting API.
-2. **Pending (runtime):** build the experimental read-only trace hook, set Coop.TraceSpawns=1, join R1M2B with two clients, decode logged requested positions and compare PM01. Confirm no altered gameplay with the trace off.
-3. Implement a guarded, co-op-only spawn assignment path in Server Tools after proving the ABI. Select the single-player campaign entry anchor, then use a collision/ground-validating engine function to reserve distinct nearby transforms. If the engine has no appropriate spatial validation API, do not substitute fixed offsets without in-game verification.
-4. Maintain compatibility with the original 1.13 server's two official engine profiles, Enabled=0, stock deathmatch selection and unmodified object.lto.
-
-**No spawn-separation runtime patch has been implemented.** A narrow, opt-in observation hook exists in source; it is not yet rebuilt or validated in Windows. The original 1.13 executable code is now available for static inspection, but collision-safe relocation and live calling-convention behaviour still require dedicated testing.
+Three players spawned separately and moved normally at the tested R1M2B positions. The ground-ray diagnostic recorded nine hits and three control misses. Next verify player-volume clearance, departure and world reset before connecting the general allocator. See [spawn trials](SPAWN-ENGINE-TRACE.md) and [collision results](INTERSECT-ABI.md).
