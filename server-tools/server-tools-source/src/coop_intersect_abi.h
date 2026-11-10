@@ -7,14 +7,16 @@
  * in AL. NOT a C++ vtable slot and NOT a player-volume sweep.
  *
  * This vintage query is NOT the same as newer LithTech SDK revisions:
- * observed KPC fields are flags +0x24, filter +0x28 and filter user +0x2c.
- * The trailing zeros provide overrun protection for experimental diagnostic
- * calls and are NOT part of the proven 0x30-byte input footprint.
+ * observed KPC fields are flags +0x24, filter +0x28, filter user +0x2c,
+ * AND an additional 16-bit field at +0x30, set to 0x6003 in original
+ * caller RVA 0xf2f7c. The field's semantic meaning remains UNVERIFIED.
+ * The zeroed trailing bytes provide overrun protection for diagnostics.
  */
 #define KPC_INTERSECT_SERVER_SLOT 0x90u
 #define KPC_INTERSECT_OBJECTS 1u
 #define KPC_INTERSECT_HPOLY 4u
-#define KPC_INTERSECT_QUERY_MIN_BYTES 0x30u
+#define KPC_INTERSECT_QUERY_MIN_BYTES 0x32u
+#define KPC_INTERSECT_ORIGINAL_WORD_30 0x6003u
 
 typedef struct { float x,y,z; } KpcIntersectVec;
 typedef struct { KpcIntersectVec normal; float distance; } KpcIntersectPlane;
@@ -26,7 +28,9 @@ typedef struct {
  U32 flags;                    /* +0x24 */
  U32 object_filter;            /* +0x28, 32-bit function address */
  U32 filter_userdata;         /* +0x2c, player HOBJECT used by callback */
- U32 reserved[4];             /* diagnostic padding; not ABI fields */
+ unsigned short legacy_word_30; /* +0x30; original caller writes 0x6003 */
+ unsigned short reserved_32; /* +0x32; semantics unknown, zero in our diagnostic */
+ U32 reserved[3];          /* diagnostic padding; not ABI fields */
 } KpcIntersectQuery;
 
 typedef struct {
@@ -45,6 +49,8 @@ _Static_assert(__builtin_offsetof(KpcIntersectQuery,direction)==0x18,"query dire
 _Static_assert(__builtin_offsetof(KpcIntersectQuery,flags)==0x24,"query flags offset");
 _Static_assert(__builtin_offsetof(KpcIntersectQuery,object_filter)==0x28,"query filter offset");
 _Static_assert(__builtin_offsetof(KpcIntersectQuery,filter_userdata)==0x2c,"query userdata offset");
+_Static_assert(__builtin_offsetof(KpcIntersectQuery,legacy_word_30)==0x30,"legacy query word 0x30 offset");
+_Static_assert(__builtin_offsetof(KpcIntersectQuery,reserved_32)==0x32,"reserved query word offset");
 _Static_assert(sizeof(KpcIntersectQuery)==0x40,"guarded query storage");
 _Static_assert(__builtin_offsetof(KpcIntersectInfo,plane)==0x0c,"info plane offset");
 _Static_assert(__builtin_offsetof(KpcIntersectInfo,hit_object)==0x1c,"info object offset");
