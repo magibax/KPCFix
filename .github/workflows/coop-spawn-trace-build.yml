@@ -1,0 +1,78 @@
+name: Experimental co-op spawn trace build
+
+on:
+  push:
+    branches:
+      - feature/coop-campaign
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install 32-bit build tools
+        run: sudo apt-get update && sudo apt-get install -y gcc-multilib binutils
+      - name: Build server proxy and refreshed manifest
+        run: python3 server-tools/server-tools-source/build_dll.py
+      - name: Run asset-free co-op tests
+        run: python3 -m unittest discover -s coop/tools -p 'test_*.py' -v
+      - name: Validate build integrity
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib
+          root=pathlib.Path('server-tools')
+          binary=root/'KPCServerTools.dll'
+          manifest=json.loads((root/'SERVER_TOOLS_BUILD.json').read_text())
+          assert binary.read_bytes()[:2]==b'MZ', 'Expected Windows PE DLL'
+          assert len(binary.read_bytes())==manifest['proxy_bytes']
+          assert hashlib.sha256(binary.read_bytes()).hexdigest()==manifest['proxy_sha256']
+          assert 'bac7696bc79f10b637134b7bbffea1ead01e67c8207452f5c3f339a8b5a353d4' in manifest['previous_proxy_hashes']
+          print('PASS:', binary.stat().st_size, 'bytes;', manifest['proxy_sha256'])
+          PY
+          objdump -p server-tools/KPCServerTools.dll | grep -A12 'Export Table'
+      - name: Stage experimental test-only package
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp server-tools/KPCServerTools.dll server-tools/SERVER_TOOLS_BUILD.json dist/
+          cat > dist/TEST-INSTRUCTIONS.txt <<'TXT'
+          KPCFIX CO-OP SPAWN TRACE - EXPERIMENTAL, NOT A STABLE RELEASE
+
+          This build is for the official KISS: Psycho Circus 1.13 dedicated
+          server, using the existing KPCFix Server Tools installation.
+          It records the original requested spawn coordinates. It does NOT
+          separate overlapping players, change spawn positions or sync co-op.
+
+          Before installation:
+          1. Close the game and dedicated server.
+          2. Back up your existing server.dll, KPCServerTools.dll,
+             SERVER_TOOLS_BUILD.json and KPCServerTools.ini.
+          3. Confirm the original server.original.dll and object.lto are intact.
+          4. Copy ONLY the supplied KPCServerTools.dll and
+             SERVER_TOOLS_BUILD.json into the game folder alongside the
+             existing Setup-KPCServerTools.cmd.
+          5. Run the existing Setup-KPCServerTools.cmd (it will verify versions
+             and install the newly built DLL as server.dll).
+          6. In the existing KPCServerTools.ini, add:
+                [Coop]
+                TraceSpawns=1
+          7. Start R1M2B and connect two clients.
+          8. Send KPCServerTools.log and server console output for analysis.
+
+          To disable logging, set TraceSpawns=0 and restart the server.
+          To restore stable code, restore your backup KPCServerTools.dll and
+          SERVER_TOOLS_BUILD.json, then re-run Setup-KPCServerTools.cmd.
+          This test build is limited to the first 64 position events.
+          TXT
+      - name: Upload local-test files
+        uses: actions/upload-artifact@v4
+        with:
+          name: KPCFix-Coop-SpawnTrace-Test
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
