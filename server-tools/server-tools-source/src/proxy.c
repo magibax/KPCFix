@@ -2,6 +2,7 @@
 #include "sha256.h"
 #include "runtime_data.h"
 #include "coop_spawn.h"
+#include "coop_intersect_abi.h"
 extern HANDLE WINAPI GetStdHandle(DWORD);
 extern void WINAPI ExitProcess(UINT) __attribute__((noreturn));
 extern DWORD WINAPI VirtualQuery(const void *,void *,DWORD);
@@ -75,8 +76,14 @@ static const U8 original_spawn_pos_call[6]={0xff,0x91,0xe0,0x01,0x00,0x00};
 static const U8 original_prepare_call[5]={0xe8,0x17,0xfd,0xff,0xff};
 typedef void (CDECL *SpawnSetPos)(void *,const U32 *);
 static U8 *spawn_image;
-static int spawn_trace_enabled,spawn_separation_enabled;
-static volatile U32 spawn_trace_count;
+static int spawn_trace_enabled,spawn_separation_enabled,collision_trace_enabled;
+static volatile U32 spawn_trace_count,collision_trace_count;
+#define COLLISION_FILTER_RVA 0x102730u
+#define COLLISION_DIAG_LIMIT 9u
+typedef U8 (CDECL *KpcIntersectFn)(const KpcIntersectQuery *,KpcIntersectInfo *);
+static float collision_float(U32 bits){union{U32 bits;float value;}u;u.bits=bits;return u.value;}
+static U32 collision_bits(float value){union{U32 bits;float value;}u;u.value=value;return u.bits;}
+
 static CoopSpawnReservations spawn_trial_reservations;
 static void trace_append(char *out,U32 *n,const char *s){
  while(*s&&*n<115)out[(*n)++]=*s++;
@@ -85,6 +92,39 @@ static void trace_hex(char *out,U32 *n,U32 value){
  static const char hex[]="0123456789abcdef";int i;
  trace_append(out,n,"0x");
  for(i=7;i>=0&&*n<115;i--)out[(*n)++]=hex[(value>>(i*4))&15u];
+}
+/* Evidence from original object.lto RVA f2fae/f2fb4:
+ * API slot +0x90, two stack pointer args, 8-byte caller cleanup, bool in AL.
+ * Original callback at +0x102730 filters the supplied user object.
+ * Diagnostic only: a downward RAY is NOT a player collision-volume test.
+ * Each test leaves all player transforms and engine game state unchanged.
+ */
+static void diagnostic_intersect_segment(const U32 *object_pos,void *object){
+ KpcIntersectQuery query={0};
+ KpcIntersectInfo hit={0};
+ U32 *engine;
+ U8 result;
+ char line[116];U32 n=0;
+ float x=collision_float(object_pos[0]),y=collision_float(object_pos[1]),z=collision_float(object_pos[2]);
+ engine=spawn_image?*(U32 **)(spawn_image+SPAWN_POS_GLOBAL_RVA):0;
+ if(!engine||!engine[KPC_INTERSECT_SERVER_SLOT/4]){
+  log_file("[KPCFix Co-op] ABI segment unavailable (no engine pointer).");
+  return;
+ }
+ query.from.x=x;query.from.y=y+64.f;query.from.z=z;
+ query.to.x=x;query.to.y=y-256.f;query.to.z=z;
+ query.flags=KPC_INTERSECT_OBJECTS|KPC_INTERSECT_HPOLY;
+ query.object_filter=(U32)(spawn_image+COLLISION_FILTER_RVA);
+ query.filter_userdata=(U32)object;
+ result=((KpcIntersectFn)engine[KPC_INTERSECT_SERVER_SLOT/4])(&query,&hit);
+ trace_append(line,&n,"[KPCFix Co-op] ABI segment hit=");
+ if(n<115)line[n++]=result?'1':'0';
+ trace_append(line,&n," obj=");trace_hex(line,&n,(U32)object);
+ if(result){
+  trace_append(line,&n," y=");trace_hex(line,&n,collision_bits(hit.point.y));
+  trace_append(line,&n," ny=");trace_hex(line,&n,collision_bits(hit.plane.normal.y));
+ }
+ line[n]=0;log_file(line);
 }
 /* The native game call pushes (HOBJECT, LTVector*) and cleans eight bytes
  * in the caller. Forward it unchanged and only then write an observation. */
@@ -101,6 +141,14 @@ static void CDECL trace_spawn_position(void *object,const U32 *pos){
   trace_append(line,&n," z=");trace_hex(line,&n,pos[2]);
   line[n]=0;log_file(line);
  }
+ /* Limit opt-in live ABI tests to three known-good R1M2B coordinates.
+  * The result is logged AFTER the original engine position assignment.
+  * This neither changes spawn positions nor disables telefragging. */
+ if(collision_trace_enabled&&pos&&
+    pos[0]==0x44c80000u&&pos[1]==0xc3800000u&&
+    (pos[2]==0xc5380000u||pos[2]==0xc5320000u||pos[2]==0xc53e0000u)&&
+    __sync_fetch_and_add(&collision_trace_count,1)<COLLISION_DIAG_LIMIT)
+  diagnostic_intersect_segment(pos,object);
 }
 /* RVA f13a4 precedes the engine's nearby-object / telefrag handling.
  * The callee is a thiscall method (ECX=player, ret 12). Adjust the private
@@ -172,7 +220,7 @@ static int apply_object(HMODULE module){
  copy(b+0x116550,noclip_init,sizeof(noclip_init));
  for(i=0;i<PATCH_COUNT;i++)for(j=0;j<patches[i].size;j++)b[patches[i].rva+j]=patches[i].after[j];
  if(spawn_trace_enabled||spawn_separation_enabled){
-  spawn_image=b;spawn_trace_count=0;
+  spawn_image=b;spawn_trace_count=0;collision_trace_count=0;
   for(i=0;i<COOP_TRIAL_SLOTS;i++)spawn_trial_reservations.player[i]=0;
   if(spawn_trace_enabled)copy(b+SPAWN_POS_CALL_RVA,spawn_call,6);
   if(spawn_separation_enabled)copy(b+SPAWN_PREPARE_CALL_RVA,prepare_call,5);
@@ -236,7 +284,9 @@ static void initialize(void){
  active=profile>=0&&GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"Enabled",1,ini_path)!=0;
  initial_cheats=GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"AllowCheats",0,ini_path)!=0;
  spawn_separation_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TrialSeparateSpawns",0,ini_path)!=0;
- spawn_trace_enabled=active&&(spawn_separation_enabled||GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
+ collision_trace_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceCollisionABI",0,ini_path)!=0;
+ spawn_trace_enabled=active&&(spawn_separation_enabled||collision_trace_enabled||
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
  if(active&&!hooked){
   if(!intercept_backend())fatal("[KPCFix Server Tools] ERROR: could not install engine loading hook.");
   hooked=1;
