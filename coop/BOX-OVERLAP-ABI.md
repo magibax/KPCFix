@@ -37,3 +37,11 @@ The portable AABB comparator only checks **boxes supplied to it**; no native BSP
 Both native world-hull and active-actor fields **remain `UNKNOWN`**, and `coop_allocator_assign` remains disconnected from the runtime DLL. The original nearby-object handler at RVA `0x0f10c0` has touch/telefrag side effects and is unsuitable for a read-only adapter.
 
 **Next milestone:** find and verify a query-only native world-BSP box/hull collision method, including its calling convention, side effects and control cases. Then independently verify live actor enumeration/box filtering before setting either full-clear field.
+
+## Candidate nearby-object enumeration routine (unverified)
+
+Following a real movement/physics caller at original server RVA `0x18c3a` leads to the object spatial-tree visitor at RVA **`0x19c97`**. Its observed caller pushes four arguments and cleans `0x10` bytes. The visitor scans a tree, invokes the guarded `0x18991` AABB comparator on object bounds, and writes results into a caller-supplied count/array (the inspected path stops at 100 candidates). This is useful as a **candidate actor broadphase** rather than a world-polygon clearance API.
+
+**Do not call this function from the experimental proxy yet.** The visitor also dispatches an object's virtual method at slot `+0x30` before testing overlap. The callback's side effects and complete interface ownership are not verified; the result capacity also must never be treated as a complete set on overflow. Identify/verify the callback and calling contract, prove no object mutations, and add a guarded read-only test before considering live actor enumeration.
+
+The spatial-tree visitor still cannot tell whether a candidate hull is embedded in a world BSP wall or solid brush. The independent world-hull blocker remains open.
