@@ -139,3 +139,26 @@ routine, establish its call/return ABI and absence of mutations, then run
 a separate opt-in differential test on the four positions above **and**
 an interior obstacle missed by the current ray samples. Keep both native
 world-hull and actor-clearance fields UNKNOWN in the current runtime.
+
+### Original server.dll API candidates eliminated by disassembly
+
+The verified original `server.original.dll` (SHA-256
+`83b7bce809948b6f70ed3f35a77a771b6087f1104d90d06a62ac3dc0d4bd37d5`)
+has two informative routines, but neither is the required world-volume query:
+
+- **RVA `0x2477b`: `ServerDE::GetWorldBox`**. The success path copies
+  three floats from world-data offsets `+0xf8` and `+0x104` into two
+  caller output buffers and returns zero; it performs no collision
+  traversal. This exposes stored world-box endpoints, not occupancy
+  of an arbitrary player AABB.
+- **RVA `0x104fb`: `PhysicsLT::GetStandingOn`**. The routine requires
+  an existing object and output record, reads that object's standing
+  relationship at `+0xa0`/`+0xa4`, and writes current standing
+  information to the caller. It does not take an arbitrary candidate
+  position and cannot establish candidate world clearance.
+
+These RVAs are relative to the original PE base `0x10000000`. The
+identifications are grounded in the original binary's corresponding
+diagnostic strings and the disassembled function bodies. They are
+**static findings only**, not runtime-approved calling conventions for
+a new hook. No new game-engine function has been invoked in this pass.
