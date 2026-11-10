@@ -66,3 +66,9 @@ game object or spawning is modified. The resource registry does **not**
 prove which model objects are live, solid or transformed. See
 [BSP-VOLUME-ABI.md](BSP-VOLUME-ABI.md) for the original ABI evidence and
 the Windows test controls.
+
+The follow-up `registry-backrefs-v3` build additionally verifies
+`model+0xdc` against the reciprocal `object+0x140` resource pointer,
+reporting matched, mismatched and unreadable counts separately.
+Even a matching link is not evidence of current solidity or safe
+world-space hull clearance.

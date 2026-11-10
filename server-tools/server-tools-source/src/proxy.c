@@ -304,6 +304,12 @@ static void registry_trace_loaded(void){
  trace_append(msg,&n," roots=");trace_hex(msg,&n,snap.root_candidates);
  trace_append(msg,&n," attached=");trace_hex(msg,&n,snap.associated_candidates);
  msg[n]=0;log_file(msg);
+ n=0;
+ trace_append(msg,&n,"[KPCFix Co-op] model refs matched=");
+ trace_hex(msg,&n,snap.reciprocal_matches);
+ trace_append(msg,&n," mismatch=");trace_hex(msg,&n,snap.reciprocal_mismatches);
+ trace_append(msg,&n," unreadable=");trace_hex(msg,&n,snap.reciprocal_unreadable);
+ msg[n]=0;log_file(msg);
  if(snap.first_root){
   n=0;
   trace_append(msg,&n,"[KPCFix Co-op] model registry first root=");
@@ -582,7 +588,7 @@ static void initialize(void){
  spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
  if(active&&spawn_trace_enabled){
-  log_file("[KPCFix Co-op] diagnostics build=registry-status-v2 (reads KPCServerTools.ini)");
+  log_file("[KPCFix Co-op] diagnostics build=registry-backrefs-v3 (reads KPCServerTools.ini)");
   log_file(model_registry_enabled?
     "[KPCFix Co-op] effective TraceModelRegistry=1":
     "[KPCFix Co-op] effective TraceModelRegistry=0 (set [Coop] TraceModelRegistry=1; restart)");

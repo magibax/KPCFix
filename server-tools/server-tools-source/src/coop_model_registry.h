@@ -13,6 +13,7 @@ typedef int (*CoopModelRead32)(void *ctx,unsigned int address,unsigned int *valu
 typedef struct {
  unsigned int entries,nonzero_models,root_candidates,associated_candidates;
  unsigned int first_root,first_associated;
+ unsigned int reciprocal_matches,reciprocal_mismatches,reciprocal_unreadable;
 } CoopModelRegistrySnapshot;
 typedef enum { COOP_MODEL_REGISTRY_UNKNOWN=-1,COOP_MODEL_REGISTRY_TRAVERSED=1 } CoopModelRegistryStatus;
 
@@ -56,13 +57,23 @@ static CoopModelRegistryStatus coop_model_registry_scan(
    summary->root_candidates++;
   }
   if(associated){
+   unsigned int backref=0;
    if(!summary->first_associated)summary->first_associated=associated;
    summary->associated_candidates++;
+   /* The original 1.13 se_InitWorldModel writes obj+0x140=entry and
+    * model+0xdc=obj (RVA 0x22990 and 0x22998 respectively).
+    * An object reference may be stale: unreadable/mismatched is diagnostic,
+    * not a reason to abandon the bounded RESOURCE registry traversal.
+    */
+   if(!coop_model_read_offset(read,ctx,associated,0x140u,&backref))
+    summary->reciprocal_unreadable++;
+   else if(backref==entry)summary->reciprocal_matches++;
+   else summary->reciprocal_mismatches++;
   }
   next=new_next;
  }
- /* TRAVERSED certifies bounded linkage, not model type, solidity,
-  * object ownership, transform validity, or world clearance. */
+ /* TRAVERSED certifies bounded RESOURCE linkage only. Even a reciprocal
+  * pointer does not prove object liveness, solidity or world transforms. */
  return COOP_MODEL_REGISTRY_TRAVERSED;
 }
 #endif

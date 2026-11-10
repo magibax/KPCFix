@@ -271,3 +271,34 @@ still does not establish current solidity or a valid world-space
 transform. After that, identify object collision and transform state
 from original engine callsites before attempting any additional BSP
 collision checks or enabling the allocator.
+
+## Next controlled probe — resource/object reciprocal back-reference
+
+From the original 1.13 `se_InitWorldModel` disassembly,
+`0x22990` stores `object+0x140 = resource_record`, while
+`0x22998` stores `model+0xdc = object`. An unverified,
+non-null `model+0xdc` pointer is therefore an opportunity for an
+additional **read-only reciprocal consistency check**, not proof of
+liveness. The registry reader now checks each associated object's
+`+0x140` DWORD with `VirtualQuery` before reading and reports:
+
+- `model refs matched`: `object+0x140 == resource_record`.
+- `mismatch`: readable object+0x140 but points to another record.
+- `unreadable`: missing/unreadable back-reference memory.
+
+The three counters must sum to `attached` from the same registry
+snapshot when traversal succeeds. An unreadable back-reference
+**does not** change registry `TRAVERSED` to `UNKNOWN`, because
+those statuses describe different kinds of evidence. No game object
+is written or called.
+
+This new build reports
+`[KPCFix Co-op] diagnostics build=registry-backrefs-v3` and a
+`model refs matched=... mismatch=... unreadable=...` line. The
+first R1M2B spawn invokes one bounded scan with
+`[Coop] TraceModelRegistry=1` as before. Use one client,
+`TrialSeparateSpawns=0`, and capture both lines. The previously
+observed R1M2B counts (115 resources, 109 associations) are the
+regression baseline; the reciprocal match count is intentionally
+unpredicted until live-tested. **Never use these reference checks
+to set a spawn-clearance verdict.**

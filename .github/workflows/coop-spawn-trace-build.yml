@@ -1,4 +1,4 @@
-name: Experimental co-op named WorldModel registry survey
+name: Experimental co-op WorldModel back-reference validation
 
 on:
   push:
@@ -50,7 +50,7 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
             server-tools/server-tools-source/tests/test_coop_bsp_box.c -o /tmp/kpc-coop-bsp-test
           /tmp/kpc-coop-bsp-test
-      - name: Verify fail-closed named-model registry traversal
+      - name: Verify bounded registry and reciprocal back-reference diagnostics
         shell: bash
         run: |
           gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
@@ -87,7 +87,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           dll=Path('server-tools/KPCServerTools.dll').read_bytes()
-          assert b'diagnostics build=registry-status-v2' in dll
+          assert b'diagnostics build=registry-backrefs-v3' in dll
           assert b'effective TraceModelRegistry=1' in dll
           assert b'model registry=DISABLED' in dll
           assert 'TraceModelRegistry'.encode('utf-16le') in dll
@@ -99,7 +99,7 @@ jobs:
           mkdir -p dist
           cp server-tools/KPCServerTools.dll server-tools/SERVER_TOOLS_BUILD.json dist/
           cat > dist/TEST-INSTRUCTIONS.txt <<'TXT'
-          EXPERIMENTAL KPCFIX CO-OP NAMED WORLDMODEL REGISTRY SURVEY
+          EXPERIMENTAL KPCFIX CO-OP WORLDMODEL RECIPROCAL BACKREF TEST
           Not a stable release. No automatic spawning or collision edits.
 
           Back up server.dll, KPCServerTools.dll, SERVER_TOOLS_BUILD.json
@@ -123,8 +123,13 @@ jobs:
           Three navigable candidates should give volume gate=UNSUPPORTED.
           The deliberately obstructed wall should give volume gate=BLOCKED.
           Additionally collect [KPCFix Co-op] base BSP box=... lines
-          AND [KPCFix Co-op] model registry=... lines.
-          Confirm the log says diagnostics build=registry-status-v2 and
+          AND [KPCFix Co-op] model registry=... lines
+          AND [KPCFix Co-op] model refs matched=... lines.
+          Every attached pointer is checked read-only against the
+          expected resource-record pointer at object+0x140. All
+          matched/mismatched/unreadable counts should sum to attached.
+          Matching DOES NOT prove live solidity or a valid transform.
+          Confirm the log says diagnostics build=registry-backrefs-v3 and
           effective TraceModelRegistry=1 at the top. If there is no
           build marker, the dedicated server is loading an older DLL
           (or this ZIP was not installed). If it reports effective
@@ -171,7 +176,7 @@ jobs:
       - name: Upload local-test files
         uses: actions/upload-artifact@v4
         with:
-          name: KPCFix-Coop-WorldModel-Registry-Survey
+          name: KPCFix-Coop-WorldModel-Backref-Diagnostic
           path: dist/
           if-no-files-found: error
           retention-days: 14
