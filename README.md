@@ -17,7 +17,7 @@ KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high f
 ## Install
 
 1. Patch a clean installation of your game to **1.13**, then close the game and launcher. Back up any existing local DLLs or INIs you are replacing.
-2. [Download the Windows release ZIP](https://github.com/magibax/KPCFix/releases/download/kpcfix-1.13-r3/KPCFix-Windows-1.13.zip). Extract its contents beside `Psycho.exe`, usually in `C:\Games\Psycho\`.
+2. [Download the Windows release ZIP](https://github.com/magibax/KPCFix/releases/download/kpcfix-1.13-r4/KPCFix-Windows-1.13.zip). Extract its contents beside `Psycho.exe`, usually in `C:\Games\Psycho\`.
 3. Before launching the game, run `Check-KPCVersion.cmd` from that folder. Continue only if it reports **PASS** and identifies your region as a supported official 1.13 build.
 4. **Recommended for the first launch after patching:** run `Launch-KPCFix.cmd`. It applies the initial KPCFix setup and opens the shipped `Psycho.exe` launcher. In the launcher, open **Display** and choose your desired resolution. Start the game and save/select a profile with that same resolution. The initial preset is **1920×1080, 60 FPS, VSync on**.
 5. After that first setup, once the desired resolution is saved in both the launcher and your game profile, you can start the game directly with the shipped `Psycho.exe`. Run `Check-KPCVersion.cmd` again after replacing or repatching game files. Keyboard bindings are yours to configure in the game.
@@ -36,7 +36,7 @@ For a 165 FPS cap, use `FpsLimiter = flipend(165)`. If a scripted sequence misbe
 
 ## Server Tools
 
-Hosting tools are a separate download: [KPCFix Server Tools 1.0.0](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0). The main KPCFix ZIP contains client fixes only, including the multiplayer browser connection fix.
+Hosting tools are a separate download: [KPCFix Server Tools 1.0.0](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r2). The main KPCFix ZIP contains client fixes only, including the multiplayer browser connection fix.
 
 Server Tools includes a compact graphical launcher for all 59 maps, server-rule controls, live `kpc_cheats 0/1` permission and console chat logging. Campaign maps are experimental and may be buggy in multiplayer. Cheat announcements appear in chat only.
 
@@ -45,3 +45,18 @@ Extract the Server Tools ZIP into the game directory, close the game/server and 
 ## Building and testing
 
 See the [client build instructions](source/BUILD.md), [architecture](ARCHITECTURE.md), [configuration reference](CONFIGURATION.md) and [verification procedures](TESTING.md).
+
+## Release source and binary provenance
+
+The current Windows client release is [KPCFix 1.13 R4](https://github.com/magibax/KPCFix/releases/tag/kpcfix-1.13-r4), and the current dedicated server release is [Server Tools 1.0.0 R2](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r2). Both release tags identify source commit `7e8a6ecbc3a7a06ef850df85fd9ec3eb1ebecb61`.
+
+GitHub's automatically generated **Source code (ZIP/tar.gz)** links are complete snapshots of the repository at each release tag. They are **not** the same as the separately uploaded, installable Windows or Server Tools ZIPs. Each installable archive contains a selected subset of files plus the release DLLs and any bundled dependencies; the repository source snapshot also contains tests and build machinery for both products.
+
+Older release tags `kpcfix-1.13-r3` and `server-tools-v1.0.0` point to earlier commits, even though their current binary ZIPs have the same checksums as the newer R4 and R2 assets. For source corresponding to the current installable packages, use R4 or R2, not those older source links.
+
+Published package SHA-256 checksums:
+
+- Windows client `KPCFix-Windows-1.13.zip`: `da2a67cda69adf8d75febf10f7915f9efcaf725ced1f2fef02a3a021f892cc55`
+- Server Tools `KPCFix-Server-Tools-1.0.0.zip`: `db8b550257a11f8a5dbdcea31512b69d19aa9922fd73979cba46478786ed4265`
+
+The source tree tracks `source/BUILD_RESULT.json`, `server-tools/SERVER_TOOLS_BUILD.json`, and package-specific checksum manifests. To prove binary provenance, rebuild from the tagged source and compare DLL SHA-256 hashes with the distributed DLLs; a matching tag alone does not establish a reproducible build.
