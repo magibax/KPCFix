@@ -53,10 +53,12 @@ Release is created merely by merging a feature branch or opening a PR.
 
 ## Reproducibility and dependency boundary
 
-- **Toolchain:** GitHub Actions uses Ubuntu 24.04, GCC 13.3.0 and GNU
-  binutils 2.42. The runner checks these versions before building. Source
-  compilation with a different toolchain can succeed but yield different DLL
-  bytes. Byte-for-byte comparisons are mandatory.
+- **Client toolchain:** Ubuntu 24.04, GCC 13.3.0, GNU binutils 2.42.
+- **Server toolchain:** Debian trixie container, GCC 14.2.0 and GNU binutils
+  2.44, matching the Windows-tested Server Tools beta build. The workflow
+  validates the versions inside the container and rejects an altered build.
+  These tools intentionally use different compilers because otherwise their
+  tracked PE32 binaries do not reproduce byte-for-byte.
 - **Client:** `source/build.py` must reproduce tracked `dinput.dll`,
   `source/SYMBOLS.json` and `source/BUILD_RESULT.json`.
 - **Server:** `server-tools/server-tools-source/build_dll.py` must reproduce
