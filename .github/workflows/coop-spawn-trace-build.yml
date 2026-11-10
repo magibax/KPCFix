@@ -1,4 +1,4 @@
-name: Experimental co-op spawn trace build
+name: Experimental co-op two-player spawn trial build
 
 on:
   push:
@@ -20,6 +20,12 @@ jobs:
         run: python3 server-tools/server-tools-source/build_dll.py
       - name: Run asset-free co-op tests
         run: python3 -m unittest discover -s coop/tools -p 'test_*.py' -v
+      - name: Run native 2-player spawn slot unit tests
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_spawn.c -o /tmp/kpc-coop-spawn-test
+          /tmp/kpc-coop-spawn-test
       - name: Validate build integrity
         shell: bash
         run: |
@@ -32,6 +38,7 @@ jobs:
           assert len(binary.read_bytes())==manifest['proxy_bytes']
           assert hashlib.sha256(binary.read_bytes()).hexdigest()==manifest['proxy_sha256']
           assert 'bac7696bc79f10b637134b7bbffea1ead01e67c8207452f5c3f339a8b5a353d4' in manifest['previous_proxy_hashes']
+          assert '9b6bd69e894925e6b31f1ed32b6ff82331af104e2c20fbb6aeb43dc4bef5be9a' in manifest['previous_proxy_hashes']
           print('PASS:', binary.stat().st_size, 'bytes;', manifest['proxy_sha256'])
           PY
           objdump -p server-tools/KPCServerTools.dll | grep -A12 'Export Table'
@@ -41,12 +48,17 @@ jobs:
           mkdir -p dist
           cp server-tools/KPCServerTools.dll server-tools/SERVER_TOOLS_BUILD.json dist/
           cat > dist/TEST-INSTRUCTIONS.txt <<'TXT'
-          KPCFIX CO-OP SPAWN TRACE - EXPERIMENTAL, NOT A STABLE RELEASE
+          KPCFIX CO-OP SPAWN SEPARATION TRIAL - EXPERIMENTAL
 
           This build is for the official KISS: Psycho Circus 1.13 dedicated
           server, using the existing KPCFix Server Tools installation.
-          It records the original requested spawn coordinates. It does NOT
-          separate overlapping players, change spawn positions or sync co-op.
+          It can assign a distinct trial spawn to the SECOND player entering
+          R1M2B. Player 1 stays at the original start. Player 2 is shifted
+          +96 world units on the Z axis BEFORE the original near-object
+          handling routine executes. The positions are NOT collision-validated,
+          so this test is ONLY intended for a disposable two-client session.
+          It does not implement full co-op, respawn handling, reconnects,
+          synchronized scripting or map transitions.
 
           Before installation:
           1. Close the game and dedicated server.
@@ -61,22 +73,31 @@ jobs:
           6. In the existing KPCServerTools.ini, add:
                 [Coop]
                 TraceSpawns=1
-          7. Start R1M2B and connect two clients.
-          8. Send KPCServerTools.log and server console output for analysis.
+                TrialSeparateSpawns=1
+          7. Start R1M2B and connect ONLY two clients.
+          8. Confirm both clients remain alive and can move separately,
+             that neither spawns in walls, and whether either telefrags.
+          9. Send KPCServerTools.log and server console output for analysis.
+          If the second spawn is stuck or unsafe, stop the server and report it.
+          If the server unexpectedly crashes, restore the backup files.
 
-          To disable logging, set TraceSpawns=0 and restart the server.
+          To disable the spawn trial, set TrialSeparateSpawns=0 and restart
+          the server; TraceSpawns=1 alone remains read-only.
           To restore the previous stable installation, stop the server and
           restore all backed-up server.dll, KPCServerTools.dll,
           SERVER_TOOLS_BUILD.json and KPCServerTools.ini. No setup rerun is
           required because the old working server.dll is restored directly.
           Do not just restore the old manifest and rerun setup: the old hash
           list may not recognize the experimental installed server.dll.
-          This test build is limited to the first 64 position events.
+          This research build supports two reserved player objects on the
+          specified R1M2B spawn anchor only. It does not recycle disconnected
+          player slots. Do not use it as a normal multiplayer/co-op server.
+          Only the first 64 setter events are logged.
           TXT
       - name: Upload local-test files
         uses: actions/upload-artifact@v4
         with:
-          name: KPCFix-Coop-SpawnTrace-Test
+          name: KPCFix-Coop-Two-Player-SpawnTrial
           path: dist/
           if-no-files-found: error
           retention-days: 14
