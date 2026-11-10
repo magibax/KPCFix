@@ -47,7 +47,11 @@ int main(void){
  assert(coop_allocator_find(&a,456)>=0);
  probe.checked=0;
  assert(coop_allocator_assign(&a,456,&home,known_good,&probe,&out,&cand)==COOP_ALLOC_SUCCESS);
- assert(same(out,second)&&cand==COOP_ALLOCATOR_CANDIDATES&&probe.checked==0);
+ assert(same(out,second)&&cand==COOP_ALLOCATOR_CANDIDATES&&probe.checked==1);
+ probe.mode=4; /* adjusted onto the first player */
+ assert(coop_allocator_assign(&a,456,&home,known_good,&probe,&out,&cand)==COOP_ALLOC_NO_SAFE_POSITION);
+ assert(same(a.slots[coop_allocator_find(&a,456)].position,second));
+ probe.mode=1;
  /* Fourth player must fail instead of teleporting onto an occupied start. */
  assert(coop_allocator_assign(&a,999,&home,known_good,&probe,&out,&cand)==COOP_ALLOC_NO_SAFE_POSITION);
  assert(coop_allocator_count(&a)==3);

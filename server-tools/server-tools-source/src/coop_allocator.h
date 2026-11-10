@@ -108,11 +108,11 @@ static int coop_valid_vec(const CoopVec3 *p){
            p->y>-1000000.f&&p->y<1000000.f&&
            p->z>-1000000.f&&p->z<1000000.f;
 }
-static int coop_candidate_clear(const CoopAllocator *a,const CoopVec3 *candidate){
+static int coop_candidate_clear(const CoopAllocator *a,U32 owner,const CoopVec3 *candidate){
  U32 i;
  for(i=0;i<COOP_ALLOCATOR_CAPACITY;i++){
   const CoopAllocation *slot=&a->slots[i];
-  if(slot->owner){
+  if(slot->owner&&slot->owner!=owner){
    float dx=candidate->x-slot->position.x;
    float dz=candidate->z-slot->position.z;
    /* Conservative horizontal exclusion, regardless of vertical difference.
@@ -130,29 +130,30 @@ static CoopAllocationStatus coop_allocator_assign(
  int slot,existing;
  if(!a||!owner||!coop_valid_vec(anchor)||!probe||!out)return COOP_ALLOC_BAD_INPUT;
  existing=coop_allocator_find(a,owner);
- if(existing>=0){
-  *out=a->slots[existing].position;
-  if(candidate_index)*candidate_index=COOP_ALLOCATOR_CANDIDATES;
-  return COOP_ALLOC_SUCCESS;
+ slot=existing;
+ if(slot<0){
+  for(i=0;i<COOP_ALLOCATOR_CAPACITY;i++)
+   if(!a->slots[i].owner){slot=(int)i;break;}
  }
- slot=-1;
- for(i=0;i<COOP_ALLOCATOR_CAPACITY;i++)
-  if(!a->slots[i].owner){slot=(int)i;break;}
  if(slot<0)return COOP_ALLOC_FULL;
- for(i=0;i<COOP_ALLOCATOR_CANDIDATES;i++){
-  CoopVec3 candidate=coop_candidate(anchor,i),validated;
-  if(!coop_valid_vec(&candidate)||!coop_candidate_clear(a,&candidate))
+ /* Try the previous position first. Keep its reservation intact until a
+  * fresh probe succeeds, including separation after any floor adjustment. */
+ for(int attempt=existing>=0?-1:0;attempt<(int)COOP_ALLOCATOR_CANDIDATES;attempt++){
+  U32 index=attempt<0?COOP_ALLOCATOR_CANDIDATES:(U32)attempt;
+  CoopVec3 candidate=attempt<0?a->slots[slot].position:coop_candidate(anchor,index);
+  CoopVec3 validated;
+  if(!coop_valid_vec(&candidate)||!coop_candidate_clear(a,owner,&candidate))
    continue;
   /* Only a POSITIVE, independently validated result is eligible.
    * Recheck the adjusted position; a floor snap must not cause overlap.
    */
   if(probe(ctx,&candidate,&validated)!=COOP_PROBE_SAFE)continue;
-  if(!coop_valid_vec(&validated)||!coop_candidate_clear(a,&validated))
+  if(!coop_valid_vec(&validated)||!coop_candidate_clear(a,owner,&validated))
    continue;
   a->slots[slot].owner=owner;
   a->slots[slot].position=validated;
   *out=validated;
-  if(candidate_index)*candidate_index=i;
+  if(candidate_index)*candidate_index=index;
   return COOP_ALLOC_SUCCESS;
  }
  return COOP_ALLOC_NO_SAFE_POSITION;

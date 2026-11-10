@@ -90,3 +90,13 @@ The next `model-geometry-survey-v6` diagnostic adds a type histogram,
 type-2/other flag cross-tabs and raw adjacent/bounds values for the
 two changed-vector objects. These are *read-only research data*,
 not a verified collision transform, live-solid roster, or spawn gate.
+
+## Roadmap to a playable campaign
+
+| Milestone | Windows acceptance test |
+| --- | --- |
+| Automatic spawn selection | Confirm main-world, moving-model and actor clearance against open and obstructed controls. Two players join at distinct automatically chosen positions on R1M2B and a second campaign map. |
+| Death and reconnect | Kill and respawn each player with their old spawn occupied. Disconnect and rejoin repeatedly. Slots are reclaimed and neither player is telefragged. |
+| First playable level pair | Two clients fight through one level, activate its exit and enter the next together. Objectives, pickups and player state follow the agreed co-op rules. |
+| Campaign compatibility | Play through each realm, checking scripted encounters, bosses, transitions and recovery after a wipe. Track exceptions per map. |
+| Experimental release | Repeat the two-level run on supported regional builds and verify ordinary deathmatch, disabled mode, install, upgrade and rollback. |
