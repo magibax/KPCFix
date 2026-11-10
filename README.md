@@ -11,7 +11,7 @@ KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high f
 ## Install the Windows client
 
 1. Patch a clean installation of your game to **1.13**, then close the game and launcher. Back up any existing local DLLs or INIs you are replacing.
-2. [Download the Windows client ZIP](https://github.com/magibax/KPCFix/releases/download/kpcfix-1.13-r4/KPCFix-Windows-1.13.zip). Extract its contents beside `Psycho.exe`, usually in `C:\Games\Psycho\`.
+2. [Download the Windows client ZIP](https://github.com/magibax/KPCFix/releases). Extract its contents beside `Psycho.exe`, usually in `C:\Games\Psycho\`.
 3. Before launching the game, run `Check-KPCVersion.cmd` from that folder. Continue only if it reports **PASS** and identifies your region as a supported official 1.13 build.
 4. **Recommended for the first launch after patching:** run `Launch-KPCFix.cmd`. It applies the initial KPCFix setup and opens the shipped `Psycho.exe` launcher. In the launcher, open **Display** and choose your desired resolution. Start the game and save/select a profile with that same resolution. The initial preset is **1920×1080, 60 FPS, VSync on**.
 5. After that first setup, once the desired resolution is saved in both the launcher and your game profile, you can start the game directly with the shipped `Psycho.exe`. Run `Check-KPCVersion.cmd` again after replacing or repatching game files. Keyboard bindings are yours to configure in the game.
@@ -30,7 +30,7 @@ For a 165 FPS cap, use `FpsLimiter = flipend(165)`. If a scripted sequence misbe
 
 ## Server Tools
 
-Hosting tools are a separate download: [KPCFix Server Tools](https://github.com/magibax/KPCFix/releases/download/server-tools-v1.0.0-r3/KPCFix-Server-Tools-1.0.0.zip). The main KPCFix ZIP contains client fixes only, including the multiplayer browser connection fix.
+Hosting tools are a separate download: [KPCFix Server Tools](https://github.com/magibax/KPCFix/releases). The main KPCFix ZIP contains client fixes only, including the multiplayer browser connection fix.
 
 Server Tools includes a compact graphical launcher for all 59 maps, server-rule controls, live `kpc_cheats 0/1` permission and console chat logging. Campaign maps are experimental and may be buggy in multiplayer. Cheat announcements appear in chat only.
 
