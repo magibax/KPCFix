@@ -78,3 +78,10 @@ now surveys raw native WorldModel type, object flag-bit counts and
 creation-time vector equality for reciprocally verified associations.
 These are diagnostics, not validated solidity flags or geometry
 transforms. See [BSP-VOLUME-ABI.md](BSP-VOLUME-ABI.md).
+
+**2026-11-10 correction:** Original engine WorldModel-specific paths
+test `object+0x76 == 2`; the v4 diagnostic's type-one label
+was incorrect. The updated `model-types-v5` survey reports both
+type 2 and type 1 and captures at most two read-only examples
+of mismatched model/source position vectors. See
+[BSP-VOLUME-ABI.md](BSP-VOLUME-ABI.md).

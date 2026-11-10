@@ -383,7 +383,7 @@ With `[Coop] TraceModelRegistry=1` and
   count of reciprocally verified associations inspected versus
   candidates excluded for broken/unreadable backlinks.
 - `model types type1=... other=... unread=...`:
-  object+0x76 type one is the engine's WorldModel path.
+  This v4 diagnostic incorrectly labelled type one as the WorldModel path; the corrected v5 diagnostic below supersedes that classification.
 - `model flags 2000=... 10000=... any12000=... unread=...`:
   raw object+0x28 mask test counts, **not a solid roster**.
   These counts overlap: `any12000` means either tested bit.
@@ -405,3 +405,45 @@ associated WorldModel resources and actively collidable instances.
 The model's `+0x11c` triple is only a creation-time copy
 relationship; do not use it to translate or rotate BSP queries.
 No dynamic BSP sweep or automatic spawn has been enabled.
+
+## Live 1.13 R1M2B type/flags/vector survey and correction (2026-11-10)
+
+The user's opt-in `registry-object-state-v4` log demonstrated:
+- The resource registry still traverses **115** resources, with **115**
+  readable model-root pointers and **109/109** reciprocal object
+  back-references; no unreadable fields.
+- The old diagnostic reported `type1=0, other=109`.
+  That did **not** mean no WorldModels were instantiated. A fresh
+  check of the *original DLL* shows the object constructor at RVA
+  `0x1d509` writes type to `object+0x76`, while independent
+  WorldModel-specific engine paths at RVAs `0x18435` and
+  `0x20719` explicitly branch on `type == 2`.
+  **The original v4 type-1 label was incorrect.**
+  The v5 collector now reports `type2`, `type1`, `other`
+  and `unread` independently. The type-2 count must be measured
+  live rather than inferred from the earlier `other` count.
+- Raw object flag counts: `0x2000` set on 49 references,
+  `0x10000` set on 18, either bit on 67, neither on 42.
+  Because 49+18=67, no associated object in this snapshot had
+  **both** tested bits. No single flag has yet been proven
+  to imply active solidity or collision-blocking.
+- Object's currently stored vector `+0x40..48` matched
+  model `+0x11c..124` bit-for-bit for **107** references and
+  differed for **2**. This is not, by itself, proof
+  of actual motion, world transform or physics participation.
+- Primary BSP controls passed again (three interior-only, one
+  wall-crossing class-zero); overall volume verdict correctly
+  remained three UNSUPPORTED and one BLOCKED.
+
+The corrected v5 read-only snapshot additionally captures up to
+**two** differing-vector examples (object and resource-record
+pointers, raw object type and flags, and bit-exact three-component
+model source and current object vectors). This is designed to
+identify what actually differed without guessing motion or
+applying an unverified transform. It adds no native engine calls,
+does not alter objects, and does not approve any spawn.
+
+The next objective remains verifying current solidity and the
+world-to-model transformation matrix before checking additional
+BSP roots. Type 2 alone and raw 0x12000 flags are not
+complete proof of a current collidable object.

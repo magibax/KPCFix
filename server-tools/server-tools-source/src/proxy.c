@@ -323,8 +323,9 @@ static void registry_trace_loaded(void){
   trace_append(msg,&n," skipped=");trace_hex(msg,&n,raw.skipped_unverified);
   msg[n]=0;log_file(msg);
   n=0;
-  trace_append(msg,&n,"[KPCFix Co-op] model types type1=");
-  trace_hex(msg,&n,raw.type_1);
+  trace_append(msg,&n,"[KPCFix Co-op] model types type2=");
+  trace_hex(msg,&n,raw.type_2);
+  trace_append(msg,&n," type1=");trace_hex(msg,&n,raw.type_1);
   trace_append(msg,&n," other=");trace_hex(msg,&n,raw.type_other);
   trace_append(msg,&n," unread=");trace_hex(msg,&n,raw.type_unreadable);
   msg[n]=0;log_file(msg);
@@ -341,6 +342,28 @@ static void registry_trace_loaded(void){
   trace_append(msg,&n," changed=");trace_hex(msg,&n,raw.init_vector_different);
   trace_append(msg,&n," unread=");trace_hex(msg,&n,raw.init_vector_unreadable);
   msg[n]=0;log_file(msg);
+  {
+   unsigned i,j;
+   for(i=0;i<raw.sample_count;i++){
+    const CoopModelVectorSample *sample=&raw.samples[i];
+    n=0;
+    trace_append(msg,&n,"[KPCFix Co-op] model delta object=");
+    trace_hex(msg,&n,sample->object);
+    trace_append(msg,&n," record=");trace_hex(msg,&n,sample->resource);
+    trace_append(msg,&n," type=");trace_hex(msg,&n,sample->type);
+    trace_append(msg,&n," flags=");trace_hex(msg,&n,sample->flags);
+    msg[n]=0;log_file(msg);
+    for(j=0;j<2;j++){
+     const U32 *v=j?sample->object_vector:sample->model_vector;
+     n=0;
+     trace_append(msg,&n,j?"[KPCFix Co-op] model vector current":"[KPCFix Co-op] model vector source");
+     trace_append(msg,&n," x=");trace_hex(msg,&n,v[0]);
+     trace_append(msg,&n," y=");trace_hex(msg,&n,v[1]);
+     trace_append(msg,&n," z=");trace_hex(msg,&n,v[2]);
+     msg[n]=0;log_file(msg);
+    }
+   }
+  }
  }
  if(snap.first_root){
   n=0;
@@ -622,7 +645,7 @@ static void initialize(void){
  spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
  if(active&&spawn_trace_enabled){
-  log_file("[KPCFix Co-op] diagnostics build=registry-object-state-v4 (reads KPCServerTools.ini)");
+  log_file("[KPCFix Co-op] diagnostics build=model-types-v5 (reads KPCServerTools.ini)");
   log_file(model_registry_enabled?
     "[KPCFix Co-op] effective TraceModelRegistry=1":
     "[KPCFix Co-op] effective TraceModelRegistry=0 (set [Coop] TraceModelRegistry=1; restart)");

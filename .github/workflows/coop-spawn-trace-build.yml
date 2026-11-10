@@ -1,4 +1,4 @@
-name: Experimental co-op WorldModel raw object-state survey
+name: Experimental co-op WorldModel type2 and vector delta validation
 
 on:
   push:
@@ -93,10 +93,12 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           dll=Path('server-tools/KPCServerTools.dll').read_bytes()
-          assert b'diagnostics build=registry-object-state-v4' in dll
+          assert b'diagnostics build=model-types-v5' in dll
           assert b'effective TraceModelRegistry=1' in dll
           assert b'effective TraceModelState=1' in dll
           assert b'[KPCFix Co-op] model flags 2000=' in dll
+          assert b'[KPCFix Co-op] model types type2=' in dll
+          assert b'[KPCFix Co-op] model delta object=' in dll
           assert b'model registry=DISABLED' in dll
           assert 'TraceModelRegistry'.encode('utf-16le') in dll
           print('PASS: registry diagnostic build, effective INI state and fallback present')
@@ -107,7 +109,7 @@ jobs:
           mkdir -p dist
           cp server-tools/KPCServerTools.dll server-tools/SERVER_TOOLS_BUILD.json dist/
           cat > dist/TEST-INSTRUCTIONS.txt <<'TXT'
-          EXPERIMENTAL KPCFIX CO-OP WORLDMODEL RAW OBJECT-STATE SURVEY
+          EXPERIMENTAL KPCFIX CO-OP WORLDMODEL TYPE2 AND VECTOR-DELTA DIAGNOSTIC
           Not a stable release. No automatic spawning or collision edits.
 
           Back up server.dll, KPCServerTools.dll, SERVER_TOOLS_BUILD.json
@@ -135,7 +137,12 @@ jobs:
           AND [KPCFix Co-op] model registry=... lines
           AND [KPCFix Co-op] model refs matched=... lines
           AND [KPCFix Co-op] model state=... / model types / model flags
-          / model vectors lines.
+          / model vectors / model delta object / model vector source
+          / model vector current lines.
+          Original 1.13 WorldModel-specific native branches test
+          type==2, not type==1. The log now separates both.
+          At most two differing vectors are logged as raw float
+          bit-patterns; these differences do not prove movement.
           Raw object+0x28 bit masks are NOT proven solid flags.
           Vector equal/changed only compares model+0x11c..124 against
           object+0x40..48; this is NOT a verified collision transform.
@@ -143,7 +150,7 @@ jobs:
           expected resource-record pointer at object+0x140. All
           matched/mismatched/unreadable counts should sum to attached.
           Matching DOES NOT prove live solidity or a valid transform.
-          Confirm the log says diagnostics build=registry-object-state-v4 and
+          Confirm the log says diagnostics build=model-types-v5 and
           effective TraceModelRegistry=1 at the top. If there is no
           build marker, the dedicated server is loading an older DLL
           (or this ZIP was not installed). If it reports effective
@@ -190,7 +197,7 @@ jobs:
       - name: Upload local-test files
         uses: actions/upload-artifact@v4
         with:
-          name: KPCFix-Coop-WorldModel-Raw-State-Diagnostic
+          name: KPCFix-Coop-Model-Type2-Vector-Diagnostic
           path: dist/
           if-no-files-found: error
           retention-days: 14
