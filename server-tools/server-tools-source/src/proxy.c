@@ -296,25 +296,25 @@ typedef struct {
  U32 disjoint,overlap,unknown;
 } ModelOverlapSurvey;
 
-/* Inspect the same object boxes passed by the native spatial visitor to
- * its AABB comparator (EU RVA 0x19d73..0x19d81). Include both types and
- * every mask. This is a resource-linked subset of the active scene. */
+static int read_spatial_box(U32 object,CoopModelRead32 read,void *ctx,CoopAabb *box){
+ float coords[6];
+ for(U32 i=0;i<6;i++){
+  U32 bits;
+  if(!coop_model_read_offset(read,ctx,object,0xacu+4*i,&bits))return 0;
+  coords[i]=collision_float(bits);
+ }
+ box->min=(CoopVec3){coords[0],coords[1],coords[2]};
+ box->max=(CoopVec3){coords[3],coords[4],coords[5]};
+ return coop_aabb_valid(box);
+}
+
+/* Inspect the same object boxes passed by the native spatial visitor. */
 static void observe_model_box(void *user,U32 entry,U32 model,U32 object,
  int matched,CoopModelRead32 read,void *ctx){
  ModelOverlapSurvey *survey=user;
- float coords[6];
  CoopAabb box;
  (void)entry;(void)model;
- if(!matched){survey->unknown++;return;}
- for(U32 i=0;i<6;i++){
-  U32 bits;
-  if(!coop_model_read_offset(read,ctx,object,0xacu+4*i,&bits)){
-   survey->unknown++;return;
-  }
-  coords[i]=collision_float(bits);
- }
- box.min=(CoopVec3){coords[0],coords[1],coords[2]};
- box.max=(CoopVec3){coords[3],coords[4],coords[5]};
+ if(!matched||!read_spatial_box(object,read,ctx,&box)){survey->unknown++;return;}
  switch(coop_aabb_overlap(&survey->player,&box,0.f)){
   case COOP_AABB_OVERLAP:survey->overlap++;break;
   case COOP_AABB_DISJOINT:survey->disjoint++;break;
@@ -322,7 +322,38 @@ static void observe_model_box(void *user,U32 entry,U32 model,U32 object,
  }
 }
 
-static void survey_candidate_boxes(CoopVec3 center,CoopVec3 lo,CoopVec3 hi){
+/* Original spawn preparation traverses selector zero at object.lto
+ * 0xf1120 and 0xf1285. Use a private cursor: the original iterators
+ * write manager+0xc and therefore cannot be nested in a diagnostic. */
+static void survey_spawn_list(const CoopAabb *candidate,U32 player){
+ CoopAabb box;
+ U32 manager,node,seen=0,own=0,overlap=0,unknown=0,n=0;
+ char line[116];
+ CoopAabbResult self=read_spatial_box(player,registry_read32,0,&box)?
+  coop_aabb_overlap(candidate,&box,0.f):COOP_AABB_UNKNOWN;
+ log_file(self==COOP_AABB_OVERLAP?"[KPCFix Co-op] player control=OVERLAP":
+          self==COOP_AABB_DISJOINT?"[KPCFix Co-op] player control=DISJOINT":
+          "[KPCFix Co-op] player control=UNKNOWN");
+ if(!coop_model_read_offset(registry_read32,0,(U32)spawn_image,0x157724,&manager)||
+    !coop_model_read_offset(registry_read32,0,manager,4,&node))goto incomplete;
+ while(node){
+  U32 handle,next;
+  if(++seen>1024||!registry_read32(0,node,&handle)||
+     !coop_model_read_offset(registry_read32,0,node,4,&next))goto incomplete;
+  if(handle==player)own++;
+  else if(!read_spatial_box(handle,registry_read32,0,&box))unknown++;
+  else if(coop_aabb_overlap(candidate,&box,0.f)==COOP_AABB_OVERLAP)overlap++;
+  node=next;
+ }
+ trace_append(line,&n,"[KPCFix Co-op] spawn list count=");trace_hex(line,&n,seen);
+ trace_append(line,&n," self=");trace_hex(line,&n,own);
+ trace_append(line,&n," otherHits=");trace_hex(line,&n,overlap);
+ trace_append(line,&n," unknown=");trace_hex(line,&n,unknown);
+ line[n]=0;log_file(line);return;
+incomplete:
+ log_file("[KPCFix Co-op] spawn list=incomplete");
+}
+static void survey_candidate_boxes(U32 player,CoopVec3 center,CoopVec3 lo,CoopVec3 hi){
  ModelOverlapSurvey survey={0};
  CoopModelRegistrySnapshot snapshot={0};
  U32 manager,state,n=0;
@@ -333,6 +364,7 @@ static void survey_candidate_boxes(CoopVec3 center,CoopVec3 lo,CoopVec3 hi){
     coop_model_registry_scan_visit(state,registry_read32,0,&snapshot,observe_model_box,&survey)!=COOP_MODEL_REGISTRY_TRAVERSED){
   log_file("[KPCFix Co-op] linked boxes=incomplete");return;
  }
+ survey_spawn_list(&survey.player,player);
  trace_append(line,&n,"[KPCFix Co-op] linked boxes overlap=");trace_hex(line,&n,survey.overlap);
  trace_append(line,&n," disjoint=");trace_hex(line,&n,survey.disjoint);
  trace_append(line,&n," unknown=");trace_hex(line,&n,survey.unknown);
@@ -474,7 +506,7 @@ static void registry_trace_loaded(void){
  * evidence of obstruction. Misses leave unsampled space unknown. */
 /* Ray samples provide positive obstruction evidence only. Full-hull and
  * active-actor clearance are UNKNOWN until their native ABI is verified. */
-static void sample_candidate(KpcIntersectFn intersect,KpcIntersectVec center,KpcIntersectVec lo,KpcIntersectVec hi){
+static void sample_candidate(U32 player,KpcIntersectFn intersect,KpcIntersectVec center,KpcIntersectVec lo,KpcIntersectVec hi){
  KpcIntersectVec floor_end=center;
  KpcIntersectInfo hit={0};
  CoopVolumeObservation o={0};
@@ -487,7 +519,7 @@ static void sample_candidate(KpcIntersectFn intersect,KpcIntersectVec center,Kpc
  o.world_hull=COOP_VOLUME_UNKNOWN;
  o.other_actors=COOP_VOLUME_UNKNOWN;
  log_vector("candidate",center);
- if(model_registry_enabled&&model_state_enabled)survey_candidate_boxes(candidate,o.bounds_min,o.bounds_max);
+ if(model_registry_enabled&&model_state_enabled)survey_candidate_boxes(player,candidate,o.bounds_min,o.bounds_max);
  floor_end.y-=256.f;
  if(world_segment(intersect,center,floor_end,&hit)){
   o.ground_hit=1;
@@ -537,7 +569,7 @@ static void trace_clearance(U32 *engine,void *object){
   KpcIntersectVec candidate=anchor;
   if(i==1)candidate.z+=96.f;
   if(i==2)candidate.z-=96.f;
-  sample_candidate(intersect,candidate,lo,hi);
+  sample_candidate((U32)object,intersect,candidate,lo,hi);
  }
  for(i=0;i<4;i++){
   int dx=directions[i][0],dz=directions[i][1];
@@ -550,7 +582,7 @@ static void trace_clearance(U32 *engine,void *object){
    KpcIntersectVec candidate=hit.point;
    log_vector("wall reference",hit.point);
    candidate.x-=0.5f*reach*dx;candidate.z-=0.5f*reach*dz;
-   sample_candidate(intersect,candidate,lo,hi);
+   sample_candidate((U32)object,intersect,candidate,lo,hi);
    return;
   }
  }
@@ -742,7 +774,7 @@ static void initialize(void){
  spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
  if(active&&spawn_trace_enabled){
-  log_file("[KPCFix Co-op] diagnostics build=linked-box-survey-v7 (reads KPCServerTools.ini)");
+  log_file("[KPCFix Co-op] diagnostics build=spawn-list-control-v8 (reads KPCServerTools.ini)");
   log_file(model_registry_enabled?
     "[KPCFix Co-op] effective TraceModelRegistry=1":
     "[KPCFix Co-op] effective TraceModelRegistry=0 (set [Coop] TraceModelRegistry=1; restart)");

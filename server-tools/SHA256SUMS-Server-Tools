@@ -2,12 +2,12 @@
 879b2f91b70ae000fe3857c1b98371b5c94ca08d0c2a762f5657e8e041a64f22  ./KPC-Server-Launcher.cmd
 b0cd1ce19c8b4fc6d025259dc0c4e99b809e1863a68263e4d6056aa5e0b2aa6a  ./KPC-Server-Launcher.ps1
 df7684e071d11336a67ba193ca86eeb4b420a412179e7fecef47dfa7b4a9ab56  ./KPCServerTools-default.ini
-7112b5ed97f94f8b7cd84bc80f7fdc945f0fb02e1a1cc6ad8f574b9b70d6d373  ./KPCServerTools.dll
+23dd5de7f099c04706d2a59603bb88763d21bbde2cd9053cf6ebade935598b08  ./KPCServerTools.dll
 111bd19eff641ab11fd75afbeec380a96e822ac3153344271456fa7629c496d7  ./LICENSE-Server-Tools.txt
 09f16398f7a430efddf79e4d030a387ad34fef53d42aa055dac4d0acb8cf546b  ./README-Server-Tools.md
 88df6cc2bc97da72e253a2ac339f9d7904b41840d85b962383e872595951dc1b  ./Restore-LegacyObject.ps1
 f7aa26ac073117d988973ba682171280a075be24ef1760616df1cbc110903e6f  ./Restore-Original-Server.cmd
-785160b7bf07b307803c1683588d21662db77f2de5afaec5b70dc293932f7d76  ./SERVER_TOOLS_BUILD.json
+77e7e97ac4d06bef38996ec4b8a29bbe670ec00b09abc56bdebc4e14e642b803  ./SERVER_TOOLS_BUILD.json
 b2393a94e71e83afa788f9b3f1b6312a642822c272e8ceb6412ed3946f69da75  ./SERVER_TOOLS_SUPPORTED_BUILDS.json
 42bbd9037525c229741b156d7d7868cceb7f44a54c8539f0b9077c61c5a900be  ./Setup-KPCServerTools.cmd
 80153a696b38917895b044cb9064b1cfe197c6164e2a731d0f98c7fff2b6925d  ./Setup-KPCServerTools.ps1
@@ -27,7 +27,7 @@ f62824bb4422e17181bfe844927f8941e6566fcaed6518333c7b911d6b334c01  ./server-tools
 2c55a5e7abd360426a8396cc7a63f18d3ed418f5991b2346da4457efee6c63f7  ./server-tools-source/src/coop_model_state.h
 436ce7febb28643288e8291ac90d338f260dae8d50f1d499dcdacbb1a8a61c33  ./server-tools-source/src/coop_spawn.h
 40ada31f2ea350d01f08090273044bea0c7f60ba133bed5467bbef92c9e2d2eb  ./server-tools-source/src/coop_volume_probe.h
-a9a55819ed7dc82bb243d8470f10f02c7b2158d8159987256b58cfae8f5c8011  ./server-tools-source/src/proxy.c
+052261b8f9eecb99bcb8e6ab05387eca98b7bbec105b4fd6dfcda78ecb7cf2e4  ./server-tools-source/src/proxy.c
 9fbd81ac7c300839273cbfc24041be2979c6a5c89e5b2e19909b62c3695883aa  ./server-tools-source/src/sha256.c
 604cf174402ff39bd43bb360a428e1cff3f201458dca5a31ce5543485a551b7e  ./server-tools-source/src/sha256.h
 fc9fa8882bd17af9c612f9e3e1c0ba76b34f8f41f898f63293c14ae382879ecb  ./server-tools-source/src/winmini.h
