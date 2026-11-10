@@ -74,7 +74,7 @@ write_word:
  mov eax,[word_count]
  cmp eax,0
  jne 1f
- cmp dword ptr [esp+4],5
+ cmp dword ptr [esp+4],4
  jne fail
  jmp 2f
 1: cmp eax,1

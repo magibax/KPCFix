@@ -403,7 +403,8 @@ cheat_line:
  call console_line
  add esp,256
  ret
-# EDX=text. Exact flags=5 packet layout from f8c40, without its formatter
+# EDX=text. Flags=4 retain the chat entry and category word, clearing
+# flag 1 (the centre-screen copy). No formatter
 # or shell-controlled console echo. Preserve the caller's buffer registers.
 broadcast_only:
  push ebx
@@ -414,7 +415,7 @@ broadcast_only:
  mov esi,eax
  mov ecx,esi
  mov eax,[esi]
- push 5
+ push 4
  call dword ptr [eax+0x3c]
  mov ecx,esi
  mov eax,[esi]

@@ -11,6 +11,12 @@ b=bytearray(Path(sys.argv[1]).read_bytes());assert hashlib.sha256(b).hexdigest()
 mode='disabled' if '--disabled' in sys.argv else 'patched'
 for c in m['changes']:b[c['offset']]=c[mode]
 assert hashlib.sha256(b).hexdigest()==m[mode]
+# Exercise the current DLL hook payload over the legacy restoration fixture.
+current=json.loads((root/'SERVER_TOOLS_BUILD.json').read_text())
+hook=(root/'source/build/hooks.bin').read_bytes()
+b[0x116580:0x116580+len(hook)]=hook
+b[current['hook_symbols']['initial_mode']]=0 if mode=='disabled' else 1
+
 exe=Path(sys.argv[2]).read_bytes();base=int(os.environ.get('KPC_TEST_BASE','0x10000000'),0);ebase=0x400000
 u=Uc(UC_ARCH_X86,UC_MODE_32)
 u.mem_map(base,0x200000);u.mem_map(ebase,0x20000);u.mem_map(0x30000000,0x100000)
@@ -121,7 +127,7 @@ def text(a):packets.append(('text',string(a[0])))
 w(mv+0x3c,stub(1,word));w(mv+0x4c,stub(1,text));w(mv,stub(0,lambda a:0))
 def send(a):
  assert a==[msg,0x45,0,1],a
- assert [x[1] for x in packets[:2]]==[5,0],packets
+ assert [x[1] for x in packets[:2]]==[4,0],packets
  broadcasts.append(packets[2][1]);packets.clear()
 w(evtable+0xc4,stub(4,send))
 cdecl(5,lambda a:0,base+0xf8e90)

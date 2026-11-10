@@ -1,5 +1,8 @@
 {
-  "proxy_sha256": "67a6be68223efb0321d41f270ae10923f0d6073731de57a61b600794c3f0eeea",
+  "previous_proxy_hashes": [
+    "67a6be68223efb0321d41f270ae10923f0d6073731de57a61b600794c3f0eeea"
+  ],
+  "proxy_sha256": "bac7696bc79f10b637134b7bbffea1ead01e67c8207452f5c3f339a8b5a353d4",
   "proxy_bytes": 13312,
   "proxy_symbols": {
     "___ImageBase": 0,

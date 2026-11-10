@@ -77,6 +77,6 @@ for line in subprocess.check_output(['nm','-an',str(work/'server.unstripped.dll'
   try:a=int(v[0],16)
   except ValueError:continue
   if 0x69000000<=a<0x69100000:proxy_symbols[v[2]]=a-0x69000000
-report=dict(proxy_sha256=hashlib.sha256(out.read_bytes()).hexdigest(),proxy_bytes=out.stat().st_size,proxy_symbols=proxy_symbols,hook_symbols=symbols,patches=patches,hook_bytes=len(code),exports=['CreateServer','DeleteServer'])
+report=dict(previous_proxy_hashes=['67a6be68223efb0321d41f270ae10923f0d6073731de57a61b600794c3f0eeea'],proxy_sha256=hashlib.sha256(out.read_bytes()).hexdigest(),proxy_bytes=out.stat().st_size,proxy_symbols=proxy_symbols,hook_symbols=symbols,patches=patches,hook_bytes=len(code),exports=['CreateServer','DeleteServer'])
 (package/'SERVER_TOOLS_BUILD.json').write_text(json.dumps(report,indent=2)+'\n')
 print(out,report['proxy_bytes'],report['proxy_sha256'])

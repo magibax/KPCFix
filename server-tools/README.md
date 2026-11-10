@@ -2,6 +2,10 @@
 
 Windows dedicated-server tools for official game version **1.13**. Supports the supplied Europe/UK, USA, German and Italian 1.13 builds. This is a local test package; the new DLL loader needs testing in Windows before publication.
 
+## Update an existing DLL installation
+
+Close the game and server, copy these files into the game directory, then run **Setup-KPCServerTools.cmd** again to deploy the new DLL. Keep your existing `server.original.dll` and `KPCServerTools.ini`. The setup recognizes the preceding proxy build.
+
 ## Install or migrate
 
 1. Close the game and dedicated server for this one-time setup. Back up your game folder.
@@ -20,7 +24,7 @@ After setup, ordinary server starts no longer modify game binaries. The game can
 - Graphical map selection and server-rule controls.
 - Optional, per-player noclip and invulnerability using the client's existing developer key bindings.
 - Live host-console permission: `kpc_cheats 1` enables cheats; `kpc_cheats 0` disables them and revokes active cheats. `kpc_cheats` shows status.
-- Everyone sees **Cheats enabled** or **Cheats disabled** when permission changes. Player toggles announce **name toggled cheat ON/OFF**.
+- Everyone sees **Cheats enabled** or **Cheats disabled** when permission changes. Player toggles announce **name toggled cheat ON/OFF** in chat only, without a centre-screen copy.
 - Player chat is mirrored to the server console. Patch messages have one `[KPCFix Server Tools]` prefix and preserve the command prompt and pending input.
 - Disabled cheat requests are rejected silently. A player's cheat state applies only to that player.
 
