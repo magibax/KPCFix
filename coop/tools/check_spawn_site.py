@@ -47,6 +47,9 @@ def inspect(data: bytes, require_hash=True):
     require(0xF10C0, bytes.fromhex('81ec80000000'), 'spawn preparation entry')
     require(0xF129D, bytes.fromhex('c20c00'), 'spawn preparation thiscall cleanup')
     require(SPAWN_ENGINE_CALL_RVA, SPAWN_ENGINE_CALL_ORIG, 'player placement API call')
+    require(0xF15F2, bytes.fromhex('e8a9f2ffff'), 'secondary spawn selector')
+    require(0xF167A, bytes.fromhex('e841faffff'), 'secondary pre-overlap handler')
+    require(0xF16C7, bytes.fromhex('ff92e0010000'), 'secondary position setter')
     require(0xF13CA, bytes.fromhex('83c408'), 'caller cleans two position arguments')
     return {
         'sha256': digest,
@@ -54,8 +57,9 @@ def inspect(data: bytes, require_hash=True):
         'start_selector_rva': '0x0f1070',
         'spawn_initialization_rva': '0x0f12a0',
         'spawn_position_call_rva': '0x0f13c4',
+        'secondary_spawn_path_rva': '0x0f15d0',
         'spawn_position_api_field_offset': '0x01e0',
-        'guards_passed': 13,
+        'guards_passed': 16,
     }
 
 
