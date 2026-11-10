@@ -38,6 +38,12 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
             server-tools/server-tools-source/tests/test_coop_volume_probe.c -o /tmp/kpc-volume-gate-test
           /tmp/kpc-volume-gate-test
+      - name: Verify isolated 3D AABB broadphase policy and interior-obstacle regression
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_aabb_overlap.c -o /tmp/kpc-coop-aabb-test
+          /tmp/kpc-coop-aabb-test
       - name: Verify legacy LithTech IntersectSegment ABI structs
         shell: bash
         run: |

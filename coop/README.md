@@ -24,7 +24,7 @@ The user supplied MAPDATA.zip (59 compiled v127 DAT worlds plus scripts) for **l
 
 The user also supplied matching, original 1.13 dedicated.exe, server.original.dll and object.lto. Their checksums were verified and the server spawn-selection call graph traced. See [SPAWN-ENGINE-TRACE.md](SPAWN-ENGINE-TRACE.md) for the confirmed runtime addresses, the **opt-in, non-relocating** spawn logging prototype, how to build it, and how to decode its logs.
 
-The [R1M2B collision diagnostic](INTERSECT-ABI.md) recorded nine grounded ray hits and three control misses. Player-volume clearance, disconnect and map-reset handling remain open.
+The [native AABB overlap research](BOX-OVERLAP-ABI.md) documents a verified read-only box-vs-box comparator, but not world BSP clearance. The [R1M2B collision diagnostic](INTERSECT-ABI.md) recorded nine grounded ray hits and three control misses. Player-volume clearance, disconnect and map-reset handling remain open.
 
 Do not import or package original game maps, models, textures, sound, or artwork in KPCFix releases.
 
@@ -52,6 +52,6 @@ Lobby/ready-up UI, synchronized films, scripted triggers, shared pickups, saves,
 
 ## Next live test
 
-Run the read-only volume evidence gate on open and obstructed positions, then verify native full-hull and active-actor clearance. Keep the trial at three clients and restart before reusing slots until authoritative departure and world-reset events are verified. See [allocator integration](GENERAL-ALLOCATOR.md).
+The volume evidence gate passed its four Windows controls. The box-vs-box overlap primitive is now statically verified; next identify and verify **native full-hull against world BSP**, followed by active-player enumeration. Do not infer safe spawns from clear rays or broadphase box tests. Keep the trial at three clients and restart before reusing slots until authoritative departure and world-reset events are verified. See [allocator integration](GENERAL-ALLOCATOR.md).
 
 [Issue #8](https://github.com/magibax/KPCFix/issues/8) tracks clearance, reconnect, map transitions and Windows regression tests for the integrated build.

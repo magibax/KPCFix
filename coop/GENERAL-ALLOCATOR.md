@@ -162,3 +162,9 @@ identifications are grounded in the original binary's corresponding
 diagnostic strings and the disassembled function bodies. They are
 **static findings only**, not runtime-approved calling conventions for
 a new hook. No new game-engine function has been invoked in this pass.
+
+## Original native AABB comparator: static milestone
+
+The original 1.13 server DLL contains a small read-only 3D AABB-overlap helper at RVA `0x18991`. Three original callsites independently verify its five 32-bit arguments and 20-byte caller stack cleanup. The exact function/body digests and test procedure are documented in [BOX-OVERLAP-ABI.md](BOX-OVERLAP-ABI.md). An isolated C implementation and regression tests detect both the known wall-control overlap (when supplied a wall obstacle box) and a fully enclosed obstacle missed by sparse rays.
+
+**Do not connect this box broadphase to live spawn approval.** It has neither authoritative BSP polygon coverage nor a complete list of live solid actors. The native `world_hull` and `other_actors` evidence inputs remain UNKNOWN, and the next task is the separate world-geometry collision traversal and active-player enumeration ABIs.
