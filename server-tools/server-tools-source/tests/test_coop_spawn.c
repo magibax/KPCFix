@@ -1,4 +1,4 @@
-#include "winmini.h"
+typedef unsigned int U32;
 #include "coop_spawn.h"
 #include <assert.h>
 
