@@ -24,6 +24,7 @@ function Assert-KPCServerVersion([string]$Exe,$GameProfile) {
     $objectHash = Read-KPCSignature 'object.lto'
     $actualObjectHash = $objectHash
     $knownTests = @{
+        'a7a266fbb3066b579b1e4e8dabf5ac497ac569b915b5dcaf98c5a58ec22d40ab' = 'Earlier client-name logging test'
         '2ed6fb337901939d9aa641a6c0ddeb75656365bac47811bf033850b352a70a12' = 'Noclip + invulnerability with console logging'
         'de5cc80287084508b56de27e9a535de7d389022327771c4f96107a327fc4adc8' = 'Invulnerability only'
         'c1cc5b94e336185e4c211c9909da6e7f43e78a970e228c334e6b3a901a47fb48' = 'Noclip test 1 + invulnerability'
