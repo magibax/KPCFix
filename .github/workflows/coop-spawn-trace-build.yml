@@ -26,6 +26,12 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
             server-tools/server-tools-source/tests/test_coop_spawn.c -o /tmp/kpc-coop-spawn-test
           /tmp/kpc-coop-spawn-test
+      - name: Verify fail-closed general allocator policy
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_allocator.c -o /tmp/kpc-coop-allocator-test
+          /tmp/kpc-coop-allocator-test
       - name: Validate build integrity
         shell: bash
         run: |
