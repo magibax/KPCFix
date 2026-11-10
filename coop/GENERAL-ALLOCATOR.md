@@ -82,3 +82,60 @@ Two distinct player handles were placed at the original anchor. The diagnostic r
 Currently the native hull and actor fields remain explicitly UNKNOWN. The three previously live-tested positions should therefore log `UNSUPPORTED`, not `SAFE`; the wall-crossing control should log `BLOCKED`. Floor-gap and slope constraints are provisional (32 world units, normal Y 0.70) and do not prove absence of hazards or scripted conflicts.
 
 **Next research:** Use matching original 1.13 binaries to find a *read-only* box/hull world intersection or sweep. Establish calling convention, ECX receiver, return layout, flags and two original callsites before invoking any newly identified API. Test positive controls (wall at X=1664 and a blocker fully enclosed in the body that the sampling rays miss), three open controls, and active-player overlap. The proven `IntersectSegment` +0x90 API performs line tests; +0x104 returns object bounds; the nearby-object routine at RVA 0xf10c0 handles telefrag contacts, not general world-hull clearance. The general allocator remains disconnected.
+
+## Windows live test: volume evidence gate (2026-11-10)
+
+The user supplied the complete progression of Windows logs from the fixed three-player
+spawn trial, the original all-miss segment ABI diagnostic, the corrected 0x6003
+ground-ray differential, the player-bounds/wall-control diagnostic, and the
+current `91c58dc` read-only evidence-gate build. **These are separate server runs,
+not a single simultaneous configuration.**
+
+In the final run, the server reported its runtime hooks installed without
+changing the original object file. The `TracePlayerClearance` diagnostic
+queried these four positions:
+
+| Position (X,Y,Z) | Ground | Sampled body | Volume verdict |
+| --- | --- | --- | --- |
+| (1600, -256, -2944) | Y=-320, normal Y=1 | No sampled hit | `UNSUPPORTED` |
+| (1600, -256, -2848) | Y=-320, normal Y=1 | No sampled hit | `UNSUPPORTED` |
+| (1600, -256, -3040) | Y=-320, normal Y=1 | No sampled hit | `UNSUPPORTED` |
+| (1654, -256, -2944), wall at X=1664 | Y=-320, normal Y=1 | Obstructed | `BLOCKED` |
+
+This matches all four predicted classifications. It validates the *read-only
+evidence gate's response to ray observations* in the original Windows game,
+but **does not establish full player-volume clearance**, validate actual
+player-versus-player overlap, or demonstrate a native box/hull sweep.
+The three `UNSUPPORTED` results are intentional and must not be renamed
+`SAFE` based on successful floor rays or earlier three-player movement.
+
+The final trace includes one ordinary spawn-position setter event at the
+original campaign anchor. It provides no evidence for disconnect/reconnect,
+map reset, PM01 deathmatch or altered engine movement. The separate older
+trace with three trial slots remains the evidence for the fixed-position
+three-client test only.
+
+### Focused static-research follow-up
+
+Independent read-only disassembly of the same SHA-verified original
+`object.lto` confirms that the known nearby-object handler at RVA
+`0x0f10c0` invokes the game's object-list enumerator at RVA `0x07d220`,
+reads object position through the engine interface at `+0x1d0`,
+reads relative object bounds through its virtual slot `+0x104`, and
+tests AABB overlap before calling a target object's `+0x50` virtual
+method. The latter path appears capable of touch/telefrag side effects,
+so it is **not** a safe read-only world-hull probe.
+
+The matching original `server.original.dll` contains identifiable
+`PhysicsLT::GetStandingOn` and `ServerDE::GetWorldBox` diagnostic strings.
+Their presence alone says nothing about the required box-sweep ABI:
+`GetStandingOn` describes existing standing state and `GetWorldBox`
+may expose world extents, neither of which proves that an arbitrary
+candidate hull is free of solid geometry. Do not call a guessed interface
+offset based on these names.
+
+**Next gate:** find the original full-volume world-geometry collision
+routine, establish its call/return ABI and absence of mutations, then run
+a separate opt-in differential test on the four positions above **and**
+an interior obstacle missed by the current ray samples. Keep both native
+world-hull and actor-clearance fields UNKNOWN in the current runtime.
