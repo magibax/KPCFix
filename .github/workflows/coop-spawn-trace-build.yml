@@ -44,6 +44,12 @@ jobs:
           gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
             server-tools/server-tools-source/tests/test_coop_aabb_overlap.c -o /tmp/kpc-coop-aabb-test
           /tmp/kpc-coop-aabb-test
+      - name: Verify bounded conservative BSP AABB leaf traversal
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_bsp_box.c -o /tmp/kpc-coop-bsp-test
+          /tmp/kpc-coop-bsp-test
       - name: Verify legacy LithTech IntersectSegment ABI structs
         shell: bash
         run: |

@@ -168,3 +168,9 @@ a new hook. No new game-engine function has been invoked in this pass.
 The original 1.13 server DLL contains a small read-only 3D AABB-overlap helper at RVA `0x18991`. Three original callsites independently verify its five 32-bit arguments and 20-byte caller stack cleanup. The exact function/body digests and test procedure are documented in [BOX-OVERLAP-ABI.md](BOX-OVERLAP-ABI.md). An isolated C implementation and regression tests detect both the known wall-control overlap (when supplied a wall obstacle box) and a fully enclosed obstacle missed by sparse rays.
 
 **Do not connect this box broadphase to live spawn approval.** It has neither authoritative BSP polygon coverage nor a complete list of live solid actors. The native `world_hull` and `other_actors` evidence inputs remain UNKNOWN, and the next task is the separate world-geometry collision traversal and active-player enumeration ABIs.
+
+## Full-box versus BSP partition trees (static proof)
+
+The original `server.original.dll` at RVA `0x1068f` provides a read-only BSP point-to-leaf classifier with verified node flags, plane and child offsets. The new bounded `coop_bsp_box.h` extends its partition logic to a conservative **whole-AABB** traversal, including an enclosed narrow excluded volume missed by corner tests. All tests currently use synthetic trees, and the game-world root has NOT yet been read by the experimental proxy. Details: [BSP-VOLUME-ABI.md](BSP-VOLUME-ABI.md).
+
+A leaf-only interior result is *not* world collision clearance: other solid WorldModels, actors and gameplay hazards still require coverage. Both live `world_hull` and `other_actors` fields remain UNKNOWN. The next gate is an **opt-in read-only native-world differential**, not automatic spawning.
