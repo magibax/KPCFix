@@ -1,6 +1,6 @@
 # Co-op campaign: spawn-point investigation
 
-Status: two-player R1M2B separation live-tested successfully; third slot added for controlled three-client test (**off by default; third position not yet runtime-validated**). All changes for this experiment belong on `feature/coop-campaign`, not `main`.
+Status: three-player R1M2B separation **live-tested successfully**; general fail-closed spawn allocator implemented and tested as a standalone policy (**not yet connected to game physics**). The map-specific prototype stays off by default. All changes for this experiment belong on `feature/coop-campaign`, not `main`.
 
 ## Question
 
@@ -24,7 +24,7 @@ The user supplied MAPDATA.zip (59 compiled v127 DAT worlds plus scripts) for **l
 
 The user also supplied matching, original 1.13 dedicated.exe, server.original.dll and object.lto. Their checksums were verified and the server spawn-selection call graph traced. See [SPAWN-ENGINE-TRACE.md](SPAWN-ENGINE-TRACE.md) for the confirmed runtime addresses, the **opt-in, non-relocating** spawn logging prototype, how to build it, and how to decode its logs.
 
-**Next prerequisite:** controlled three-client Windows test on R1M2B, followed by reconnect-safe slot reclamation and collision-validating placement. Optional DEdit source maps could help research geometry but are not required for the current stage.
+**Next prerequisite:** identify and ABI-verify the LithTech 1.13 collision/ground API and player departure/map reset events before integrating the [generic allocation policy](GENERAL-ALLOCATOR.md) into live spawn hooks. Optional DEdit source maps could help research geometry but are not required for the current stage.
 
 Do not import or package original game maps, models, textures, sound, or artwork in KPCFix releases.
 
@@ -54,4 +54,4 @@ Lobby/ready-up UI, synchronized films, scripted triggers, shared pickups, saves,
 
 The DAT object-table layout, PlayerStart class, GameType property and sample world coordinates have been confirmed for 59 maps. Static reverse engineering now confirms the game-type fallback and identifies a guarded position-setting call site. The tracing wrapper is **not yet live-tested** and no collision-validating co-op offset mechanism exists. Do not enable automatic relocation until the in-game ABI and collision behavior are confirmed.
 
-**Next action:** Build/install the new three-client experimental Server Tools DLL, cap maxclients=3 and use [Coop] TrialSeparateSpawns=1 with [ServerTools] Enabled=1 on R1M2B. Connect three distinct players once, verify survival/collision/telefrag behaviour, and send logs. **Do not connect a fourth client or cycle three distinct player pointers through reconnects** until slot reclamation exists. See SPAWN-ENGINE-TRACE.md.
+**Next action:** Complete the engine-side collision/floor probe and verified disconnect handler described in [GENERAL-ALLOCATOR.md](GENERAL-ALLOCATOR.md). The tested R1M2B three-player build is unchanged in behaviour. **Do not connect a fourth client or cycle three distinct player pointers through reconnects** until slot reclamation is wired to player departure events. See SPAWN-ENGINE-TRACE.md.
