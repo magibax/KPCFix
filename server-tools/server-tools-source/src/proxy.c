@@ -1,6 +1,7 @@
 #include "winmini.h"
 #include "sha256.h"
 #include "runtime_data.h"
+#include "coop_spawn.h"
 extern HANDLE WINAPI GetStdHandle(DWORD);
 extern void WINAPI ExitProcess(UINT) __attribute__((noreturn));
 extern DWORD WINAPI VirtualQuery(const void *,void *,DWORD);
@@ -67,12 +68,16 @@ static int valid_image(U8 *b,U32 image_size){
  * position setter. This callsite is inside the *original* 1.13 object image;
  * guard the original bytes before installing the redirect. */
 #define SPAWN_POS_CALL_RVA 0x0f13c4u
+#define SPAWN_PREPARE_CALL_RVA 0x0f13a4u
+#define SPAWN_PREPARE_TARGET_RVA 0x0f10c0u
 #define SPAWN_POS_GLOBAL_RVA 0x16de80u
 static const U8 original_spawn_pos_call[6]={0xff,0x91,0xe0,0x01,0x00,0x00};
+static const U8 original_prepare_call[5]={0xe8,0x17,0xfd,0xff,0xff};
 typedef void (CDECL *SpawnSetPos)(void *,const U32 *);
 static U8 *spawn_image;
-static int spawn_trace_enabled;
+static int spawn_trace_enabled,spawn_separation_enabled;
 static volatile U32 spawn_trace_count;
+static CoopSpawnReservations spawn_trial_reservations;
 static void trace_append(char *out,U32 *n,const char *s){
  while(*s&&*n<115)out[(*n)++]=*s++;
 }
@@ -97,19 +102,50 @@ static void CDECL trace_spawn_position(void *object,const U32 *pos){
   line[n]=0;log_file(line);
  }
 }
+/* RVA f13a4 precedes the engine's nearby-object / telefrag handling.
+ * The callee is a thiscall method (ECX=player, ret 12). Adjust the private
+ * local copy of the spawn vector BEFORE forwarding the original invocation.
+ * This is an experimental trial, not a collision-validated placement API. */
+typedef void (__attribute__((thiscall)) *SpawnPrepareFn)(void *,U32 *,const U32 *,const U32 *);
+static void __attribute__((thiscall)) coop_before_telefrag(void *player,U32 *pos,const U32 *a,const U32 *b){
+ if(spawn_separation_enabled&&coop_is_r1m2b_anchor(pos)){
+  int slot=coop_claim_slot(&spawn_trial_reservations,(U32)player);
+  if(slot>=0){
+   coop_assign_trial_position(pos,slot);
+   if(spawn_trace_count<64){
+    char line[116];U32 n=0;
+    trace_append(line,&n,"[KPCFix Co-op] trial slot=");
+    if(n<115)line[n++]=(char)('0'+slot);
+    trace_append(line,&n," player=");trace_hex(line,&n,(U32)player);
+    trace_append(line,&n," z=");trace_hex(line,&n,pos[2]);
+    line[n]=0;log_file(line);
+   }
+  }else{
+   log_file("[KPCFix Co-op] trial has only 2 reserved slots; leaving original spawn unchanged.");
+  }
+ }
+ ((SpawnPrepareFn)(spawn_image+SPAWN_PREPARE_TARGET_RVA))(player,pos,a,b);
+}
+static void make_prepare_call(U8 *out,U8 *site){
+ U32 relative=(U32)coop_before_telefrag-((U32)site+5);
+ out[0]=0xe8;copy(out+1,(const U8 *)&relative,4);
+}
+
 static void make_spawn_call(U8 *out,U8 *site){
  U32 relative=(U32)trace_spawn_position-((U32)site+5);
  out[0]=0xe8;copy(out+1,(const U8 *)&relative,4);out[5]=0x90;
 }
 
 static int apply_object(HMODULE module){
- U8 *b=(U8 *)module;U8 hash[32],expected[8],spawn_call[6];U32 i,j,old,restore,already=1;
+ U8 *b=(U8 *)module;U8 hash[32],expected[8],spawn_call[6],prepare_call[5];U32 i,j,old,restore,already=1;
  U32 mbi[7],delta=(U32)b-0x10000000u;
  if(!module_hash(module,hash)||!same(hash,object_hash,32)||!valid_image(b,0x196000))return 0;
  make_spawn_call(spawn_call,b+SPAWN_POS_CALL_RVA);
+ make_prepare_call(prepare_call,b+SPAWN_PREPARE_CALL_RVA);
  for(i=0;i<PATCH_COUNT;i++)if(!same(b+patches[i].rva,patches[i].after,patches[i].size))already=0;
  if(already){
   if(!same(b+SPAWN_POS_CALL_RVA,spawn_trace_enabled?spawn_call:original_spawn_pos_call,6))return 0;
+  if(!same(b+SPAWN_PREPARE_CALL_RVA,spawn_separation_enabled?prepare_call:original_prepare_call,5))return 0;
   if(b[HOOK_RVA+INITIAL_OFFSET]>1||!same(b+0x116550,noclip_init,sizeof(noclip_init)))return 0;
   for(i=0;i<sizeof(hook_code);i++)if(i!=INITIAL_OFFSET&&b[HOOK_RVA+i]!=hook_code[i])return 0;
   return 1;
@@ -120,6 +156,7 @@ static int apply_object(HMODULE module){
   if(!same(b+patches[i].rva,expected,patches[i].size))return 0;
  }
  if(!same(b+SPAWN_POS_CALL_RVA,original_spawn_pos_call,6))return 0;
+ if(!same(b+SPAWN_PREPARE_CALL_RVA,original_prepare_call,5))return 0;
  for(i=0;i<sizeof(hook_code);i++)if(b[HOOK_RVA+i])return 0;
  for(i=0;i<sizeof(noclip_init);i++)if(b[0x116550+i])return 0;
  /* The known .data section's final page includes unused, writable padding.
@@ -134,7 +171,11 @@ static int apply_object(HMODULE module){
  b[HOOK_RVA+INITIAL_OFFSET]=(U8)initial_cheats;
  copy(b+0x116550,noclip_init,sizeof(noclip_init));
  for(i=0;i<PATCH_COUNT;i++)for(j=0;j<patches[i].size;j++)b[patches[i].rva+j]=patches[i].after[j];
- if(spawn_trace_enabled){spawn_image=b;spawn_trace_count=0;copy(b+SPAWN_POS_CALL_RVA,spawn_call,6);}
+ if(spawn_trace_enabled||spawn_separation_enabled){
+  spawn_image=b;spawn_trace_count=0;spawn_trial_reservations.player[0]=spawn_trial_reservations.player[1]=0;
+  if(spawn_trace_enabled)copy(b+SPAWN_POS_CALL_RVA,spawn_call,6);
+  if(spawn_separation_enabled)copy(b+SPAWN_PREPARE_CALL_RVA,prepare_call,5);
+ }
  /* LoadLibrary has already applied relocations and may have run table init. */
  *(U32 *)(b+0x16d950)&=~3u;
  if(!VirtualProtect(b+0x1000,0x116000,old,&restore)||
@@ -193,7 +234,8 @@ static void initialize(void){
  }
  active=profile>=0&&GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"Enabled",1,ini_path)!=0;
  initial_cheats=GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"AllowCheats",0,ini_path)!=0;
- spawn_trace_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0;
+ spawn_separation_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TrialSeparateSpawns",0,ini_path)!=0;
+ spawn_trace_enabled=active&&(spawn_separation_enabled||GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
  if(active&&!hooked){
   if(!intercept_backend())fatal("[KPCFix Server Tools] ERROR: could not install engine loading hook.");
   hooked=1;
