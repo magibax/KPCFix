@@ -6,7 +6,7 @@ KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high f
 - **Multiplayer from the main menu.** Direct IP now lets you query and join a server immediately after launching the game. This fixes the “No Response” that previously meant loading a local map before you could connect.
 - **Play above 60 FPS.** Timing and movement fixes address slow-motion animations and excess sliding after releasing a movement key. In playtesting, the game has generally been stable with FPS unlocked, and narration, camera pans and animations have typically kept their expected pace. Some scripted sequences may still be unstable and need more playtesting.
 - **Readable HUD at native resolution.** Menu cursor and tooltips follow the HUD scale. The default HUD scale is 150% at 1080p. For 1440p, select 2560×1440 in game and set `ScalePercent=200` under `[HUD]` in `KPCFix.ini`.
-- **4:3 cinematics.** Fullscreen movies are centred on widescreen displays. Movie smoothing is enabled by default. The HUD and cursor use point filtering to keep their pixel edges sharp. In the `[AspectRatio]` section of `KPCFix.ini`, set `CinematicFilter=0` for sharper movies or `Cinematics4x3=0` for the original stretched playback.
+- **4:3 cinematics.** Fullscreen movies are centred on widescreen displays. Movie smoothing is enabled by default. In the `[AspectRatio]` section of `KPCFix.ini`, set `CinematicFilter=0` for sharper movies or `Cinematics4x3=0` for the original stretched playback.
 
 **TO DO:** 
 - Engine performance optimisation: Inspect the engine for opportunities to improve FPS, reduce rendering overhead and optimise performance without introducing instability.
