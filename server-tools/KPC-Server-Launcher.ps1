@@ -32,7 +32,7 @@ $map.Location=New-Object System.Drawing.Point(20,105)
 $map.Width=580
 [void]$form.Controls.Add($map)
 Label 'Server name' 20 145
-$name=New-Object Windows.Forms.TextBox; $name.Location=New-Object Drawing.Point(20,170); $name.Width=580; $name.Text='KPC LAN Server'; $form.Controls.Add($name)
+$name=New-Object Windows.Forms.TextBox; $name.Location=New-Object Drawing.Point(20,170); $name.Width=580; $name.Text='KPC Server'; $form.Controls.Add($name)
 Label 'UDP port                                      Maximum players' 20 210
 $port=New-Object Windows.Forms.NumericUpDown; $port.Location=New-Object Drawing.Point(20,235); $port.Minimum=1; $port.Maximum=65535; $port.Value=42972; $form.Controls.Add($port)
 $players=New-Object Windows.Forms.NumericUpDown; $players.Location=New-Object Drawing.Point(280,235); $players.Minimum=1; $players.Maximum=16; $players.Value=8; $form.Controls.Add($players)
@@ -56,6 +56,13 @@ foreach($choice in $choices) {
  $box.Size=New-Object Drawing.Size(190,30)
  $form.Controls.Add($box); $settings[[string]$choice[0]]=$box; $i++
 }
+$cheats=New-Object Windows.Forms.CheckBox
+$cheats.Text='Allow cheats on startup (noclip and invulnerability)'
+$cheats.Checked=$false
+$cheats.Location=New-Object Drawing.Point(20,582)
+$cheats.Size=New-Object Drawing.Size(580,30)
+$form.Controls.Add($cheats)
+$hint=New-Object Windows.Forms.Label; $hint.Text='Live console: kpc_cheats 0 / 1'; $hint.Location=New-Object Drawing.Point(20,630); $hint.Size=New-Object Drawing.Size(330,22); $form.Controls.Add($hint)
 $button=New-Object Windows.Forms.Button; $button.Text='Start selected map'; $button.Location=New-Object Drawing.Point(390,620); $button.Size=New-Object Drawing.Size(210,40); $form.Controls.Add($button)
 $group.Items.Add('All maps') | Out-Null
 $categories=New-Object 'System.Collections.Generic.List[string]'
@@ -74,7 +81,7 @@ $button.add_Click({
  try {
   if($map.SelectedIndex -lt 0){throw 'Select a map.'}
   if($name.Text -match '["\r\n]' -or [string]::IsNullOrWhiteSpace($name.Text)){throw 'Enter a server name without quotes or newlines.'}
-  $running=Get-Process -Name dedicated,'DEDICA~1' -ErrorAction SilentlyContinue
+  $running=Get-Process -Name @('dedicated','DEDICA~1') -ErrorAction SilentlyContinue
   if($running){throw 'A dedicated server is already running. Close it before starting another server with this launcher.'}
   $chosen=$script:visible[$map.SelectedIndex]
   $config=Get-Content (Join-Path $PSScriptRoot 'server-template.cfg') -Raw
@@ -91,7 +98,8 @@ $button.add_Click({
   Set-Content (Join-Path $PSScriptRoot 'kpc-gui-server.cfg') $config -Encoding ASCII
   Set-Content (Join-Path $PSScriptRoot 'kpc-gui-maps.txt') $chosen.Path -Encoding ASCII
   $worker=Join-Path $PSScriptRoot 'Start-KPC-Selected-Server.ps1'
-  Start-Process powershell.exe -WorkingDirectory $PSScriptRoot -ArgumentList ('-NoProfile -NoExit -ExecutionPolicy Bypass -File "'+$worker+'" -Map "'+$chosen.Path+'"')
+  $cheatMode=if($cheats.Checked){'Enabled'}else{'Disabled'}
+  Start-Process powershell.exe -WorkingDirectory $PSScriptRoot -ArgumentList ('-NoLogo -NoProfile -NoExit -ExecutionPolicy Bypass -File "'+$worker+'" -Map "'+$chosen.Path+'" -Cheats '+$cheatMode)
  } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message,'KPCFix server launcher') | Out-Null }
 })
 [Windows.Forms.Application]::Run($form)

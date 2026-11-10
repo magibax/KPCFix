@@ -1,4 +1,7 @@
-param([Parameter(Mandatory=$true)][string]$Map)
+param(
+ [Parameter(Mandatory=$true)][string]$Map,
+ [ValidateSet('Enabled','Disabled')][string]$Cheats='Disabled'
+)
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 if ($Map -notmatch '^worlds\\(deathmatch\\PM(0[1-9]|10)|realm[0-5]\\(R[1-5]M[0-4][ABC]?|TUTORIAL))$') { throw 'Invalid map path.' }
@@ -7,9 +10,14 @@ if (-not $Exe) { throw 'Dedicated EXE missing: put these files in the installed 
 . (Join-Path $PSScriptRoot 'Check-KPCVersion.ps1')
 $GameProfile = Assert-KPCGameVersion
 Assert-KPCServerVersion $Exe $GameProfile
-foreach ($Required in @('kpc-gui-server.cfg','kpc-gui-maps.txt')) {
+foreach ($Required in @('kpc-gui-server.cfg','kpc-gui-maps.txt','Set-ServerCheats.ps1','patch.json')) {
     if (-not (Test-Path -LiteralPath $Required)) { throw "Missing $Required; keep the starter configuration beside this launcher." }
 }
+# Apply and verify the selected policy before starting the dedicated process.
+# Run separately so patch failures produce an exit code instead of closing this worker.
+& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Set-ServerCheats.ps1') -Mode $Cheats
+if ($LASTEXITCODE -ne 0) { throw 'Could not apply the server cheat setting. Server was not started.' }
+Assert-KPCServerVersion $Exe $GameProfile
 # Write to this console's input buffer, not the active desktop window.
 Add-Type -TypeDefinition @'
 using System;
