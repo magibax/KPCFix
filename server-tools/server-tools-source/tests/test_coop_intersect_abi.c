@@ -8,7 +8,8 @@ int main(void){
  assert(KPC_INTERSECT_SERVER_SLOT==0x90u);
  assert(KPC_INTERSECT_OBJECTS==1u);
  assert(KPC_INTERSECT_HPOLY==4u);
- assert(KPC_INTERSECT_QUERY_MIN_BYTES==0x30u);
+ assert(KPC_INTERSECT_QUERY_MIN_BYTES==0x32u);
+ assert(KPC_INTERSECT_ORIGINAL_WORD_30==0x6003u);
  assert(sizeof(q)==0x40u);
  assert(sizeof(hit)==0x40u);
  q.from.x=1600.f;q.from.y=-240.f;q.from.z=-2944.f;
@@ -16,6 +17,10 @@ int main(void){
  q.flags=KPC_INTERSECT_OBJECTS|KPC_INTERSECT_HPOLY;
  q.object_filter=0x12345678u;
  q.filter_userdata=0x87654321u;
+ assert(q.legacy_word_30==0u);
+ q.legacy_word_30=KPC_INTERSECT_ORIGINAL_WORD_30;
+ assert(q.legacy_word_30==0x6003u);
+ assert(q.reserved_32==0);
  assert(q.flags==5u);
  assert(q.from.x==q.to.x&&q.from.z==q.to.z);
  assert(q.from.y>q.to.y);
