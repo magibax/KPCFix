@@ -79,7 +79,7 @@ static U8 *spawn_image;
 static int spawn_trace_enabled,spawn_separation_enabled,collision_trace_enabled;
 static volatile U32 spawn_trace_count,collision_trace_count;
 #define COLLISION_FILTER_RVA 0x102730u
-#define COLLISION_DIAG_LIMIT 9u
+#define COLLISION_DIAG_LIMIT 3u /* at most 3 known player locations */
 typedef U8 (CDECL *KpcIntersectFn)(const KpcIntersectQuery *,KpcIntersectInfo *);
 static float collision_float(U32 bits){union{U32 bits;float value;}u;u.bits=bits;return u.value;}
 static U32 collision_bits(float value){union{U32 bits;float value;}u;u.value=value;return u.bits;}
@@ -99,34 +99,53 @@ static void trace_hex(char *out,U32 *n,U32 value){
  * Diagnostic only: a downward RAY is NOT a player collision-volume test.
  * Each test leaves all player transforms and engine game state unchanged.
  */
+/* Four carefully bounded, read-only queries at each of the three known
+ * R1M2B positions. Mode 0 reproduces our live-tested all-zero +0x30 control;
+ * modes 1-3 vary the previously omitted original query word and flags/range.
+ * The original game at RVA f2f7c writes 0x6003 to query+0x30, so retaining
+ * that control comparison identifies whether its omission caused hit=0.
+ * Even a hit is NOT sufficient to approve a player-sized spawn position. */
 static void diagnostic_intersect_segment(const U32 *object_pos,void *object){
- KpcIntersectQuery query={0};
- KpcIntersectInfo hit={0};
  U32 *engine;
- U8 result;
- char line[116];U32 n=0;
+ U32 mode;
  float x=collision_float(object_pos[0]),y=collision_float(object_pos[1]),z=collision_float(object_pos[2]);
  engine=spawn_image?*(U32 **)(spawn_image+SPAWN_POS_GLOBAL_RVA):0;
  if(!engine||!engine[KPC_INTERSECT_SERVER_SLOT/4]){
   log_file("[KPCFix Co-op] ABI segment unavailable (no engine pointer).");
   return;
  }
- query.from.x=x;query.from.y=y+64.f;query.from.z=z;
- query.to.x=x;query.to.y=y-256.f;query.to.z=z;
- query.flags=KPC_INTERSECT_OBJECTS|KPC_INTERSECT_HPOLY;
- query.object_filter=(U32)(spawn_image+COLLISION_FILTER_RVA);
- query.filter_userdata=(U32)object;
- result=((KpcIntersectFn)engine[KPC_INTERSECT_SERVER_SLOT/4])(&query,&hit);
- trace_append(line,&n,"[KPCFix Co-op] ABI segment hit=");
- if(n<115)line[n++]=result?'1':'0';
- trace_append(line,&n," obj=");trace_hex(line,&n,(U32)object);
- if(result){
-  trace_append(line,&n," y=");trace_hex(line,&n,collision_bits(hit.point.y));
-  trace_append(line,&n," ny=");trace_hex(line,&n,collision_bits(hit.plane.normal.y));
-  trace_append(line,&n," hobj=");trace_hex(line,&n,hit.hit_object);
-  trace_append(line,&n," surf=");trace_hex(line,&n,hit.surface_flags);
+ for(mode=0;mode<4;mode++){
+  KpcIntersectQuery query={0};
+  KpcIntersectInfo hit={0};
+  U8 result;
+  char line[116];U32 n=0;
+  query.from.x=x;query.from.y=y+(mode==3?192.f:64.f);query.from.z=z;
+  query.to.x=x;query.to.y=y-(mode==3?2048.f:256.f);query.to.z=z;
+  query.flags=(mode==2)?KPC_INTERSECT_HPOLY:(KPC_INTERSECT_OBJECTS|KPC_INTERSECT_HPOLY);
+  query.object_filter=(U32)(spawn_image+COLLISION_FILTER_RVA);
+  query.filter_userdata=(U32)object;
+  query.legacy_word_30=(unsigned short)(mode==0?0:KPC_INTERSECT_ORIGINAL_WORD_30);
+  result=((KpcIntersectFn)engine[KPC_INTERSECT_SERVER_SLOT/4])(&query,&hit);
+  trace_append(line,&n,"[KPCFix Co-op] ray m=");
+  if(n<115)line[n++]=(char)('0'+mode);
+  trace_append(line,&n," flags=");
+  if(n<115)line[n++]=(char)('0'+query.flags);
+  trace_append(line,&n," ext=");trace_hex(line,&n,query.legacy_word_30);
+  trace_append(line,&n," z=");trace_hex(line,&n,object_pos[2]);
+  trace_append(line,&n," hit=");
+  if(n<115)line[n++]=result?'1':'0';
+  line[n]=0;log_file(line);
+  if(result){
+   n=0;
+   trace_append(line,&n,"[KPCFix Co-op] ray+ m=");
+   if(n<115)line[n++]=(char)('0'+mode);
+   trace_append(line,&n," y=");trace_hex(line,&n,collision_bits(hit.point.y));
+   trace_append(line,&n," ny=");trace_hex(line,&n,collision_bits(hit.plane.normal.y));
+   trace_append(line,&n," obj=");trace_hex(line,&n,hit.hit_object);
+   trace_append(line,&n," surf=");trace_hex(line,&n,hit.surface_flags);
+   line[n]=0;log_file(line);
+  }
  }
- line[n]=0;log_file(line);
 }
 /* The native game call pushes (HOBJECT, LTVector*) and cleans eight bytes
  * in the caller. Forward it unchanged and only then write an observation. */
