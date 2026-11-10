@@ -38,6 +38,8 @@ Enabled=1
 AllowCheats=0
 ```
 
+**Important:** `Start-KPC-Selected-Server.ps1` explicitly requires the `AllowCheats` key in `KPCServerTools.ini`; if it is absent, the graphical server launcher stops with `AllowCheats is missing from KPCServerTools.ini.` Existing INI files are preserved by setup, so re-running setup does not fill a missing key. Retain `AllowCheats=0` (or `AllowCheats=1` when explicitly desired) under `[ServerTools]` whenever adding co-op settings. The key must exist even if cheats are disabled.
+
 `Enabled=0` makes the proxy pass calls through to the official engine without installing Server Tools hooks; restart the server after changing it. `AllowCheats` sets initial permission, which the graphical launcher updates from its checkbox. Use the console command for live changes. Chat logging and announcements are active whenever the tools are enabled. Startup/errors are also appended to `KPCServerTools.log`.
 
 To remove the proxy, close the game/server and run **Restore-Original-Server.cmd**. It restores the preserved official engine to `server.dll`; `object.lto` remains stock. Old on-disk patch installers are moved to `KPCServerTools-Legacy` during migration; do not run them with this DLL installation.
@@ -61,9 +63,17 @@ This section applies **only** to the `feature/coop-campaign` branch, not to the 
 The current tracked `KPCServerTools.dll` was **not rebuilt** for this research step. To test, build from this branch with the documented GCC/binutils toolchain, then deploy the resulting DLL using the usual setup script. Add the following to the existing `KPCServerTools.ini` and restart the server:
 
 ```ini
+[ServerTools]
+Enabled=1
+AllowCheats=0
+
 [Coop]
+TrialSeparateSpawns=1
 TraceSpawns=1
+TraceCollisionABI=1
 ```
+
+`AllowCheats` is required for the graphical server launcher to proceed. `TraceCollisionABI=1` enables read-only diagnostic segment rays and does **not** enable automatic collision-aware spawning.
 
 Run a two-player campaign map such as R1M2B, then inspect `KPCServerTools.log`. The first 64 candidate position requests are written only to the log; no user-facing chat or screen text is generated. Disable by setting `TraceSpawns=0` or remove the key. `Enabled=0` continues to pass through to the original engine. Do not ship a new release without rebuilding the tracked binary and build manifest, checking hashes, and performing Windows runtime verification.
 
