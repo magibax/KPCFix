@@ -1,6 +1,6 @@
 # Engine spawn trace: official 1.13 binaries
 
-Status: **static reverse engineering verified**, optional instrumentation added in source, **no multiplayer runtime test and no spawn relocation patch**.
+Status: **spawn trace live-tested with two clients**; both were assigned the same anchor, with telefragging observed. An **opt-in, map-specific two-player position trial** is in the feature branch; it has not yet been live-tested.
 
 ## Uploaded binary provenance
 
@@ -64,6 +64,27 @@ Run synthetic tests:
     python -m unittest discover -s coop/tools -p 'test_*.py' -v
 
 **Trace records observe requested coordinates, not proven collision-validated or final player transforms.**
+
+## Live observation and experimental offset trial
+
+On 2026-11-10 the user tested the trace build on R1M2B. Two distinct player object handles requested precisely the same float32 position:
+
+    obj=0x02d08284 x=0x44c80000 y=0xc3800000 z=0xc5380000
+    obj=0x02d080d8 x=0x44c80000 y=0xc3800000 z=0xc5380000
+
+The values decode to (1600, -256, -2944). The user observed the second spawn telefragging the first player.
+
+Further disassembly shows the world-object handling function at RVA 0x0f10c0 is called at RVA 0x0f13a4 **before** the final engine position setter at RVA 0x0f13c4. It receives the proposed LTVector by pointer, plus two additional vector pointers, with the player instance in ECX; it ends in ret 12. Therefore late changes at f13c4 would not necessarily prevent telefragging, and the trial hooks the earlier f13a4 site instead.
+
+The trial:
+- is **disabled by default** and requires [Coop] TrialSeparateSpawns=1, with ServerTools.Enabled=1;
+- only acts on exact R1M2B single-player start coordinate bits;
+- reserves first two distinct player *object pointers* for the lifetime of the map/module;
+- leaves the first at (1600,-256,-2944) and moves the second to (1600,-256,-2848), **before** calling the unmodified original f10c0 routine;
+- leaves the original engine setter and telefrag handling intact, logs the chosen slot/coordinates, and keeps the existing post-position trace enabled;
+- does **not** validate walls, floor, body size, or other actors, and does **not** release slots after disconnect. Only two connected players in a throwaway test are supported.
+
+This +96 Z position is a **test hypothesis** (map object coordinates suggest a corridor in Z), *not a proven safe spawn*. If the second player is clipped into geometry or unable to move, disable the trial and report the result. This is not a production-ready allocator.
 
 ## Next gate
 
