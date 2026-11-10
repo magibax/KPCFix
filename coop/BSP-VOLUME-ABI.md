@@ -447,3 +447,79 @@ The next objective remains verifying current solidity and the
 world-to-model transformation matrix before checking additional
 BSP roots. Type 2 alone and raw 0x12000 flags are not
 complete proof of a current collidable object.
+
+## Live Windows v5 — type-2 and vector-delta validation (2026-11-10)
+
+The opt-in `model-types-v5` log fully traversed the R1M2B model
+registry, repeating **115** entries, **115** readable candidate BSP
+roots and **109/109** matching reciprocal object references. No
+unreadable or skipped state was reported. Type values now decode:
+
+| Object-type result | Count |
+| --- | ---: |
+| Native `object+0x76 == 2` | **57** |
+| Native type 1 | **0** |
+| Other readable types | **52** |
+| Unreadable | **0** |
+
+The corrected type-2 count verifies the old v4 type-1-only label
+was misleading; the 52 remaining associations require an actual
+type histogram, not an assumption about their nature.
+
+The raw `object+0x28` flag distribution repeated exactly:
+49 with `0x2000`, 18 with `0x10000`, 67 with
+either (`0x12000`), 42 with neither; no overlap of the two
+tested bits in this snapshot. These masks are **not verified
+full-solidity flags**. The 109 object/source vectors repeated
+107 equal, 2 different, with no unreadable values.
+
+The two changed entries were **both type 2, with identical raw
+flags `0x00204001`** (and neither `0x2000` nor
+`0x10000`):
+
+| | Source position (X, Y, Z) | Current object position (X, Y, Z) | Difference |
+| --- | --- | --- | --- |
+| Object `0x03be438c`, record `0x03f1b430` | (537, 852, -1445) | (501.377716, 895.350525, -1409.377808) | (-35.622284, +43.350525, +35.622192) |
+| Object `0x03be4550`, record `0x03f1a240` | (504.5, 886, -1415.5) | (481.073486, 844.358276, -1392.073486) | (-23.426514, -41.641724, +23.426514) |
+
+This is strong evidence of *changed stored model-object position
+state* after the initial copy. The similar diagonally opposed X/Z
+components are consistent with scripted repositioning or a
+movable WorldModel, but a single timestamp does not establish
+time-dependent motion or rotation. Do **not** use this to
+calculate transformed BSP collision planes without independently
+verified local/world matrix semantics.
+
+The base-BSP volume differential remained identical: the three
+navigable controls returned `INTERIOR_ONLY` with 27/24/25
+visits, and the known wall control returned
+`TOUCHES_CLASS_ZERO` in 17 visits (base root
+`0x0399f020`). The overall evidence gate correctly remained
+3× `UNSUPPORTED` and 1× `BLOCKED`.
+
+### Additional static original-server findings
+
+The original `se_InitWorldModel` at
+RVA `0x229bf..0x22a57` derives candidate min/max bounds
+from model fields `+0xe0..+0xf4` and passes these into
+native routine RVA `0x19e06` for spatial-bound indexing.
+Disassembly of `0x19e06` shows it **updates live
+object-indexing bounds and spatial-tree structures**,
+including writes at `object+0xc4..+0xd8`. It is
+therefore *not* a side-effect-free collision query and
+must **not** be invoked from experimental instrumentation.
+
+The constructor at `0x1d403..0x1d509` also initializes
+object fields `+0x4c..+0x64` from the creation record,
+but the geometry/rotation semantics of those fields have
+not yet been corroborated across independent transform
+call sites. Copying them, or simply subtracting the
+current object's position from BSP plane distances, would
+not establish a sound collision transform.
+
+**Next engineering target:** verify native type distribution
+and the full collision-related flags/masks, establish
+rotation and world/local transform layouts, and identify the
+actual live-solid object set. Only then can the current
+read-only BSP-box classifier be applied to additional
+models without silently omitting obstacles.
