@@ -90,6 +90,7 @@ jobs:
           5. In KPCServerTools.ini use:
                [ServerTools]
                Enabled=1
+               AllowCheats=0
 
                [Coop]
                TrialSeparateSpawns=1
@@ -121,6 +122,31 @@ jobs:
 
           No original proprietary game binaries or maps are included.
           TXT
+      - name: Verify packaged INI example meets launcher contract
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib,re
+          instruction=(pathlib.Path('dist')/'TEST-INSTRUCTIONS.txt').read_text()
+          original=pathlib.Path('server-tools/KPCServerTools-default.ini').read_text()
+          pattern=r'(?ms)^\[ServerTools\]\s*\n(?:[^\[]*\n)*?AllowCheats\s*=\s*[01]\s*        uses: actions/upload-artifact@v4
+        with:
+          name: KPCFix-Coop-CollisionABI-Differential-Test
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+          assert re.search(pattern, original), 'Default INI must include launcher-required AllowCheats'
+          assert re.search(r'(?m)^\s*AllowCheats=0\s*        uses: actions/upload-artifact@v4
+        with:
+          name: KPCFix-Coop-CollisionABI-Differential-Test
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+,instruction), 'Experimental test instructions omitted AllowCheats'
+          assert 'AllowCheats=0' in pathlib.Path('server-tools/README-Server-Tools.md').read_text()
+          print('PASS: launcher-required AllowCheats key present in defaults, docs and test package')
+          PY
       - name: Upload local-test files
         uses: actions/upload-artifact@v4
         with:
