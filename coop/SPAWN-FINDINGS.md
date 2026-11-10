@@ -2,7 +2,7 @@
 
 Date: 2026-11-10
 Branch: feature/coop-campaign
-Status: DAT inspection completed; original 1.13 server binaries subsequently verified; optional read-only spawn trace is now in feature-branch source, not runtime tested
+The static survey covers 59 campaign and multiplayer maps. Subsequent live spawn and ray trials cover three R1M2B positions.
 
 ## Inputs and reproducibility
 

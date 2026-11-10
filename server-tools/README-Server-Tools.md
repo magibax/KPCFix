@@ -50,9 +50,9 @@ To remove the proxy, close the game/server and run **Restore-Original-Server.cmd
 
 The small 32-bit proxy forwards the engine's two exports and intercepts its lookup of `ObjectDLLSetup`. It validates the official binaries, then installs the established Server Tools hooks in the loaded object module. It does not change the object file, PE headers or relocation table. Original game binaries are not bundled.
 
-Compiled-proxy emulation passed for Europe and US engine profiles at relocated DLL/object addresses, with cheats enabled, disabled, pass-through and altered-object rejection. Hook tests cover separate player state, live revocation, client OFF acknowledgements, chat announcements and prompt restoration. These checks supplement Windows testing; they do not replace it. The preceding on-disk hooks were tested in game, but this DLL build still needs that confirmation.
+Compiled-proxy emulation passed for Europe and US engine profiles at relocated DLL/object addresses, with cheats enabled, disabled, pass-through and altered-object rejection. Hook tests cover separate player state, live revocation, client OFF acknowledgements, chat announcements and prompt restoration. These checks supplement Windows testing; they do not replace it. The stable R3 warning-spacing fix was confirmed in a Windows playtest. Record the DLL hash and repeat the applicable live checks when testing a different build.
 
-Source and build/test instructions are in `server-tools-source/README.md`. This package includes the DLL conversion and chat-only announcements.
+Source and build/test instructions are in `server-tools-source/README.md`. The stable download is [Server Tools R3](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3).
 
 ## Installing alongside KPCFix
 
@@ -62,7 +62,7 @@ Server Tools uses its own README, license, checksums, compatibility checker, bui
 
 This section applies **only** to the `feature/coop-campaign` branch, not to the stable Server Tools release. Source now includes a conditional spawn-position trace plus an **opt-in, R1M2B-only three-client spawn trial**. Both hooks are off by default. The trial is not collision-validated and must not be used on public servers.
 
-The current tracked `KPCServerTools.dll` was **not rebuilt** for this research step. To test, build from this branch with the documented GCC/binutils toolchain, then deploy the resulting DLL using the usual setup script. Add the following to the existing `KPCServerTools.ini` and restart the server:
+The branch includes a rebuilt experimental DLL and matching build metadata. After deploying it with setup, edit the existing `KPCServerTools.ini` and restart the server:
 
 ```ini
 [ServerTools]
@@ -77,6 +77,6 @@ TraceCollisionABI=1
 
 `AllowCheats` is required for the graphical server launcher to proceed. `TraceCollisionABI=1` enables read-only diagnostic segment rays and does **not** enable automatic collision-aware spawning.
 
-Run a two-player campaign map such as R1M2B, then inspect `KPCServerTools.log`. The first 64 candidate position requests are written only to the log; no user-facing chat or screen text is generated. Disable by setting `TraceSpawns=0` or remove the key. `Enabled=0` continues to pass through to the original engine. Do not ship a new release without rebuilding the tracked binary and build manifest, checking hashes, and performing Windows runtime verification.
+Run R1M2B with at most three clients in a fresh server session, then inspect `KPCServerTools.log`. The first 64 candidate position requests are written only to the log; no user-facing chat or screen text is generated. To end the trial, set all three `[Coop]` keys to 0 and restart the server. `Enabled=0` continues to pass through to the original engine. Do not ship a new release without rebuilding the tracked binary and build manifest, checking hashes, and performing Windows runtime verification.
 
-See [engine trace findings](../coop/SPAWN-ENGINE-TRACE.md), [site verifier](../coop/tools/check_spawn_site.py) and [log decoder](../coop/tools/decode_spawn_log.py).
+See [engine trace findings](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/SPAWN-ENGINE-TRACE.md), [site verifier](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/tools/check_spawn_site.py) and [log decoder](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/tools/decode_spawn_log.py).

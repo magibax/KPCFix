@@ -40,7 +40,7 @@ The shipped experimental three-player R1M2B DLL remains intentionally restricted
 
 ## Recommended next runtime instrumentation
 
-1. Trace the server's existing collision/ground-query calls using the official supplied `server.original.dll` and `object.lto` and verify the method offset/signature against working original call sites.
+1. Use the [verified R1M2B segment-query results](INTERSECT-ABI.md) as the ground reference. Trace a player-volume clearance method and verify its calling convention against original call sites.
 2. Add a strictly read-only diagnostic pass to log candidate acceptance/rejection, initially on R1M2B against the three known good positions and at least one deliberately blocked location.
 3. Only after that diagnostic has passed independently, replace the current three fixed positions with `coop_allocator_assign` using the verified engine probe.
 4. Integrate authoritative disconnect/map-reset notifications, then regression-test ordinary deathmatch and the untouched server mode.

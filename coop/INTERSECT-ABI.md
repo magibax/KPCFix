@@ -109,8 +109,6 @@ The result supports using the *verified native field value* for subsequent groun
 
 The graphical server launch script `Start-KPC-Selected-Server.ps1` requires `AllowCheats` to be present under `[ServerTools]` in `KPCServerTools.ini`; it throws an error and refuses startup if missing. Always preserve both `Enabled=1` and `AllowCheats=0` when adding `[Coop]` diagnostics. See `server-tools/README-Server-Tools.md`.
 
-
-
 ## Next ABI research — player-volume clearance
 
 `IntersectSegment` supplies a **line** hit; the general allocator's `CoopProbe` contract requires **player-sized clearance**, valid world geometry, and grounding. Next disassemble the original engine's world-model queries, player hull physics and `GetStandingOn`/object dimensions or collision-sweep APIs, verify their method offsets and call conventions separately, and then implement a tested read-only 3D volume probe. Also trace authoritative disconnect/map lifecycle before connecting the general allocator. No automatic world-map spawn placement should be activated before this.

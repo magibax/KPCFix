@@ -44,7 +44,7 @@ The common patch notes list a 1.12 server crash when a jack-in-the-box exploded 
 
 ## Validation
 
-The tests load the shipped DLL and execute original 1.13 x86 routines with mocked Windows, graphics and socket services. They exercise the slider and its stock switch, both cursor images and tooltip bounds, ground movement, fractional animation timing, each of the 13 HUD redirects, the original panel loop, projected inventory counts and the direct-IP address builder. The compiled file reader and SHA-256 accept each stock 1.13 pair. A same-size shell with one altered byte is rejected. The disc files are also exercised as rejected inputs. See `verification/SUMMARY.json` for the per-region results.
+The tests load the shipped DLL and execute original 1.13 x86 routines with mocked Windows, graphics and socket services. They exercise the slider and its stock switch, both cursor images and tooltip bounds, ground movement, fractional animation timing, each of the 13 HUD redirects, the original panel loop, projected inventory counts and the direct-IP address builder. The compiled file reader and SHA-256 accept each stock 1.13 pair. A same-size shell with one altered byte is rejected. The disc files are also exercised as rejected inputs. The historical per-region results identify the tested DLL in `verification/SUMMARY.json`. Use `source/verify.py` with the matching original files to verify another build.
 
 Native visual presentation through DDrawCompat, actual mouse feel, Windows launcher execution and live multiplayer between server editions remain playtest items.
 

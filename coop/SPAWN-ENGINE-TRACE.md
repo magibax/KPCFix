@@ -1,6 +1,6 @@
 # Engine spawn trace: official 1.13 binaries
 
-Status: **two-client spawn separation live-verified** on R1M2B (no telefragging; in-bounds movement), with repeat same-pointer placement observed after reconnects. A **three-client map-specific trial** is in the feature branch; slot 2 has not yet been live-tested.
+Three distinct R1M2B positions were live-tested in the three-player trial. Repeat placements with the same player pointer were observed after reconnect. Slot reclamation for new pointers remains open.
 
 ## Uploaded binary provenance
 

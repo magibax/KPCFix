@@ -4,7 +4,7 @@ b0cd1ce19c8b4fc6d025259dc0c4e99b809e1863a68263e4d6056aa5e0b2aa6a  ./KPC-Server-L
 e1f8d1fdd8fd06bc8a9fd3575f5296319891bf657a857993835e99f8ac16fbb9  ./KPCServerTools-default.ini
 b0404468077d0aec012fa9268618d375b99361d16dc669178dc8df0c45f0fa38  ./KPCServerTools.dll
 111bd19eff641ab11fd75afbeec380a96e822ac3153344271456fa7629c496d7  ./LICENSE-Server-Tools.txt
-9b031acb913286886f897e31f530c952890e2e53e0342d716a5ca6244ab88dcc  ./README-Server-Tools.md
+09f16398f7a430efddf79e4d030a387ad34fef53d42aa055dac4d0acb8cf546b  ./README-Server-Tools.md
 88df6cc2bc97da72e253a2ac339f9d7904b41840d85b962383e872595951dc1b  ./Restore-LegacyObject.ps1
 f7aa26ac073117d988973ba682171280a075be24ef1760616df1cbc110903e6f  ./Restore-Original-Server.cmd
 67f313e02f8e7a0842eaf32800c1acc6691569c5597882f5628182701a6d7b26  ./SERVER_TOOLS_BUILD.json
@@ -15,7 +15,7 @@ bc5f588c214796ed3a84d1e1afa85666d77acdce2db5203a3ed26b03b320cb54  ./Start-KPC-Se
 45c1ffbaa3016c0e52a1ba111d945c18589161d7467c815a4b69d0b2f09228b8  ./legacy-object-patches.json
 52e752d2c4efb4eabec10e92a0705d027fbe576df9d7a350d1e5d4602a23ce5c  ./maps.json
 36e778ff3008b123101f17f013ed242d0935c9d42cb35037098a917e93d3092b  ./server-template.cfg
-2aa621f20cebdbdc5ebc86188c031733d4d8ce6095624e940c4267e97d1f0184  ./server-tools-source/README.md
+81d9191e4ced000a59ac919ebbcfe42be30dc906011990a7df363e1d13f9f4ad  ./server-tools-source/README.md
 981ecfaf0850faee2ef8c341041967aa4f9267627dccff788fd53018dbe1c30a  ./server-tools-source/build_dll.py
 d58fd6de38f962bceff9f8741f9e77a94f6a4491e26b87bf4ce61a0e0633adb3  ./server-tools-source/logging.S
 4f93e647e662452908fb01b65c3e86ef446c523bf0f374a7a2b98dd14e4c78af  ./server-tools-source/pe_build.py
