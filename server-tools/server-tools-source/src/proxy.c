@@ -123,6 +123,8 @@ static void diagnostic_intersect_segment(const U32 *object_pos,void *object){
  if(result){
   trace_append(line,&n," y=");trace_hex(line,&n,collision_bits(hit.point.y));
   trace_append(line,&n," ny=");trace_hex(line,&n,collision_bits(hit.plane.normal.y));
+  trace_append(line,&n," hobj=");trace_hex(line,&n,hit.hit_object);
+  trace_append(line,&n," surf=");trace_hex(line,&n,hit.surface_flags);
  }
  line[n]=0;log_file(line);
 }
