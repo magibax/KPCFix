@@ -58,6 +58,7 @@ def inspect(data: bytes, require_hash=True):
     require(0xF2F5F, bytes.fromhex('c78424d000000005000000'), 'intersect flags at +0x24')
     require(0xF2F6A, bytes.fromhex('c78424d400000030271010'), 'intersect filter at +0x28')
     require(0xF2F75, bytes.fromhex('89b424d8000000'), 'intersect filter userdata at +0x2c')
+    require(0xF2F7C, bytes.fromhex('66c78424dc0000000360'), 'original intersect query extra word +0x30')
     require(0x3A60, bytes.fromhex('8bc133c9894824894828c3'), 'vintage query flags/filter initializer')
     require(0x102730, bytes.fromhex('8b44240485c0750332c0c33b4424080f95c0c3'), 'original cdecl object filter')
     require(0xEBC7, bytes.fromhex('ff909000000083c408'), 'independent intersect caller')
@@ -71,9 +72,9 @@ def inspect(data: bytes, require_hash=True):
         'secondary_spawn_path_rva': '0x0f15d0',
         'intersect_segment_api_offset': '0x90',
         'intersect_callsite_rva': '0x0f2fae',
-        'intersect_query_vintage_bytes': 48,
+        'intersect_query_vintage_bytes': 50,
         'spawn_position_api_field_offset': '0x01e0',
-        'guards_passed': 24,
+        'guards_passed': 25,
     }
 
 
