@@ -1,6 +1,6 @@
 # BSP world-volume classification: original server engine
 
-Status: **original native BSP point walker verified by disassembly; conservative AABB traversal implemented and unit-tested on synthetic trees; real map volumes NOT yet live-validated**. No spawn allocator integration.
+Status: **original native BSP point walker and conservative whole-AABB traversal verified; live R1M2B primary-BSP differential passed all four controls on 2026-11-10**. Additional world models and dynamic actors are unverified. No spawn allocator integration.
 
 ## Original 1.13 evidence (binary-specific)
 
@@ -34,7 +34,7 @@ gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
 /tmp/kpc-coop-bsp-test
 ```
 
-The hash checker never executes/patches or redistributes original game code; its unit tests use synthetic PE fixtures. Neither the native runtime nor current R1M2B fixed-position trial has been modified by this stage.
+The hash checker never executes/patches or redistributes original game code; its unit tests use synthetic PE fixtures. A subsequent opt-in Windows runtime tracer reads the original loaded BSP without changing player transforms or spawn allocation.
 
 ## Next runtime gate
 
@@ -98,8 +98,61 @@ Run `worlds\\realm1\\R1M2B` with `maxclients=2`, connect
 **only one client**, and paste the `candidate`, `body sample`,
 `base BSP box` and `volume gate` lines. The existing three
 `UNSUPPORTED` and one `BLOCKED` evidence-gate results are expected;
-the **base-BSP classifications are intentionally not predicted**
-until observed live. If all report `UNKNOWN`, inspect the root
+the base-BSP classifications were later observed on Windows as described below. If all report `UNKNOWN` in another build, inspect the root
 diagnostic and revisit the native pointer-chain inference. Stop and
 restore the backups if anything crashes or misbehaves. Disable the
 switch and restart to remove diagnostic traversal.
+
+## Windows validation — four R1M2B controls (2026-11-10)
+
+**Result: all four predicted control distinctions passed** using the opt-in
+`TraceBspVolume=1` experimental build. The user supplied these live
+dedicated-server log results after the prior synthetic tests and CI build.
+
+| Candidate centre (X, Y, Z) | Base BSP classification | Nodes visited | Sampled body hit | Overall volume gate |
+| --- | --- | ---: | --- | --- |
+| (1600, -256, -2944) original anchor | `INTERIOR_ONLY` | 27 (`0x1b`) | No | `UNSUPPORTED` |
+| (1600, -256, -2848) | `INTERIOR_ONLY` | 24 (`0x18`) | No | `UNSUPPORTED` |
+| (1600, -256, -3040) | `INTERIOR_ONLY` | 25 (`0x19`) | No | `UNSUPPORTED` |
+| (1654, -256, -2944) wall-crossing control | `TOUCHES_CLASS_ZERO` | 17 (`0x11`) | Yes | `BLOCKED` |
+
+All four traversals used the same loaded primary-world BSP root pointer
+`0x03a0c020`. Player-relative bounds were
+(-20, -46, -20) to (+20, +46, +20).
+Each candidate independently yielded a floor hit at Y=-320 with normal
+(0, 1, 0). The wall reference was at (1664, -256, -2944).
+The wall-control box spans X=1634..1674, crossing the wall plane.
+The server logged successful runtime hook installation with the original
+object file unchanged; the submitted trace contains no crashes.
+
+**Interpretation:** On this specific official 1.13 `R1M2B` map, whole-AABB
+traversal through the loaded **primary BSP** differentiates all three
+previously navigable spawn volumes from the known obstructed wall control.
+This is strong runtime evidence that the control wall obstruction is
+represented by the same primary BSP leaf partition, though the log does not
+identify the exact blocking polygon or prove arbitrary-world coverage.
+Importantly, the `TOUCHES_CLASS_ZERO` result is obtained for the
+full 3D player box, not solely a ground or body-ray sample.
+
+**Boundary of proof:** The classification is conservative and applies
+to one map, one player-box dimension set and four controls. A result of
+`INTERIOR_ONLY` does **not** certify a usable spawn across all solid
+WorldModels, destructible/moving geometry, actor bodies, hazardous surfaces,
+trigger semantics or temporal changes. These are not in the primary-tree
+query. Consequently the overall evidence gate correctly remains
+`UNSUPPORTED` on all three clear base-BSP controls and `BLOCKED` at
+the obstructed control. Do not set `world_hull` or `other_actors` to
+`VERIFIED_CLEAR` or enable `coop_allocator_assign`.
+
+### Next validation required
+
+1. Inventory all solid WorldModels and determine their BSP roots,
+   transformations, collision flags and live lifecycle. Establish whether
+   a read-only traversal of every relevant model can be done safely.
+2. Independently verify live-actor overlap, including self-filtering
+   and authoritative active-player identity.
+3. Differential-test against a wall/door belonging to a separate
+   WorldModel, moving-world geometry and additional campaign maps.
+4. Only after comprehensive coverage, integrate complete physical
+   clearance into the fail-closed spawn probe; hazard/script checks and
+   disconnect/map-reset lifecycle remain additional gates.
