@@ -1,3 +1,4 @@
 @echo off
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0Set-ServerCheats.ps1" -Mode Stock
+cd /d "%~dp0"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0Setup-KPCServerTools.ps1" -Uninstall
 pause

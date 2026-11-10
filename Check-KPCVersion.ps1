@@ -22,6 +22,16 @@ function Assert-KPCServerVersion([string]$Exe,$GameProfile) {
     $exeHash = Read-KPCSignature $Exe
     $dllHash = Read-KPCSignature 'server.dll'
     $objectHash = Read-KPCSignature 'object.lto'
+    # The DLL proxy preserves the official engine under a separate filename.
+    $metaPath = Join-Path $PSScriptRoot 'SERVER_TOOLS_BUILD.json'
+    if (Test-Path -LiteralPath $metaPath) {
+        $meta = Get-Content -Raw -LiteralPath $metaPath | ConvertFrom-Json
+        if ($dllHash -eq $meta.proxy_sha256) {
+            $dllHash = Read-KPCSignature 'server.original.dll'
+            Write-Host '[KPCFix Server Tools] Runtime proxy recognized; checking the preserved original engine.'
+        }
+    }
+
     $actualObjectHash = $objectHash
     $knownTests = @{
         '054c78e8655d17c0445d53a259a4c5939e123416763a678954c88da6e21aaa45' = 'Live console cheats revocation fix; initially enabled'
@@ -72,3 +82,4 @@ if ($MyInvocation.InvocationName -ne '.') {
         exit 1
     }
 }
+

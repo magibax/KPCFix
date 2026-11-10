@@ -6,7 +6,7 @@ from pathlib import Path
 import hashlib,json,struct,sys,os
 from unicorn import Uc,UC_ARCH_X86,UC_MODE_32,UC_HOOK_CODE
 from unicorn.x86_const import *
-root=Path(__file__).resolve().parents[2];m=json.loads(Path(os.environ.get('KPC_TEST_PATCH_MANIFEST',str(root/'patch.json'))).read_text())
+root=Path(__file__).resolve().parents[2];m=json.loads(Path(os.environ.get('KPC_TEST_PATCH_MANIFEST',str(root/'legacy-object-patches.json'))).read_text())
 b=bytearray(Path(sys.argv[1]).read_bytes());assert hashlib.sha256(b).hexdigest()==m['original']
 mode='disabled' if '--disabled' in sys.argv else 'patched'
 for c in m['changes']:b[c['offset']]=c[mode]

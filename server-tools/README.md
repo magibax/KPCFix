@@ -1,63 +1,47 @@
-# KPCFix Server Tools
+# KPCFix Server Tools — DLL test build
 
-Windows dedicated server tools for supported official game version 1.13 installations. Includes the graphical map/rules launcher, chat logging, cheat announcements and live host control of noclip and invulnerability.
+Windows dedicated-server tools for official game version **1.13**. Supports the supplied Europe/UK, USA, German and Italian 1.13 builds. This is a local test package; the new DLL loader needs testing in Windows before publication.
 
-## Install
+## Install or migrate
 
-1. Stop the game and dedicated server for this update.
-2. Extract **all files** beside `Psycho.exe`, `dedicated.exe`, `server.dll` and `object.lto` (usually `C:\Games\Psycho\`), replacing the previous Server Tools files. Existing recognized patches are upgraded automatically; do not restore the module manually.
-3. Check the game version before launching:
+1. Close the game and dedicated server for this one-time setup. Back up your game folder.
+2. Extract this package into the game directory, normally `C:\Games\Psycho\`, beside `Psycho.exe`, `dedicated.exe`, `server.dll` and `object.lto`. Keep the package's supporting files together.
+3. Run **Setup-KPCServerTools.cmd**. It preserves the official engine as `server.original.dll`, installs our proxy as `server.dll`, and restores recognized earlier Server Tools patches to the exact original `object.lto`. Unsupported files are rejected.
+4. Run **KPC-Server-Launcher.cmd** to choose a map, server rules and initial cheat permission, then start the server. Clients should discover it in their game browser.
 
-   ```powershell
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Check-KPCVersion.ps1
-   ```
+Do not manually rename or overwrite the original `server.dll`: setup handles the backup. `KPCServerTools.dll` is the supplied proxy payload, which setup copies to the engine's expected filename. Keep `server.original.dll` beside it.
 
-4. Run **KPC-Server-Launcher.cmd**. Choose a map, rules and the initial **Allow cheats on startup** setting (default off), then start the server.
+The launcher uses its own generated `kpc-gui-server.cfg` and map list; it does not rewrite the shipped `server.cfg`. All 59 maps are listed, including campaign maps and scripted M0 introductions. Campaign maps were not designed for multiplayer and may be buggy.
 
-## Live host commands
+After setup, ordinary server starts no longer modify game binaries. The game can remain open while you start the dedicated server. The existing client `dinput.dll` is independent and remains installed as before.
 
-Enter these directly at the dedicated server's `>` prompt:
+## Features
 
-```text
-kpc_cheats 1
-kpc_cheats 0
-kpc_cheats
+- Graphical map selection and server-rule controls.
+- Optional, per-player noclip and invulnerability using the client's existing developer key bindings.
+- Live host-console permission: `kpc_cheats 1` enables cheats; `kpc_cheats 0` disables them and revokes active cheats. `kpc_cheats` shows status.
+- Everyone sees **Cheats enabled** or **Cheats disabled** when permission changes. Player toggles announce **name toggled cheat ON/OFF**.
+- Player chat is mirrored to the server console. Patch messages have one `[KPCFix Server Tools]` prefix and preserve the command prompt and pending input.
+- Disabled cheat requests are rejected silently. A player's cheat state applies only to that player.
+
+## Settings and removal
+
+Setup creates `KPCServerTools.ini` if absent:
+
+```ini
+[ServerTools]
+Enabled=1
+AllowCheats=0
 ```
 
-- `kpc_cheats 1` enables cheat permission immediately.
-- `kpc_cheats 0` disables permission immediately and clears connected players' invulnerability. Clients with confirmed noclip receive a targeted OFF correction; late ON reports are also corrected without sending duplicate toggle responses.
-- `kpc_cheats` prints the current permission setting in the server console.
+`Enabled=0` makes the proxy pass calls through to the official engine without installing Server Tools hooks; restart the server after changing it. `AllowCheats` sets initial permission, which the graphical launcher updates from its checkbox. Use the console command for live changes. Chat logging and announcements are active whenever the tools are enabled. Startup/errors are also appended to `KPCServerTools.log`.
 
-No restart, file patch or client closure is needed for these console commands. Both startup modes include the live hooks, so enabling after starting disabled works too. The host command is registered in the dedicated application's command table; ordinary client chat cannot change it. Each actual permission change sends exactly **Cheats enabled** or **Cheats disabled** in-game to all connected clients. The console receives one copy prefixed `[KPCFix Server Tools]`. Repeating the current setting only prints console status, without another broadcast.
+To remove the proxy, close the game/server and run **Restore-Original-Server.cmd**. It restores the preserved official engine to `server.dll`; `object.lto` remains stock. Old on-disk patch installers are moved to `KPCServerTools-Legacy` during migration; do not run them with this DLL installation.
 
-Rejected player requests remain silent: no cheat action, rejection notice or announcement. Normal chat is mirrored to the server console in both modes. While enabled, each player's own toggles remain individual and are announced in-game as `name toggled cheat ON/OFF`, with a prefixed console copy. Invulnerability uses the player flag; noclip uses the existing client-reported collision state, not a toggle counter. The host's disable command intentionally revokes active cheats for all connected players, with just the one host announcement.
+## How it works and validation
 
-The setting persists across map changes within the current server shell. A new server launch uses the checkbox selection again. The live console state is held in memory; it is not saved as a new startup preference.
+The small 32-bit proxy forwards the engine's two exports and intercepts its lookup of `ObjectDLLSetup`. It validates the official binaries, then installs the established Server Tools hooks in the loaded object module. It does not change the object file, PE headers or relocation table. Original game binaries are not bundled.
 
-## Hosting and configuration
+Compiled-proxy emulation passed for Europe and US engine profiles at relocated DLL/object addresses, with cheats enabled, disabled, pass-through and altered-object rejection. Hook tests cover separate player state, live revocation, client OFF acknowledgements, chat announcements and prompt restoration. These checks supplement Windows testing; they do not replace it. The preceding on-disk hooks were tested in game, but this DLL build still needs that confirmation.
 
-All 59 maps remain selectable: PM01–PM10, campaign maps, M0 introductions and the tutorial. Campaign multiplayer can be buggy and may fall back to a single-player spawn point; this does not implement co-op. The GUI provides server/player/frag/time settings, teamplay, item retention, FOV permission and starting equipment. It generates `kpc-gui-server.cfg` and `kpc-gui-maps.txt` from `server-template.cfg`; the game's `server.cfg` is untouched. The server should appear in the in-game server browser.
-
-Names and keyboard bindings are not changed. Players use the game's existing developer controls and their own bindings. Other developer commands retain their restrictions. Original engine console messages retain their original text; our logs preserve the prompt, pending command and insertion position.
-
-## Installer and rollback
-
-Initial installation/startup selection still changes `object.lto` on disk, while the game/server are closed. Live commands do not touch the file. A runtime DLL conversion that leaves the original module unchanged on disk has not been implemented.
-
-The installer verifies known input hashes, exact normalization to the original module, target hashes and the replaced file, retaining the original backup `object.lto.before-noclip-test`. Its Windows PowerShell file-replacement correction is included. Known earlier cheat/chat and startup-switch builds are accepted.
-
-- `Enable-ServerCheats.cmd`: install with initial cheats enabled.
-- `Disable-ServerCheats.cmd`: install with initial cheats disabled, retaining live control and chat logging.
-- `Restore-Original-Server.cmd`: remove every server binary patch and restore the exact original module.
-
-Close the game/server before using these installer/restore commands. The launcher reapplies the selected initial mode on the next start; use the live console commands to change a running server.
-
-## Verification
-
-The supplied four region copies of original 1.13 `object.lto` are identical. Europe/Germany/Italy share a dedicated executable/server DLL profile; the US pair differs. Keep each official pair together. No proprietary game binaries are distributed.
-
-x86 emulator checks passed for both dedicated profiles and both initial modes: native host-command registration/callback arguments, enabling/disabling, exact broadcast text, silent gates, two-player revocation, late-report deduplication, disconnect cleanup, command/cursor preservation and full patch rollback. The revised test executes the original object-list iterators and player conversion, includes a non-player entry, and guards opaque object memory against writes. It reproduces the old invalid-access bug and passes with this correction. Relocation was also exercised at a nonpreferred module address. PowerShell syntax checks passed. The user confirmed the corrected live-control/revocation build works on the European-family Windows setup. US native testing, broader two-client testing and map-change coverage remain outstanding.
-
-Source and tests are included under `source/`. GNU binutils and Python build the patch manifest from an exact original module; the optional `unicorn` Python package runs emulator tests. `check_live.py` accepts the stock object path and dedicated executable path, plus `--disabled` for the off startup mode. `check_modes.py` validates mode hashes and rollback; `run_checks.py` covers packet and console hooks. See `LICENSE` for the MIT license.
-
-The published Server Tools 0.1.0 ZIP predates these live-control updates. This folder contains the current main-branch implementation.
+Source and build/test instructions are in `source/README.md`. Published release downloads may predate this DLL conversion; use the current server-tools directory for this build.

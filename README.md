@@ -33,3 +33,7 @@ FpsLimiter = off
 ```
 
 For a 165 FPS cap, use `FpsLimiter = flipend(165)`. If a scripted sequence misbehaves, restore the shipped values (`borderless`, `wait(1)`, and `flipend(60)`) and replay it at 60 FPS.
+
+## Server Tools
+
+The [Server Tools](server-tools/README.md) provide a graphical launcher for all 59 maps, server-rule controls, console chat logging and live `kpc_cheats 0/1` permission. Copy the contents of `server-tools/` into the game directory and run **Setup-KPCServerTools.cmd** once before using **KPC-Server-Launcher.cmd**. The DLL applies the hooks in memory and leaves `object.lto` stock after migration. Campaign maps are selectable but may be buggy in multiplayer. Published release downloads are unchanged; this DLL conversion is currently available from the repository.

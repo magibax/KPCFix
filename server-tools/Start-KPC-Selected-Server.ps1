@@ -10,14 +10,16 @@ if (-not $Exe) { throw 'Dedicated EXE missing: put these files in the installed 
 . (Join-Path $PSScriptRoot 'Check-KPCVersion.ps1')
 $GameProfile = Assert-KPCGameVersion
 Assert-KPCServerVersion $Exe $GameProfile
-foreach ($Required in @('kpc-gui-server.cfg','kpc-gui-maps.txt','Set-ServerCheats.ps1','patch.json')) {
-    if (-not (Test-Path -LiteralPath $Required)) { throw "Missing $Required; keep the starter configuration beside this launcher." }
+foreach ($Required in @('kpc-gui-server.cfg','kpc-gui-maps.txt','KPCServerTools.ini')) {
+ if (-not (Test-Path -LiteralPath $Required)) { throw "Missing $Required; run Setup-KPCServerTools.cmd first." }
 }
-# Apply and verify the selected policy before starting the dedicated process.
-# Run separately so patch failures produce an exit code instead of closing this worker.
-& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'Set-ServerCheats.ps1') -Mode $Cheats
-if ($LASTEXITCODE -ne 0) { throw 'Could not apply the server cheat setting. Server was not started.' }
-Assert-KPCServerVersion $Exe $GameProfile
+# Initial policy is configuration only; game binaries are never rewritten at launch.
+$iniPath=Join-Path $PSScriptRoot 'KPCServerTools.ini'
+$ini=[IO.File]::ReadAllText($iniPath)
+$value=if($Cheats -eq 'Enabled'){'1'}else{'0'}
+if($ini -notmatch '(?im)^\s*AllowCheats\s*=') {throw 'AllowCheats is missing from KPCServerTools.ini.'}
+$ini=[regex]::Replace($ini,'(?im)^\s*AllowCheats\s*=.*$',('AllowCheats='+$value))
+[IO.File]::WriteAllText($iniPath,$ini,[Text.Encoding]::ASCII)
 # Write to this console's input buffer, not the active desktop window.
 Add-Type -TypeDefinition @'
 using System;
