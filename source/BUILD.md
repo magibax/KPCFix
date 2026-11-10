@@ -1,6 +1,6 @@
 # Building the Windows proxy
 
-From the package root, run:
+From the checkout or extracted client package root, run the following with a fresh output directory. The release workflow reproduces the tracked client with Ubuntu 24.04, GCC 13.3.0 and GNU binutils 2.42.
 
 ```sh
 python3 source/build.py --build-dir build --output build/dinput.dll
@@ -20,4 +20,4 @@ python3 source/verify.py --archive KPCFix-region-research-final.tar.gz --output 
 
 The checked DLL is the package-root `dinput.dll`; the matching symbol map is `source/SYMBOLS.json`. To check a new build, copy both of those files from that build before running verification. The disassembly audit additionally requires `objdump`. Checks execute the proxy and original game code in an x86 emulator; Windows I/O, presentation, and socket services are simulated.
 
-The R2 client hook fits fullscreen Smacker playback to 4:3 and optionally smooths the movie. The edition-specific shell hooks scale the enemy frame, fill and label. At HUD scales other than 100%, the label uses the row midpoint and font height.
+The client cinematic hook fits fullscreen Smacker playback to 4:3 and optionally smooths the movie. The edition-specific shell hooks scale the enemy frame, fill and label. At HUD scales other than 100%, the label uses the row midpoint and font height.

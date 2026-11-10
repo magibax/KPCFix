@@ -8,16 +8,10 @@ KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high f
 - **Readable HUD at native resolution.** Menu cursor and tooltips follow the HUD scale. The default HUD scale is 150% at 1080p. For 1440p, select 2560×1440 in game and set `ScalePercent=200` under `[HUD]` in `KPCFix.ini`.
 - **4:3 cinematics.** Fullscreen movies are centred on widescreen displays. Movie smoothing is enabled by default. In the `[AspectRatio]` section of `KPCFix.ini`, set `CinematicFilter=0` for sharper movies or `Cinematics4x3=0` for the original stretched playback.
 
-**TO DO:** 
-- Engine performance optimisation: Inspect the engine for opportunities to improve FPS, reduce rendering overhead and optimise performance without introducing instability.
-- Anisotropic filtering & antialiasing: Investigate enabling or improving anisotropic filtering and antialiasing, including within the game's menus.
-- Graphics configuration: Investigate c_GlobalDetail, GibDetail, LodOffset and other graphics settings to understand their behaviour, performance impact and sensible defaults for modern hardware.
-- Graphics fidelity improvements: Investigate engine-level methods to improve rendering quality, texture filtering, model detail, draw distances and other visual effects.
-
-## Install
+## Install the Windows client
 
 1. Patch a clean installation of your game to **1.13**, then close the game and launcher. Back up any existing local DLLs or INIs you are replacing.
-2. [Download the Windows release ZIP](https://github.com/magibax/KPCFix/releases/download/kpcfix-1.13-r4/KPCFix-Windows-1.13.zip). Extract its contents beside `Psycho.exe`, usually in `C:\Games\Psycho\`.
+2. [Download the Windows client R4 ZIP](https://github.com/magibax/KPCFix/releases/download/kpcfix-1.13-r4/KPCFix-Windows-1.13.zip). Extract its contents beside `Psycho.exe`, usually in `C:\Games\Psycho\`.
 3. Before launching the game, run `Check-KPCVersion.cmd` from that folder. Continue only if it reports **PASS** and identifies your region as a supported official 1.13 build.
 4. **Recommended for the first launch after patching:** run `Launch-KPCFix.cmd`. It applies the initial KPCFix setup and opens the shipped `Psycho.exe` launcher. In the launcher, open **Display** and choose your desired resolution. Start the game and save/select a profile with that same resolution. The initial preset is **1920×1080, 60 FPS, VSync on**.
 5. After that first setup, once the desired resolution is saved in both the launcher and your game profile, you can start the game directly with the shipped `Psycho.exe`. Run `Check-KPCVersion.cmd` again after replacing or repatching game files. Keyboard bindings are yours to configure in the game.
@@ -36,7 +30,7 @@ For a 165 FPS cap, use `FpsLimiter = flipend(165)`. If a scripted sequence misbe
 
 ## Server Tools
 
-Hosting tools are a separate download: [KPCFix Server Tools 1.0.0](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3). The main KPCFix ZIP contains client fixes only, including the multiplayer browser connection fix.
+Hosting tools are a separate download: [KPCFix Server Tools R3](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3). The main KPCFix ZIP contains client fixes only, including the multiplayer browser connection fix.
 
 Server Tools includes a compact graphical launcher for all 59 maps, server-rule controls, live `kpc_cheats 0/1` permission and console chat logging. Campaign maps are experimental and may be buggy in multiplayer. Cheat announcements appear in chat only.
 
@@ -45,3 +39,12 @@ Extract the Server Tools ZIP into the game directory, close the game/server and 
 ## Building and testing
 
 See the [client build instructions](source/BUILD.md), [architecture](ARCHITECTURE.md), [configuration reference](CONFIGURATION.md) and [verification procedures](TESTING.md).
+
+For edition fingerprints, see [compatibility notes](COMPATIBILITY-NOTES.md). Maintainers can find the packaging and tag procedure in the [release guide](https://github.com/magibax/KPCFix/blob/main/RELEASING.md). Experimental campaign hosting is tracked in [co-op research](https://github.com/magibax/KPCFix/tree/feature/coop-campaign/coop).
+
+## Graphics research
+
+- Engine performance optimisation: Inspect the engine for opportunities to improve FPS, reduce rendering overhead and optimise performance without introducing instability.
+- Anisotropic filtering & antialiasing: Investigate enabling or improving anisotropic filtering and antialiasing, including within the game's menus.
+- Graphics configuration: Investigate c_GlobalDetail, GibDetail, LodOffset and other graphics settings to understand their behaviour, performance impact and sensible defaults for modern hardware.
+- Graphics fidelity improvements: Investigate engine-level methods to improve rendering quality, texture filtering, model detail, draw distances and other visual effects.

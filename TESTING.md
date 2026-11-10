@@ -19,3 +19,9 @@ From the repository root build the client with the command in [source/BUILD.md](
 | Server installation and migration | Test clean install, recognised legacy object restore, existing proxy upgrade, repeat setup and uninstall. Compare stock object and backend hashes throughout. Confirm an existing active INI survives setup. |
 
 Record toolchain, DLL hashes, regional files, OS or Wine version, renderer and observed results. Emulator assertions, byte-identical builds and native playtests answer different questions.
+
+## Release package checks
+
+From the repository root run `python3 -m unittest discover -s tools -p 'test_*.py'`. Build both archives using the [release procedure](https://github.com/magibax/KPCFix/blob/main/RELEASING.md). Verify the internal manifests, compare ZIP member paths case-insensitively across products and record the ZIP hash with the playtest results.
+
+For an upgrade, test with the official engine already preserved as `server.original.dll`. A recognised active proxy should upgrade in place. An unrecognised active `server.dll` should stop setup without replacing it. With a verified original backup, move the active DLL aside and rerun setup. Confirm the original engine hash and active INI survive both paths.

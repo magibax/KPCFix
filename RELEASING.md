@@ -27,29 +27,14 @@ relationship between source, installer and reproducible build evidence.
 
 ## Tag naming and trigger
 
-| Product | Existing stable | Next suitable tag (after verification) | Release asset |
-| --- | --- | --- | --- |
-| Client | `kpcfix-1.13-r4` | `kpcfix-1.13-r5` (only when client changes warrant it) | `KPCFix-Windows-1.13.zip` |
-| Server Tools | `server-tools-v1.0.0-r2` | `server-tools-v1.0.0-r3` | `KPCFix-Server-Tools-1.0.0.zip` |
+| Product | Published tag | Installable asset |
+| --- | --- | --- |
+| Windows client | [kpcfix-1.13-r4](https://github.com/magibax/KPCFix/releases/tag/kpcfix-1.13-r4) | `KPCFix-Windows-1.13.zip` |
+| Server Tools | [server-tools-v1.0.0-r3](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3) | `KPCFix-Server-Tools-1.0.0.zip` |
 
-For the current completed server beta integration, only a **new Server Tools
-release** is needed. The existing Windows client release remains valid if the
-client executable and its distributed assets have not changed.
+Server Tools R3 was published from `a034fa6`. Its ZIP SHA-256 is `bb518c27864b59a41e9425e015071bc99cbf26d1a724532edf5fe944307c6646`. Later changes to the upgrade guidance on main postdate that ZIP.
 
-To create the server revision after the workflow and live checks succeed:
-
-```sh
-git fetch origin
-git switch main
-git pull --ff-only origin main
-git tag -a server-tools-v1.0.0-r3 -m "KPCFix Server Tools 1.0.0 R3"
-git push origin server-tools-v1.0.0-r3
-```
-
-Inspect [Actions](https://github.com/magibax/KPCFix/actions) and the new
-[Releases](https://github.com/magibax/KPCFix/releases) entry. Do not push a
-tag until the commit to be released has passed validation. No tag or GitHub
-Release is created merely by merging a feature branch or opening a PR.
+For a subsequent revision, choose the next unused tag for the affected product. Verify the intended commit and push its annotated tag. The tag workflow creates the release and uploads the ZIP and checksum. After publication, check the download and update the product link in the project README and its entry in the client checksum manifest.
 
 ## Reproducibility and dependency boundary
 
