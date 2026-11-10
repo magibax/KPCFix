@@ -106,4 +106,4 @@ Do not enable more than three players, assume safe reconnect replacement, or gen
 
 ## Next gate
 
-After the third-player test, the next engineering gate is robust disconnect/reconnect slot reclamation, then collision-validated nearby spawn selection, all-map entry anchors, and regressions against PM01 and normal server mode.
+The three-player R1M2B prototype has passed live tests. The next engineering gate is the [general allocator and physics adapter](GENERAL-ALLOCATOR.md): verified floor/volume queries, proper player departure and world reset, support for both independently identified player-placement paths, all-map entry anchors, and regressions against PM01 and normal server mode.
