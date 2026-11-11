@@ -60,7 +60,7 @@ fixed, live-validated or ready to ship:
   change, synthetic interrupted-write regression, four-region emulator
   run and Windows test.
 - **Client `ui.c` base-relative address and HUD log site-count drift.**
-  Group with a future `kpcfix-1.13-r5` source change and rebuild,
+  Group with a future `kpcfix-v1.1.0` source change and rebuild,
   not a documentation-only R4 update.
 - **`proxy.c` split and stale helper.** Refactoring the experimental
   proxy and removing the older public checker helper both require
