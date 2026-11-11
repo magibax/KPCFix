@@ -158,6 +158,9 @@ jobs:
       - name: Execute real PowerShell launcher INI edit block against temp fixtures
         shell: pwsh
         run: ./tools/Test-KPCServerIni.ps1
+      - name: Repeat the launcher INI test under Windows PowerShell 5.1
+        shell: powershell
+        run: ./tools/Test-KPCServerIni.ps1
 
   publish-client:
     if: startsWith(github.ref, 'refs/tags/kpcfix-1.13-r')

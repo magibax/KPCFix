@@ -25,19 +25,23 @@ try {
  & $apply
  $actual=[IO.File]::ReadAllText($iniPath)
  if($actual -ne "[ServerTools]`r`nEnabled=1`r`nAllowCheats=1`r`n"){throw "CRLF update failed: $actual"}
- # Preserve UTF-8 BOM and Unicode comments when inserting.
+ # A UTF-8 BOM is dropped; Unicode comments and CRLF survive the rewrite.
+ $accent=[string][char]0xE9
  $bom=([Text.UTF8Encoding]::new($true))
- [IO.File]::WriteAllText($iniPath,"[ServerTools]`r`n; café`r`nEnabled=1`r`n",$bom)
- $Cheats='Disabled'
+ [IO.File]::WriteAllText($iniPath,"[ServerTools]`r`n; caf$accent`r`nEnabled=1`r`n",$bom)
+ $Cheats='Enabled'
  & $apply
  $bytes=[IO.File]::ReadAllBytes($iniPath)
- if($bytes.Length -lt 3 -or $bytes[0] -ne 239 -or $bytes[1] -ne 187 -or $bytes[2] -ne 191){throw 'UTF-8 BOM not preserved'}
+ if($bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191){throw 'UTF-8 BOM was not removed'}
  $actual=[IO.File]::ReadAllText($iniPath)
- if(-not $actual.Contains('; café') -or -not $actual.Contains("AllowCheats=0`r`n")){throw 'Unicode text or CRLF not preserved'}
- # Reference observation on real Windows: the proxy DLL reads this file with
- # GetPrivateProfileIntW. 1 = section found, 7 = fallback (section missed).
+ if($actual -ne "[ServerTools]`r`nAllowCheats=1`r`n; caf$accent`r`nEnabled=1`r`n"){throw "BOM rewrite changed other content: $actual"}
+ # On real Windows, read back through the proxy DLL's own API, GetPrivateProfileIntW.
+ # 1 = section found, 7 = fallback (section missed).
  if($env:OS -eq 'Windows_NT'){
   Add-Type -Namespace KPCTest -Name Ini -MemberDefinition '[DllImport("kernel32.dll",CharSet=CharSet.Unicode,ExactSpelling=true)] public static extern uint GetPrivateProfileIntW(string section,string key,int fallback,string file);'
+  $rewritten=[KPCTest.Ini]::GetPrivateProfileIntW('ServerTools','AllowCheats',7,$iniPath)
+  if($rewritten -ne 1){throw "GetPrivateProfileIntW could not read the rewritten INI: $rewritten"}
+  # Reference observation, not an assertion: why the BOM is dropped.
   $control=Join-Path $testDir 'bom-control.ini'
   [IO.File]::WriteAllText($control,"[ServerTools]`r`nAllowCheats=1`r`n",$bom)
   $withBom=[KPCTest.Ini]::GetPrivateProfileIntW('ServerTools','AllowCheats',7,$control)
@@ -52,5 +56,5 @@ try {
  try {$Cheats='Disabled'; & $apply} catch {$failed=$true}
  if(-not $failed){throw 'Missing [ServerTools] should have failed'}
  if([IO.File]::ReadAllText($iniPath) -ne "[Coop]`nTraceCampaign=0`n"){throw 'Invalid INI unexpectedly rewritten'}
- Write-Host 'PASS: Windows INI insertion, CRLF, BOM/Unicode and fail-closed missing section'
+ Write-Host 'PASS: Windows INI insertion, CRLF, BOM removal/Unicode and fail-closed missing section'
 }finally {if([IO.Directory]::Exists($testDir)){[IO.Directory]::Delete($testDir,$true)}}

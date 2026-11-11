@@ -37,7 +37,7 @@ Server Tools revision. A passing CI run is not a substitute for them.
 | Experimental v7/v8 to stable | With verified server.original.dll, replace payload/manifest with stable candidate, rerun setup, confirm approved original proxy replaced and no co-op diagnostics are emitted |
 | Unrecognized active server.dll | Setup must stop without replacing files; with verified original backup, move the unknown DLL aside and retry explicitly |
 | Existing INI missing AllowCheats | Launch GUI with cheats disabled then enabled; check the key is inserted under [ServerTools], value toggles, and all other settings/comments are unchanged |
-| Text encoding and line endings | Test LF, CRLF and UTF-8 BOM INIs, compare bytes except the deliberate key insertion/update |
+| Text encoding and line endings | Test LF, CRLF and UTF-8 BOM INIs, compare bytes except the deliberate key insertion/update and the removed BOM |
 | Remove / reinstall | Restore official server.dll and verify object.lto untouched; reinstall stable payload and check DLL and backend hashes |
 | Disabled hooks | Set Enabled=0, restart, confirm original engine pass-through and no experimental trace markers |
 
