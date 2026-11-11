@@ -1,7 +1,7 @@
 param(
  [Parameter(Mandatory=$true)][string]$Map,
  [ValidateSet('Enabled','Disabled')][string]$Cheats='Disabled',
- # EXPERIMENTAL co-op MVP (feature branch DLL only): R1M2B -> R1M2C route.
+ # EXPERIMENTAL co-op MVP (feature branch DLL only): R1M2B -> R1M2C -> R1M3A route.
  [switch]$Coop
 )
 $ErrorActionPreference = 'Stop'
@@ -18,7 +18,9 @@ foreach ($Required in @('kpc-gui-server.cfg','kpc-gui-maps.txt','KPCServerTools.
 if ($Coop) {
  if ($Map -ne 'worlds\realm1\R1M2B') { throw 'The co-op MVP route starts at worlds\realm1\R1M2B.' }
  $route = @(Get-Content -LiteralPath 'kpc-gui-maps.txt' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
- if ($route -notcontains 'worlds\realm1\R1M2C') { throw 'Co-op map list must contain worlds\realm1\R1M2C.' }
+ foreach ($world in 'worlds\realm1\R1M2C','worlds\realm1\R1M3A') {
+  if ($route -notcontains $world) { throw "Co-op map list must contain $world." }
+ }
 }
 # Initial policy is configuration only; game binaries are never rewritten at launch.
 $iniPath=Join-Path $PSScriptRoot 'KPCServerTools.ini'

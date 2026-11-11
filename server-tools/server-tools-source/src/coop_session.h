@@ -22,7 +22,10 @@
 #define COOP_MSG_MAX 112u
 #define COOP_WORLD_MAX 64u
 #define COOP_COMMAND_MAX 64u
-#define COOP_ROUTE_LEN 2u
+/* Windows evidence: R1M2B -> R1M2C changed via the host !next override; on
+ * R1M2C a golden-mirror exit object reported NextWorld realm1/r1m3a (refused
+ * by the earlier build). A natural R1M2C -> R1M3A change is not yet observed. */
+#define COOP_ROUTE_LEN 3u
 #define COOP_TRANSITION_TIMEOUT_MS 30000u
 #define COOP_LOAD_GRACE_MS 90000u
 
@@ -57,6 +60,7 @@ typedef struct {
  unsigned int transition_epoch;     /* debounce: one change per epoch */
  unsigned int transition_ms,epoch_ms;
  unsigned int duplicate_exits,rejected_exits,full_rejects;
+ unsigned int reject_reply_epoch;    /* epoch+1 of the last off-route reply (0 = none) */
  int host;                          /* member index or -1 */
  CoopMember m[COOP_SESSION_MAX_MEMBERS];
 } CoopSession;
@@ -67,7 +71,7 @@ typedef struct {
  char msg[COOP_MSG_MAX];
 } CoopResult;
 
-static const char *const coop_route[COOP_ROUTE_LEN]={"realm1/r1m2b","realm1/r1m2c"};
+static const char *const coop_route[COOP_ROUTE_LEN]={"realm1/r1m2b","realm1/r1m2c","realm1/r1m3a"};
 
 /* ---------- bounded string helpers (no libc) ---------- */
 static unsigned int coop_strlen(const char *s,unsigned int max){
@@ -134,7 +138,7 @@ static int coop_route_index(const char *world){
  return -1;
 }
 static const char *coop_route_label(unsigned int pos){
- static const char *const label[COOP_ROUTE_LEN]={"R1M2B","R1M2C"};
+ static const char *const label[COOP_ROUTE_LEN]={"R1M2B","R1M2C","R1M3A"};
  return pos<COOP_ROUTE_LEN?label[pos]:"?";
 }
 static const char *coop_phase_name(int phase){
@@ -407,7 +411,11 @@ static void coop_session_exit(CoopSession *s,const char *next_world,unsigned int
  idx=coop_route_index(next_world);
  if(idx<0||(unsigned int)idx!=s->route_pos+1){
   s->rejected_exits++;
-  coop_result(r,COOP_ACT_REPLY,"[Co-op] Exit destination is outside the MVP route; not changing world");
+  /* An exit volume can fire repeatedly while touched: reply once per epoch. */
+  if(s->reject_reply_epoch!=s->epoch+1u){
+   s->reject_reply_epoch=s->epoch+1u;
+   coop_result(r,COOP_ACT_REPLY,"[Co-op] Exit destination is outside the MVP route; not changing world");
+  }
   return;
  }
  s->start_pending=0;

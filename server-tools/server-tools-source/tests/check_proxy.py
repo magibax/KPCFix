@@ -193,8 +193,9 @@ def coop_scenario():
  assert target[0x100744]==target[0xfde97]
  said=[];ends=[];telefrag=[];nextlevels=[]
  base=scratch+0x100000;shell=base;manager=base+0x4000;players=base+0x5000;strings=base+0x8000
- write(obj+0x16de60,shell);write(shell+0x1d0,1);write(shell+0x1ae0,2)
+ write(obj+0x16de60,shell);write(shell+0x1d0,1);write(shell+0x1ae0,3)
  u.mem_write(shell+0x210,b'worlds\\realm1\\R1M2B\0');u.mem_write(shell+0x210+0x7f,b'worlds\\realm1\\R1M2C\0')
+ u.mem_write(shell+0x210+2*0x7f,b'worlds\\realm1\\R1M3A\0')
  write(obj+0x16da88,0);write(obj+0x157724,manager)
  def broadcast():
   said.append(cstr(u.reg_read(UC_X86_REG_EDX)));sp=u.reg_read(UC_X86_REG_ESP)
@@ -226,9 +227,13 @@ def coop_scenario():
   call_regs(target[0xfeec4],[],{UC_X86_REG_ESI:who,UC_X86_REG_EAX:strings},0)
   assert u.reg_read(UC_X86_REG_ESI)==who+0x1e8 and u.reg_read(UC_X86_REG_EAX)==strings
   return said[n:]
- def exit_trigger(world,flag=0):
+ def exit_trigger(world,flag=1,activator=0):
+  # Native multiplayer state: the exit's property reader sets +0x152 to 1 for
+  # every exit when the game type is non-zero (object.lto 2d33f-2d352).
+  # Stack as inside handler 2d450: [esp+4]=handler return, [esp+8]=&activator.
   trig=strings+0x400;u.mem_write(trig+0x54,world.encode()+b'\0');u.mem_write(trig+0x152,bytes([flag]))
-  call_regs(target[0x2d455],[],{UC_X86_REG_EAX:shell,UC_X86_REG_ECX:trig},0)
+  u.mem_write(trig+0xd3,b'\0');act=strings+0x700;write(act,activator)
+  call_regs(target[0x2d455],[0x1002d442,act],{UC_X86_REG_EAX:shell,UC_X86_REG_ECX:trig},0)
   assert u.reg_read(UC_X86_REG_EDX)==1  # native multiplayer gate preserved
  def next_level():
   clock[0]+=4000;call_regs(target[0x100744],[],{UC_X86_REG_ECX:shell},0)
@@ -241,25 +246,38 @@ def coop_scenario():
  assert any('Only the host' in m for m in chat(bob,'!start'))
  chat(bob,'!READY')
  out=chat(alice,'!start');assert any('Starting -> R1M2B' in m for m in out),out
- assert len(ends)==1 and ends[0]==shell and read(obj+0x16da88)==1
+ assert len(ends)==1 and ends[0]==shell and read(obj+0x16da88)==2   # count-1: native pre-increment wraps to R1M2B
  next_level();assert len(nextlevels)==1 and read(obj+0x16da88)==0
  spawn(alice);assert any('R1M2B started (epoch 1)' in m for m in said),said
  spawn(bob)
- exit_trigger('worlds\\realm1\\R1M2C',flag=1);assert len(ends)==1   # unverified flag: no change
- exit_trigger('worlds\\realm1\\R1M2C');assert len(ends)==2 and read(obj+0x16da88)==0
- for i in range(5):exit_trigger('worlds\\realm1\\R1M2C')
+ exit_trigger('worlds\\realm1\\R1M2C',flag=0,activator=0xa1);assert len(ends)==1   # not the native MP value: refused
+ exit_trigger('',activator=0xa1);assert len(ends)==1                               # missing NextWorld: refused
+ exit_trigger('worlds\\realm1\\R1M2C',activator=0xa1);assert len(ends)==2 and read(obj+0x16da88)==0
+ for i in range(5):exit_trigger('worlds\\realm1\\R1M2C',activator=0xb2)
  assert len(ends)==2,'exit must be debounced'
  next_level();assert read(obj+0x16da88)==1
  spawn(alice,path=0xf167a);spawn(bob);assert not telefrag
  roster(0xa1)                                              # Bob disconnected
  clock[0]+=1000;out=chat(alice,'!coop')
  assert any('Bob left' in m for m in said) and any('PLAYING R1M2C e2' in m for m in out),(said,out)
+ # Golden-mirror exit object on R1M2C, NextWorld as logged on Windows.
+ n=len(said);exit_trigger('worlds/realm1/r1m3a',activator=0xa1)
+ assert len(ends)==3 and read(obj+0x16da88)==1 and any('Exit reached -> R1M3A' in m for m in said[n:]),said[n:]
+ exit_trigger('worlds/realm1/r1m3a',activator=0xa1);assert len(ends)==3
+ next_level();assert read(obj+0x16da88)==2
+ spawn(alice);assert any('R1M3A started (epoch 3)' in m for m in said),said
+ n=len(said)
+ for i in range(4):exit_trigger('worlds/realm1/r1m3b',activator=0xa1)
+ assert len(ends)==3 and sum('outside the MVP route' in m for m in said[n:])==1,said[n:]
  assert any('End of the MVP route' in m for m in chat(alice,'!next'))
  text=b''.join(log).decode('latin1')
- for marker in ('build=coop-session-v1 proto=kpc-coop/1 sha256=','effective CoopSession=1','session armed kpc-coop/1',
+ for marker in ('build=coop-session-v2 proto=kpc-coop/1 sha256=','effective CoopSession=1','session armed kpc-coop/1',
                 'change [Co-op] All ready','world-loaded worlds\\realm1\\R1M2C','telefrag=skipped',
-                'exit-seen next=worlds\\realm1\\R1M2C flag152=1'):
+                'exit-refused flag152 differs','exit-seen next= flag152=1',
+                'exit-seen next=worlds\\realm1\\R1M2C flag152=1 exit=0x','activator=member:Alice start=-',
+                'exit next=worlds/realm1/r1m3a flag152=1','world-loaded worlds\\realm1\\R1M3A'):
   assert marker in text,marker
+ assert text.count('exit-seen')<=3*8,'exit logging must stay bounded per epoch'
  print('PASS co-op session hooks:',len(said),'broadcasts,',len(ends),'native end-level requests,',len(nextlevels),'NextLevel calls, telefrag skipped')
 
 call(proxy+ps['_DllMain'],[proxy,1,0],True)

@@ -64,9 +64,9 @@ $cheats.Checked=$false
 $cheats.Location=New-Object Drawing.Point(16,351)
 $cheats.Size=New-Object Drawing.Size(370,26)
 $form.Controls.Add($cheats)
-# EXPERIMENTAL co-op MVP: fixed R1M2B -> R1M2C route, max 3 players, chat lobby.
+# EXPERIMENTAL co-op MVP: fixed R1M2B -> R1M2C -> R1M3A route, max 3 players, chat lobby.
 $coop=New-Object Windows.Forms.CheckBox
-$coop.Text='EXPERIMENTAL co-op session: R1M2B -> R1M2C, max 3, chat lobby (!ready / !start)'
+$coop.Text='EXPERIMENTAL co-op session: R1M2B -> R1M2C -> R1M3A, max 3, chat lobby (!ready / !start)'
 $coop.Checked=$false
 $coop.Location=New-Object Drawing.Point(16,408)
 $coop.Size=New-Object Drawing.Size(588,26)
@@ -113,7 +113,7 @@ $button.add_Click({
    $config=[regex]::Replace($config,'(?m)^"fraglimit".*$','"fraglimit" "0"')
    $config=[regex]::Replace($config,'(?m)^"timelimit".*$','"timelimit" "0"')
    $config=[regex]::Replace($config,'(?m)^"keepitems".*$','"keepitems" "1"')
-   $mapLines=@('worlds\realm1\R1M2B','worlds\realm1\R1M2C')
+   $mapLines=@('worlds\realm1\R1M2B','worlds\realm1\R1M2C','worlds\realm1\R1M3A')
   }
   Set-Content (Join-Path $PSScriptRoot 'kpc-gui-server.cfg') $config -Encoding ASCII
   Set-Content (Join-Path $PSScriptRoot 'kpc-gui-maps.txt') $mapLines -Encoding ASCII
