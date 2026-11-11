@@ -11,6 +11,7 @@ extern U32 WINAPI GetPrivateProfileStringW(const WCHAR *,const WCHAR *,const WCH
 #include "coop_aabb_overlap.h"
 #include "coop_model_state.h"
 #include "coop_session.h"
+#include "coop_script_clock.h"
 extern HANDLE WINAPI GetStdHandle(DWORD);
 extern void WINAPI ExitProcess(UINT) __attribute__((noreturn));
 extern DWORD WINAPI VirtualQuery(const void *,void *,DWORD);
@@ -678,6 +679,33 @@ static int coop_intro;
 static struct {int valid;U32 epoch;char name[0x100];} coop_intro_snap;
 /* Proof of concept: only R1M3A's intro (cathedral1start.scr) is enabled. */
 static int coop_intro_world_allowed(U32 route_pos){return route_pos==2u;}
+/* [Coop] CoopScriptClock (default = CoopIntro): run the original script clock
+ * on wall-clock time. Evidence (stock server.dll 83b7bce8, dedicated.exe,
+ * object.lto 3a03f879):
+ *  - dedicated.exe 401c7b-401c94 runs a server frame (403ad0 -> IServerMgr
+ *    vtbl+0x50 = server.dll 2358c) only after timeGetTime advanced >= 8 ms;
+ *  - 2358c takes time = timeGetTime*0.001 (2ed76); 2a05f sets the frame's
+ *    elapsed time and 2a19c-2a1d0 clamps it to [0.01, 0.2] s, so an 8 ms
+ *    frame is credited 10 ms (game time runs 1.25x wall time on such hosts);
+ *  - the object.lto shell Update ffb70 caps that dt at 0.2 and passes it to
+ *    the script updater c5630 (call at ffba5), which advances every playing
+ *    script (c6260: time += dt; dispatch events whose time <= script time)
+ *    and its running events (camera_path update b3230, fog fade c2b60).
+ * The client plays streamed narration in real time, so script-timed
+ * subtitles, camera cuts and the window smash ran ahead of the voice. The
+ * governor (coop_script_clock.h) gives scripts min(engine dt, unpaid wall
+ * time). Only the c5630 argument changes; ea6d0 and the engine's own game
+ * time are untouched. TraceTiming=1 installs the same site as a read-only
+ * observer (dt forwarded bit-identically) when the governor is off. */
+static int coop_script_clock;
+static CoopScriptClock coop_clock;
+/* Bounded clock observation (TraceTiming=1): one calibration line for the
+ * first 10 s of frames, and during an intro one line per dispatched script
+ * event plus a summary. Totals are microseconds; frames are counted. */
+static struct {U32 frames,engine_us,given_us;} coop_clock_sum;
+static struct {int done,started;U32 t0,frames0,engine0,given0;} coop_clock_cal;
+#define COOP_INTRO_EVENT_LOG_MAX 128u
+static struct {int active;U32 script,next,logged,t0,frames0,engine0,given0;} coop_intro_trace;
 /* [Coop] CoopTestStartWorld: route world that !start loads (test option). */
 static U32 coop_start_pos;
 static int coop_start_state;   /* 0 unset, 1 accepted, 2 rejected */
@@ -1019,6 +1047,99 @@ static void *CDECL campaign_lookup(const char *path){
 typedef void (CDECL *ScriptPlayFn)(const char *);
 typedef U8 (CDECL *ScriptIsPlayingFn)(const char *);
 typedef void (CDECL *CinematicFlagFn)(U32);
+/* Script clock site ffba5 (push esi; call c5630; esi = the frame's dt as
+ * float bits). c5630 is cdecl with one argument; the caller pops it.
+ * Script object fields used by the trace (verified in c6260/c6380): +0x104
+ * event count, +0x108 event array, +0x110 script time (float), +0x114 next
+ * event index; event +4 = authored time (float). Playing list: count at
+ * 15a0a4, array at 15a0a8; c5340 resets the script (c61c0) and appends it. */
+typedef void (CDECL *ScriptUpdateFn)(U32);
+static float coop_f(U32 bits){union{U32 b;float f;}v;v.b=bits;return v.f;}
+static U32 coop_us_from_bits(U32 bits){
+ float f=coop_f(bits);
+ if(!(f>0.f))return 0;
+ if(f>1.f)return 1000000u;
+ return (U32)(I32)(f*1000000.f+0.5f);
+}
+static U32 coop_bits_from_us(U32 us){union{U32 b;float f;}v;v.f=(float)(I32)us*0.000001f;return v.b;}
+static U32 coop_ms_from_float_bits(U32 bits){
+ float f=coop_f(bits);
+ if(!(f>0.f))return 0;
+ if(f>100000.f)return 100000000u;
+ return (U32)(I32)(f*1000.f+0.5f);
+}
+static int coop_script_playing(U32 script){
+ U32 count,array,i,entry;
+ if(!coop_rd((U32)coop_image+0x15a0a4u,&count)||!coop_rd((U32)coop_image+0x15a0a8u,&array)||count>256u)return 0;
+ for(i=0;i<count;i++)if(coop_rd(array+i*4u,&entry)&&entry==script)return 1;
+ return 0;
+}
+static void coop_clock_line(const char *event,U32 frames,U32 engine_us,U32 given_us,U32 wall_ms){
+ char line[160];U32 n=0;
+ coop_text(line,&n,"frames=",sizeof line);coop_dec(line,&n,frames,sizeof line);
+ coop_text(line,&n," engine_ms=",sizeof line);coop_dec(line,&n,engine_us/1000u,sizeof line);
+ coop_text(line,&n," script_ms=",sizeof line);coop_dec(line,&n,given_us/1000u,sizeof line);
+ coop_text(line,&n," wall_ms=",sizeof line);coop_dec(line,&n,wall_ms,sizeof line);
+ coop_text(line,&n,coop_script_clock?" governor=on":" governor=off",sizeof line);
+ coop_log(event,line);
+}
+/* Log events the intro script dispatched since the last frame (bounded). */
+static void coop_intro_trace_events(U32 now){
+ U32 s=coop_intro_trace.script,count,array,next,time_bits,ev,at_bits;
+ if(!coop_rd(s+0x104u,&count)||!coop_rd(s+0x108u,&array)||!coop_rd(s+0x110u,&time_bits)||
+    !coop_rd(s+0x114u,&next)||count>4096u||next>count){coop_intro_trace.script=0;return;}
+ while(coop_intro_trace.next<next&&coop_intro_trace.logged<COOP_INTRO_EVENT_LOG_MAX){
+  char line[160];U32 n=0,i=coop_intro_trace.next++;
+  if(!coop_rd(array+i*4u,&ev)||!coop_rd(ev+4u,&at_bits))at_bits=0;
+  coop_text(line,&n,"i=",sizeof line);coop_dec(line,&n,i,sizeof line);
+  coop_text(line,&n," at_ms=",sizeof line);coop_dec(line,&n,coop_ms_from_float_bits(at_bits),sizeof line);
+  coop_text(line,&n," script_ms=",sizeof line);coop_dec(line,&n,coop_ms_from_float_bits(time_bits),sizeof line);
+  coop_text(line,&n," wall_ms=",sizeof line);coop_dec(line,&n,now-coop_intro_trace.t0,sizeof line);
+  coop_log("intro-event",line);coop_intro_trace.logged++;
+ }
+ coop_intro_trace.next=next;
+}
+static void CDECL coop_script_update(U32 dt_bits){
+ U32 now=GetTickCount(),engine_us=coop_us_from_bits(dt_bits),given_us=engine_us,bits=dt_bits;
+ int traced=0;
+ if(coop_script_clock){
+  given_us=coop_script_clock_step(&coop_clock,now,engine_us);
+  if(given_us!=engine_us)bits=coop_bits_from_us(given_us);
+ }
+ if(coop_trace_timing&&coop_intro_trace.script)traced=coop_script_playing(coop_intro_trace.script);
+ ((ScriptUpdateFn)(coop_image+0xc5630u))(bits);
+ coop_clock_sum.frames++;coop_clock_sum.engine_us+=engine_us;coop_clock_sum.given_us+=given_us;
+ if(!coop_trace_timing)return;
+ if(traced)coop_intro_trace_events(now);
+ if(!coop_clock_cal.done){
+  if(!coop_clock_cal.started){
+   coop_clock_cal.started=1;coop_clock_cal.t0=now;coop_clock_cal.frames0=coop_clock_sum.frames;
+   coop_clock_cal.engine0=coop_clock_sum.engine_us;coop_clock_cal.given0=coop_clock_sum.given_us;
+  }else if(now-coop_clock_cal.t0>=10000u){
+   coop_clock_cal.done=1;
+   coop_clock_line("clock-calibration",coop_clock_sum.frames-coop_clock_cal.frames0,
+     coop_clock_sum.engine_us-coop_clock_cal.engine0,coop_clock_sum.given_us-coop_clock_cal.given0,now-coop_clock_cal.t0);
+  }
+ }
+}
+static void coop_intro_trace_begin(void){
+ U32 count,array,script;
+ coop_intro_trace.active=0;coop_intro_trace.script=0;
+ if(!coop_trace_timing)return;
+ coop_intro_trace.active=1;coop_intro_trace.next=0;coop_intro_trace.logged=0;
+ coop_intro_trace.t0=GetTickCount();coop_intro_trace.frames0=coop_clock_sum.frames;
+ coop_intro_trace.engine0=coop_clock_sum.engine_us;coop_intro_trace.given0=coop_clock_sum.given_us;
+ if(coop_rd((U32)coop_image+0x15a0a4u,&count)&&count&&count<=256u&&
+    coop_rd((U32)coop_image+0x15a0a8u,&array)&&coop_rd(array+(count-1u)*4u,&script))coop_intro_trace.script=script;
+ else coop_log("intro-trace","script object not found; event lines unavailable");
+}
+static void coop_intro_trace_end(void){
+ if(!coop_intro_trace.active)return;
+ coop_clock_line("intro-clock",coop_clock_sum.frames-coop_intro_trace.frames0,
+   coop_clock_sum.engine_us-coop_intro_trace.engine0,coop_clock_sum.given_us-coop_intro_trace.given0,
+   GetTickCount()-coop_intro_trace.t0);
+ coop_intro_trace.script=0;coop_intro_trace.active=0;
+}
 static void coop_intro_frame(U32 now){
  CoopResult r;int act=coop_session_intro_tick(&coop_state,now,&r);
  if(act==COOP_ACT_INTRO_START){
@@ -1031,16 +1152,18 @@ static void coop_intro_frame(U32 now){
    coop_session_intro_done(&coop_state,0,&r);
    coop_log("intro-failed","script did not enter the playing list");
    runtime_broadcast(coop_image,r.msg);
-  }else coop_log("intro-playing",r.msg);
+  }else{coop_log("intro-playing",r.msg);coop_intro_trace_begin();}
  }else if(act==COOP_ACT_INTRO_ABORT){
   ((CinematicFlagFn)(coop_image+0xc5a10u))(1u);
   ((CinematicFlagFn)(coop_image+0xc59a0u))(0u);
   coop_log("intro-abort","overran; user_input on and letterbox off broadcast");
+  coop_intro_trace_end();
   runtime_broadcast(coop_image,r.msg);
  }else if(coop_state.phase==COOP_PHASE_INTRO_RUNNING&&
           !((ScriptIsPlayingFn)(coop_image+0xc55b0u))(coop_intro_snap.name)){
   coop_session_intro_done(&coop_state,1,&r);
   coop_log("intro-finished",coop_intro_snap.name);
+  coop_intro_trace_end();
   runtime_broadcast(coop_image,r.msg);
  }
 }
@@ -1107,7 +1230,7 @@ static void make_call(OptionalSite *s,U8 *b,const void *target){
  s->hooked[0]=0xe8;copy(s->hooked+1,(const U8 *)&rel,4);
  for(i=5;i<s->size;i++)s->hooked[i]=0x90;
 }
-#define OPTIONAL_SITES 10u
+#define OPTIONAL_SITES 11u
 static void optional_sites(OptionalSite *s,U8 *b){
  static const struct {U32 rva,size;U8 original[6];} table[OPTIONAL_SITES]={
   {SPAWN_POS_CALL_RVA,6,{0xff,0x91,0xe0,0x01,0x00,0x00}},
@@ -1120,6 +1243,7 @@ static void optional_sites(OptionalSite *s,U8 *b){
   {0xfde97,5,{0xe8,0x24,0x27,0x00,0x00}},        /* console nextlevel -> NextLevel */
   {0x10494b,5,{0xe8,0x00,0x64,0xfb,0xff}},       /* WorldProperties -> music event bad50 */
   {0xffbbf,5,{0xe8,0x5c,0x0b,0x00,0x00}},        /* shell Update -> 100720 (per frame) */
+  {0xffba5,5,{0xe8,0x86,0x5a,0xfc,0xff}},        /* shell Update -> script clock c5630 */
  };
  U32 i;
  for(i=0;i<OPTIONAL_SITES;i++){s[i].rva=table[i].rva;s[i].size=table[i].size;copy(s[i].original,table[i].original,6);}
@@ -1133,6 +1257,7 @@ static void optional_sites(OptionalSite *s,U8 *b){
  make_call(&s[7],b,(const void *)coop_next_level);
  make_call(&s[8],b,(const void *)coop_music_event);
  make_call(&s[9],b,(const void *)coop_frame);
+ make_call(&s[10],b,(const void *)coop_script_update);
  s[0].enabled=spawn_trace_enabled;
  s[1].enabled=spawn_separation_enabled||coop_session_enabled;
  s[2].enabled=campaign_trace||coop_session_enabled;
@@ -1140,6 +1265,7 @@ static void optional_sites(OptionalSite *s,U8 *b){
  for(i=4;i<8;i++)s[i].enabled=coop_session_enabled;
  s[8].enabled=coop_session_enabled&&(coop_trace_music||coop_music);
  s[9].enabled=coop_session_enabled&&(coop_music||coop_intro);
+ s[10].enabled=coop_session_enabled&&(coop_script_clock||coop_trace_timing);
 }
 static int apply_object(HMODULE module){
  U8 *b=(U8 *)module;U8 hash[32],expected[8];U32 i,j,old,restore,already=1;
@@ -1182,6 +1308,7 @@ static int apply_object(HMODULE module){
  }
  if(coop_session_enabled){
   coop_image=b;coop_session_init(&coop_state,coop_min_players,coop_max_players);coop_t0=GetTickCount();
+  coop_script_clock_reset(&coop_clock);
   coop_state.start_pos=coop_start_pos;
  }
  for(i=0;i<OPTIONAL_SITES;i++)if(site[i].enabled)copy(b+site[i].rva,site[i].hooked,site[i].size);
@@ -1287,6 +1414,7 @@ static void initialize(void){
  coop_trace_music=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceMusic",0,ini_path)!=0;
  coop_music=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopMusic",1,ini_path)!=0;
  coop_intro=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopIntro",0,ini_path)!=0;
+ coop_script_clock=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopScriptClock",coop_intro,ini_path)!=0;
  /* Test-only start world: accepted only if it names a route world exactly
   * (case-insensitive ASCII); anything else is ignored (start stays R1M2B). */
  coop_start_pos=0;coop_start_state=0;
@@ -1321,6 +1449,9 @@ static void initialize(void){
     "[KPCFix Co-op] effective CoopMusic=1 (per-player world music start after spawn)":
     "[KPCFix Co-op] effective CoopMusic=0");
   if(coop_intro)log_file("[KPCFix Co-op] effective CoopIntro=1 (original starting_cinematic after all players are in; R1M3A only)");
+  if(coop_session_enabled&&(coop_intro||coop_script_clock))log_file(coop_script_clock?
+    "[KPCFix Co-op] effective CoopScriptClock=1 (script clock limited to wall-clock time)":
+    "[KPCFix Co-op] effective CoopScriptClock=0 (script clock = engine frame time)");
   if(coop_start_state==1){
    char line[96];U32 m=0;coop_text(line,&m,"[KPCFix Co-op] effective CoopTestStartWorld=",sizeof line);
    coop_text(line,&m,coop_route_label(coop_start_pos),sizeof line);coop_text(line,&m," (test start)",sizeof line);log_file(line);

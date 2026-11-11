@@ -22,11 +22,12 @@ after changing a switch.
 | `CoopIntermission` | 0 | 0: change world through the native pending-NextLevel flag, without the multiplayer scoreboard. 1: native intermission (scoreboard; waits for a player's fire/use) |
 | `CoopMusic` | 1 | Session only: send each player, once per map and after it spawns, the world's original music start (LOAD_STRING, TRANSITION, READY/PLAY, INTENSITY), to that client only. 0 restores the stock one-time broadcast at world initialisation |
 | `CoopIntro` | 0 | EXPERIMENTAL, session only: play the world's original `starting_cinematic` once for the whole session when every present member has entered the new world (3 s settle, 30 s barrier timeout, never with zero players). R1M3A only |
+| `CoopScriptClock` | = `CoopIntro` | Session only: limit the original script clock (object.lto `0xc5630`, call site `0xffba5`) to wall-clock time. The stock dedicated server credits each 8 ms frame as 10 ms (engine minimum frame time), so scripts ran 1.25× fast against the client's real-time narration. 0 = engine frame time. Engine game time is unchanged |
 | `CoopTestStartWorld` | empty | TEST ONLY: route world `!start` loads (`R1M2B`, `R1M2C` or `R1M3A`, case-insensitive). Any other value is ignored and logged |
 | `TraceMusic` | 0 | Session diagnostic: log `music-world …` when a world creates its music event (call site `0x10494b`) |
-| `TraceTiming` | 0 | Session diagnostic: prefix co-op log lines with `t=<ms since session armed>` |
+| `TraceTiming` | 0 | Session diagnostic: prefix co-op log lines with `t=<ms since session armed>`; log one `clock-calibration` line (engine versus wall time over the first 10 s of frames) and, during an intro, `intro-event` per dispatched script event plus an `intro-clock` summary |
 
-These are seventeen `[Coop]` keys (ten diagnostics plus seven session keys). The ninth INI-related setting
+These are eighteen `[Coop]` keys (ten diagnostics plus eight session keys). The ninth INI-related setting
 often counted in audits is `[ServerTools] AllowCheats`, a stable
 hosting permission independent of co-op. `[ServerTools] Enabled=1`
 is additionally required for experimental hooks.

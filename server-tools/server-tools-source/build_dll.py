@@ -122,6 +122,9 @@ previous_proxies=[
     # coop-session-v2 e17c150f (872de1e): live per-player DirectMusic, also
     # on a second laptop joining an active server (2026-11-11).
     'e17c150ff920aa9865fe06c8e0109bad9426215cfb1fdf943115af67be7dbf27',
+    # coop-session-v2 13ca1d0a (23c68f4): live two-client R1M3A intro
+    # (desktop + laptop, 2026-11-11); narration trailed the script clock.
+    '13ca1d0a7c17986dcbdc3f360bf82f92084584864824b623854fb57b1f10364b',
 ]
 if new_hash in previous_proxies:
  raise SystemExit('Current proxy SHA-256 unexpectedly appears in the previous allowlist')

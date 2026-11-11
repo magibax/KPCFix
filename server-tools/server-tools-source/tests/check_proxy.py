@@ -1,5 +1,6 @@
 """Run the compiled proxy with mapped original images and mocked Win32 APIs.
-Usage: python check_proxy.py FIXTURE_DIRECTORY [--cheats] [--off] [--bad-object] [--coop-session [--trace-timing]]
+Usage: python check_proxy.py FIXTURE_DIRECTORY [--cheats] [--off] [--bad-object] [--coop-session [--trace-timing]
+       [--intro [--test-start=R1M3A] [--intro-overrun] [--script-clock|--no-script-clock]]]
 SHA compression is accelerated with hashlib in this emulator; the same C SHA
 implementation is separately tested natively by the build validation workflow.
 """
@@ -98,6 +99,11 @@ def profile_int(a):
  if key=='TraceMusic':return int('--trace-music' in sys.argv)
  if key=='CoopMusic':return 0 if '--no-music' in sys.argv else a[2]
  if key=='CoopIntro':return int('--intro' in sys.argv)
+ if key=='CoopScriptClock':
+  # Default argument is CoopIntro; the flags override it either way.
+  if '--no-script-clock' in sys.argv:return 0
+  if '--script-clock' in sys.argv:return 1
+  return a[2]
  return int('--cheats' in sys.argv)
 functions['GetPrivateProfileIntW']=stub('GetPrivateProfileIntW',4,profile_int)
 def profile_str(a):
@@ -194,10 +200,13 @@ def coop_scenario():
  compiled proxy and assembled broadcast adapter are the shipped bytes."""
  sites={0xf13c4:(6,'ff91e0010000'),0xf13a4:(5,'e817fdffff'),0x2d455:(6,'8b90d0010000'),0x1045b1:(5,'e80a0bfcff'),
         0xfeec4:(6,'81c6e8010000'),0xf167a:(5,'e841faffff'),0x100744:(5,'e877feffff'),0xfde97:(5,'e824270000'),
-        0x10494b:(5,'e80064fbff'),0xffbbf:(5,'e85c0b0000')}
+        0x10494b:(5,'e80064fbff'),0xffbbf:(5,'e85c0b0000'),0xffba5:(5,'e8865afcff')}
  music_flag='--no-music' not in sys.argv
  intro_flag='--intro' in sys.argv
- hooked_optional={0x10494b:music_flag or '--trace-music' in sys.argv,0xffbbf:music_flag or intro_flag,0x1045b1:intro_flag}
+ trace_timing='--trace-timing' in sys.argv
+ script_clock='--script-clock' in sys.argv or (intro_flag and '--no-script-clock' not in sys.argv)
+ hooked_optional={0x10494b:music_flag or '--trace-music' in sys.argv,0xffbbf:music_flag or intro_flag,0x1045b1:intro_flag,
+                  0xffba5:script_clock or trace_timing}
  target={}
  for rva,(size,orig) in sites.items():
   now=bytes(u.mem_read(obj+rva,size))
@@ -304,7 +313,32 @@ def coop_scenario():
     u.reg_write(UC_X86_REG_EAX,0 if r is None else r);u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
    return run
   scripts=[];playing=[0];cine=[]
-  def play(a):scripts.append(cstr(a[0]));playing[0]=1
+  # Fake original script object (fields verified in c6260/c6380/c5340):
+  # +0x104 event count, +0x108 event array, +0x110 time, +0x114 next index;
+  # event +4 = authored time. Playing list: count 15a0a4, array 15a0a8.
+  # Authored times from CATHEDRAL1START.SCR: start, streamsound, subtitle,
+  # window_break, last event.
+  authored=[0.0,1.0,8.5,47.8,53.0]
+  sobj=code+0x600;sarr=code+0x780;evs=code+0x800;plist=code+0x900   # object spans +0x118
+  write(sobj+0x104,len(authored));write(sobj+0x108,sarr)
+  for i,t in enumerate(authored):
+   write(sarr+4*i,evs+16*i);u.mem_write(evs+16*i+4,struct.pack('<f',t))
+  write(obj+0x15a0a8,plist);write(obj+0x15a0a4,0)
+  def play(a):
+   scripts.append(cstr(a[0]));playing[0]=1
+   u.mem_write(sobj+0x110,struct.pack('<f',0.0));write(sobj+0x114,0)
+   write(plist,sobj);write(obj+0x15a0a4,1)
+  given=[]
+  def script_update(a):
+   # c5630 stand-in: advance the playing script exactly like c6260.
+   given.append(a[0])
+   if not read(obj+0x15a0a4):return
+   t=struct.unpack('<f',bytes(u.mem_read(sobj+0x110,4)))[0]+struct.unpack('<f',struct.pack('<I',a[0]))[0]
+   u.mem_write(sobj+0x110,struct.pack('<f',t));i=read(sobj+0x114)
+   while i<len(authored) and authored[i]<=struct.unpack('<f',struct.pack('<f',t))[0]:i+=1
+   write(sobj+0x114,i)
+   if i==len(authored):write(obj+0x15a0a4,0);playing[0]=0
+  stubs[obj+0xc5630]=cstub(1,script_update)
   stubs[obj+0xc50c0]=cstub(1,lambda a:0x4321)
   stubs[obj+0xc5340]=cstub(1,play)
   stubs[obj+0xc55b0]=cstub(1,lambda a:playing[0])
@@ -327,6 +361,7 @@ def coop_scenario():
    spawn(alice);assert any('Intro skipped' in m for m in said),said
    print('PASS co-op intro: invalid/absent test start ignored; no intro outside R1M3A');return
   assert 'effective CoopTestStartWorld=R1M3A (test start)' in text and 'effective CoopIntro=1' in text
+  assert ('effective CoopScriptClock=1' if script_clock else 'effective CoopScriptClock=0') in text
   assert 'intro-armed '+name in text and read(obj+0x16da88)==2
   n=len(said);spawn(alice);frame(5000)
   assert not scripts and any('Intro starts when all players are in (1/2)' in m for m in said[n:]),said[n:]
@@ -337,6 +372,36 @@ def coop_scenario():
   overrun='--intro-overrun' in sys.argv
   if overrun:
    frame(120000);assert cine==[('input',1),('letterbox',0)] and any('Intro overran' in m for m in said),(cine,said[-3:])
+  elif 0xffba5 in target:
+   # Measured host cadence, scaled for speed: frames every 40 ms of wall time,
+   # the engine crediting 50 ms each (the 1.25x of 8 ms frames credited 10 ms).
+   dt=struct.unpack('<I',struct.pack('<f',0.05))[0];t0=clock[0];n=0
+   while playing[0] and n<3000:
+    clock[0]+=40;call_regs(target[0xffba5],[dt],{},0);n+=1
+   wall=clock[0]-t0;assert not playing[0],'script finished'
+   if script_clock:
+    assert 52960<=wall<=53120,wall          # authored 53 s on the wall clock
+    assert max(struct.unpack('<f',struct.pack('<I',g))[0] for g in given)<=0.05+1e-7,'never a larger step than the engine'
+   else:
+    assert all(g==dt for g in given),'observer forwards the engine dt bit-identically'
+    assert 42360<=wall<=42480,wall          # stock: 53 s of script in 42.4 s
+   frame();assert any('Intro finished' in m for m in said) and not cine,(cine,said[-3:])
+   text=b''.join(log).decode('latin1')
+   if trace_timing:
+    ev=[l for l in text.splitlines() if ' intro-event ' in l]
+    assert len(ev)==len(authored),ev
+    # Narration (streamsound, i=1 at 1.0 s) to window smash (i=3 at 47.8 s):
+    # authored 46.8 s; the stock clock compresses it to 46.8/1.25 = 37.44 s.
+    voice=re.search(r'intro-event i=1 at_ms=1000 script_ms=(\d+) wall_ms=(\d+)',text);assert voice,ev
+    smash=re.search(r'intro-event i=3 at_ms=47800 script_ms=(\d+) wall_ms=(\d+)',text);assert smash,ev
+    w=int(smash.group(2))-int(voice.group(2));assert (46720<=w<=46880) if script_clock else (37360<=w<=37520),w
+    clk=re.search(r'intro-clock frames=(\d+) engine_ms=(\d+) script_ms=(\d+) wall_ms=(\d+) governor=(on|off)',text);assert clk,text[-400:]
+    assert clk.group(5)==('on' if script_clock else 'off')
+    cal=re.search(r'clock-calibration frames=(\d+) engine_ms=(\d+) script_ms=(\d+) wall_ms=(\d+)',text);assert cal
+    assert int(cal.group(2))*4==int(cal.group(4))*5 or abs(int(cal.group(2))*4-int(cal.group(4))*5)<=250,cal.group(0)
+   else:
+    assert 'intro-event' not in text and 'clock-calibration' not in text
+   print('PASS co-op script clock:',('governed' if script_clock else 'observed'),'53 s script ran',wall,'ms of wall clock')
   else:
    playing[0]=0;frame();assert any('Intro finished' in m for m in said) and not cine,(cine,said[-3:])
   frame();assert scripts==[name]
