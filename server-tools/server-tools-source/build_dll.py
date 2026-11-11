@@ -125,6 +125,9 @@ previous_proxies=[
     # coop-session-v2 13ca1d0a (23c68f4): live two-client R1M3A intro
     # (desktop + laptop, 2026-11-11); narration trailed the script clock.
     '13ca1d0a7c17986dcbdc3f360bf82f92084584864824b623854fb57b1f10364b',
+    # coop-session-v2 e86bb352 (5843fa9): CoopScriptClock; desktop + laptop
+    # confirmed the subtitle/narration cadence fix (2026-11-11).
+    'e86bb352df4a726c2a6c0d689df93ce39414cd5cc8206b959892add58f2e257d',
 ]
 if new_hash in previous_proxies:
  raise SystemExit('Current proxy SHA-256 unexpectedly appears in the previous allowlist')

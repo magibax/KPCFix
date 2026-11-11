@@ -11,6 +11,7 @@ extern U32 WINAPI GetPrivateProfileStringW(const WCHAR *,const WCHAR *,const WCH
 #include "coop_aabb_overlap.h"
 #include "coop_model_state.h"
 #include "coop_session.h"
+#include "coop_scoreboard.h"
 #include "coop_script_clock.h"
 extern HANDLE WINAPI GetStdHandle(DWORD);
 extern void WINAPI ExitProcess(UINT) __attribute__((noreturn));
@@ -699,13 +700,64 @@ static int coop_intro_world_allowed(U32 route_pos){return route_pos==2u;}
  * observer (dt forwarded bit-identically) when the governor is off. */
 static int coop_script_clock;
 static CoopScriptClock coop_clock;
+/* [Coop] CoopSoundClock (default = CoopScriptClock): run the server's sound
+ * timers on wall-clock time. Evidence (stock server.dll 83b7bce8):
+ *  - object.lto streamsound (event bcf2d, local mode 52c80) calls PlaySound
+ *    (g_pServerDE vtbl+0x174) with flags 0x430;
+ *  - server.dll 2c6e6-2c70a sets a track's time left (+0x20) to
+ *    duration + min(0.5, duration/2) (44.19 s narration: 44.69 s);
+ *  - the per-frame updater 29f0b (only caller: 2a1fc, ECX = server manager,
+ *    one float = the clamped frame dt [esi+0x1f0], ret 4) subtracts that dt
+ *    per track (2c805);
+ *  - the per-client set builder 1f920 skips a track whose time left <= 0
+ *    (1f94f-1f961), so clients stop it; IsSoundDone (277e2) reports done.
+ * With frames credited 1.25x wall time, the 44.69 s narration left the set
+ * about 35.9 s of real time after it started: the cut after "...useful ally
+ * for you" (WAV 35-36.5 s). The client streams in real time. The governor
+ * (the same arithmetic as the script clock, separate state) gives 29f0b
+ * min(engine dt, unpaid wall time); nothing else in the frame changes. The
+ * site is hash-gated to the Europe-family server.dll; others stay original. */
+#define SOUND_TRACKS_CALL_RVA 0x2a1fcu
+#define SOUND_TRACKS_TARGET_RVA 0x29f0bu
+static const U8 original_sound_call[5]={0xe8,0x0a,0xfd,0xff,0xff};
+static int coop_sound_clock,coop_sound_clock_installed;
+static CoopScriptClock coop_sound;
+static struct {U32 frames,engine_us,given_us;} coop_sound_sum;
 /* Bounded clock observation (TraceTiming=1): one calibration line for the
  * first 10 s of frames, and during an intro one line per dispatched script
  * event plus a summary. Totals are microseconds; frames are counted. */
 static struct {U32 frames,engine_us,given_us;} coop_clock_sum;
 static struct {int done,started;U32 t0,frames0,engine0,given0;} coop_clock_cal;
 #define COOP_INTRO_EVENT_LOG_MAX 128u
-static struct {int active;U32 script,next,logged,t0,frames0,engine0,given0;} coop_intro_trace;
+static struct {int active;U32 script,next,logged,t0,frames0,engine0,given0,sframes0,sengine0,sgiven0;} coop_intro_trace;
+/* [Coop] CoopStartScoreboard (default 1 in a session with CoopIntermission=0):
+ * the stock scoreboard as the !start loading presentation (coop_scoreboard.h).
+ * Messages: 0x48 MID_MULTI_INTERMISSION (show) and 0x69 MID_CAN_RENDER
+ * (close), both without payload, to one client at a time. */
+static int coop_start_scoreboard;
+static CoopScoreboard coop_sb;
+/* [Coop] CoopSpawners (default 1 in a session): CMonsterSpawner::ReadProp
+ * (object.lto 93a80) ORs 0x10 ("not in multiplayer") into the spawner's
+ * MiscFlags before the shared skill/game-type filter f9000 (93c5d: or al,0x10;
+ * call at 93c65). f9000 returns 0 in multiplayer whenever bit 0x10 is set, so
+ * every CMonsterSpawner is marked not-to-create (93c71-93c7b: or [ocs+4],2)
+ * at world load. R1M3A has 53 of them in 17 groups, including the three named
+ * spawn6 that 47.9 trigger_generic spawn6 activates (CMonsterSpawner7 10x
+ * CHeadless Normal+Hard, CMonsterSpawner41 5x CHeadless Easy,
+ * CMonsterSpawner35 3x CGasbag Normal+Hard). trigger_generic (bf520 ->
+ * 300a0) then finds no group and does nothing. Placed monsters and CSpawner
+ * use the authored flags (d4b44), which is why R1M2B has enemies. NOP-ing the
+ * forced OR passes the authored flags: designer 0x10 and the difficulty
+ * bits are still honoured. The spawners exist once on the server and their
+ * monsters replicate like any placed monster. */
+static int coop_spawners=1,coop_trace_spawners;
+static U32 coop_spawner_ok,coop_spawner_no,coop_spawner_logged;
+/* [Coop] CoopSkill (absent = unchanged; 0 Lullaby, 1 Daydream, 2 Sleepless,
+ * 3 Cold Sweat, 4 Nightmare as printed by the stock skill command fb710).
+ * f9000 maps skill 0-1 to MiscFlags bit 1, 2 to bit 2, 3-4 to bit 4. The
+ * dedicated server never sets it (fb738, f1f66), so it stays 0. Written to
+ * the original variable 15b678 before each world load. */
+static I32 coop_skill=-1;
 /* [Coop] CoopTestStartWorld: route world that !start loads (test option). */
 static U32 coop_start_pos;
 static int coop_start_state;   /* 0 unset, 1 accepted, 2 rejected */
@@ -773,6 +825,26 @@ static void coop_current_world(char out[0x80]){
     coop_rd((U32)coop_image+COOP_MAPCURSOR_RVA,&cursor)&&count&&count<=64&&cursor<count)
   coop_copy_str(out,shell+0x210u+cursor*0x7fu,0x7f);
 }
+/* Default co-op path: set the shell's native pending-NextLevel flag +0x1ae9,
+ * which the server's own Update (ffb70 -> 100720) consumes on the next frame
+ * through the hooked NextLevel site 100744. This is the native post-
+ * intermission path without the scoreboard broadcast or the click wait,
+ * the same client flow as a console "nextlevel". Refused if a native
+ * intermission is already active (+0x1ae8), so no state is left half set. */
+static int coop_shell_change_allowed(U32 shell){
+ if(!bsp_mem_readable(shell+0x1ae8u,2)||*(const U8 *)(shell+0x1ae8u)){
+  CoopResult failed;coop_session_change_failed(&coop_state,&failed);
+  coop_log("change-failed","native intermission already active or shell flags unreadable");
+  runtime_broadcast(coop_image,failed.msg);return 0;
+ }
+ return 1;
+}
+static void coop_set_pending_next_level(U32 shell){
+ if(!coop_shell_change_allowed(shell))return;
+ *(U8 *)(shell+0x1ae9u)=1;
+ coop_log("end-level","native pending NextLevel set (no intermission scoreboard)");
+}
+static void coop_sb_deliver(const CoopSbMessage *out,U32 n);
 static void coop_execute(CoopResult *r){
  if(r->action==COOP_ACT_NONE)return;
  coop_log(r->action==COOP_ACT_CHANGE_WORLD?"change":"say",r->msg);
@@ -792,19 +864,16 @@ static void coop_execute(CoopResult *r){
    ((ShellFn)(coop_image+COOP_END_LEVEL_RVA))((void *)shell);
    coop_log("end-level","native intermission requested (continues on a player's fire/use)");
   }else{
-   /* Default co-op path: set the shell's native pending-NextLevel flag +0x1ae9,
-    * which the server's own Update (ffb70 -> 100720) consumes on the next frame
-    * through the hooked NextLevel site 100744. This is the native post-
-    * intermission path without the scoreboard broadcast or the click wait,
-    * the same client flow as a console "nextlevel". Refused if a native
-    * intermission is already active (+0x1ae8), so no state is left half set. */
-   if(!bsp_mem_readable(shell+0x1ae8u,2)||*(const U8 *)(shell+0x1ae8u)){
-    CoopResult failed;coop_session_change_failed(&coop_state,&failed);
-    coop_log("change-failed","native intermission already active or shell flags unreadable");
-    runtime_broadcast(coop_image,failed.msg);return;
+   if(coop_start_scoreboard&&coop_state.start_pending){
+    /* !start: show the stock scoreboard to every present member, then make
+     * the same pending-NextLevel change after COOP_SB_HOLD_MS (coop_frame). */
+    CoopSbMessage out[COOP_SESSION_MAX_MEMBERS];
+    if(!coop_shell_change_allowed(shell))return;
+    coop_sb_deliver(out,coop_sb_start(&coop_sb,&coop_state,GetTickCount(),out));
+    coop_log("end-level","start scoreboard shown; native pending NextLevel deferred 1000 ms");
+    return;
    }
-   *(U8 *)(shell+0x1ae9u)=1;
-   coop_log("end-level","native pending NextLevel set (no intermission scoreboard)");
+   coop_set_pending_next_level(shell);
   }
  }
 }
@@ -842,6 +911,29 @@ static int coop_music_send(U32 client){
 #undef COOP_MSG_END
  return 1;
 }
+/* Stock scoreboard show (0x48) / close (0x69) to one client, no payload. */
+static int coop_sb_send(U32 client,U32 id){
+ void *de;U32 *vt,msg;
+ if(!client||!coop_msg_api(&de,&vt))return 0;
+ msg=((MsgStartFn)vt[0xac/4])(de,client,id);if(!msg)return 0;
+ ((MsgEndFn)vt[0xb4/4])(de,msg);
+ return 1;
+}
+static void coop_sb_deliver(const CoopSbMessage *out,U32 n){
+ U32 i,k;
+ for(i=0;i<n;i++){
+  char line[160];int ok=coop_sb_send(out[i].client,out[i].id);k=0;
+  coop_text(line,&k,out[i].id==COOP_SB_SHOW?"show client=":"close client=",sizeof line);
+  coop_dec(line,&k,out[i].client,sizeof line);
+  coop_text(line,&k,out[i].id==COOP_SB_SHOW?" msg=0x48":" msg=0x69",sizeof line);
+  coop_text(line,&k,ok?" sent":" failed",sizeof line);
+  coop_log("scoreboard",line);
+ }
+}
+static void coop_sb_pump(U32 now){
+ CoopSbMessage out[COOP_SESSION_MAX_MEMBERS];
+ if(coop_start_scoreboard)coop_sb_deliver(out,coop_sb_frame(&coop_sb,&coop_state,now,out));
+}
 /* Deliver due per-player music starts (called once per server frame). */
 static void coop_music_frame(U32 now){
  int i,n=0;
@@ -872,6 +964,7 @@ static void coop_spawn_hook(U32 player,U32 *pos,int first_path){
   slot=coop_session_seen(&coop_state,client,player,object,name,now,&r);
   coop_execute(&r);
   if(coop_music)coop_session_music_schedule(&coop_state,slot,now);
+  if(coop_start_scoreboard)coop_sb_spawn(&coop_sb,&coop_state,slot,now);
  }
  if(first_path&&slot>=0&&slot<(int)COOP_TRIAL_SLOTS&&coop_is_r1m2b_anchor(pos))
   coop_assign_trial_position(pos,slot);
@@ -954,9 +1047,33 @@ static void coop_exit_trigger(U32 trigger,U32 activator_ptr){
  coop_execute(&r);
 }
 typedef void (__attribute__((thiscall)) *SpawnPrepareFn)(void *,U32 *,const U32 *,const U32 *);
+static void coop_apply_skill(void){
+ U32 *skill;
+ if(coop_skill<0||!coop_image)return;
+ skill=(U32 *)(coop_image+0x15b678u);
+ if(bsp_mem_readable((U32)skill,4))*skill=(U32)coop_skill;
+}
+/* Opt-in trace ([Coop] TraceSpawners=1) of the spawner filter call 93c65:
+ * cdecl f9000(skill, flags) -> AL, caller pops 8. Forwarded unchanged. */
+typedef U32 (CDECL *SkillFilterFn)(U32,U32);
+static U32 CDECL coop_spawner_filter(U32 skill,U32 flags){
+ U32 ok=((SkillFilterFn)(coop_image+0xf9000u))(skill,flags)&0xffu;
+ if(ok)coop_spawner_ok++;else coop_spawner_no++;
+ if(coop_spawner_logged<64u){
+  char line[160];U32 n=0;coop_spawner_logged++;
+  coop_text(line,&n,"skill=",sizeof line);coop_dec(line,&n,skill,sizeof line);
+  coop_text(line,&n," miscflags=",sizeof line);coop_dec(line,&n,flags&0xffu,sizeof line);
+  coop_text(line,&n,ok?" create=1":" create=0",sizeof line);
+  coop_log("spawner-filter",line);
+ }
+ return ok;
+}
 static void __attribute__((thiscall)) coop_next_level(void *shell){
  char world[0x80];U32 now=GetTickCount();
- if(coop_session_enabled){coop_session_world_loading(&coop_state,now);coop_log("world-loading","native NextLevel");}
+ if(coop_session_enabled){
+  coop_session_world_loading(&coop_state,now);coop_sb_world_loading(&coop_sb);coop_log("world-loading","native NextLevel");
+  coop_apply_skill();coop_spawner_ok=coop_spawner_no=0;
+ }
  ((ShellFn)(coop_image+COOP_NEXT_LEVEL_RVA))(shell);
  if(coop_session_enabled){
   coop_current_world(world);
@@ -967,6 +1084,17 @@ static void __attribute__((thiscall)) coop_next_level(void *shell){
    if(coop_state.intro_armed)coop_log("intro-armed",coop_intro_snap.name);
   }
   coop_log("world-loaded",world[0]?world:"(unknown)");
+  {
+   char line[160];U32 n=0,skill=0;
+   coop_rd((U32)coop_image+0x15b678u,&skill);
+   coop_text(line,&n,"skill=",sizeof line);coop_dec(line,&n,skill,sizeof line);
+   coop_text(line,&n,coop_spawners?" monster-spawners=authored":" monster-spawners=stock-mp-off",sizeof line);
+   if(coop_trace_spawners){
+    coop_text(line,&n," accepted=",sizeof line);coop_dec(line,&n,coop_spawner_ok,sizeof line);
+    coop_text(line,&n," rejected=",sizeof line);coop_dec(line,&n,coop_spawner_no,sizeof line);
+   }
+   coop_log("world-content",line);
+  }
  }
 }
 
@@ -1122,6 +1250,34 @@ static void CDECL coop_script_update(U32 dt_bits){
   }
  }
 }
+/* Sound-track timer site server.dll 2a1fc (see CoopSoundClock): thiscall
+ * 29f0b(server manager, float dt), callee pops 4 bytes. */
+typedef void (__attribute__((thiscall)) *SoundTracksFn)(void *,U32);
+static void __attribute__((thiscall)) coop_sound_update(void *manager,U32 dt_bits){
+ U32 engine_us=coop_us_from_bits(dt_bits),given_us=engine_us,bits=dt_bits;
+ if(coop_sound_clock){
+  given_us=coop_script_clock_step(&coop_sound,GetTickCount(),engine_us);
+  if(given_us!=engine_us)bits=coop_bits_from_us(given_us);
+ }
+ coop_sound_sum.frames++;coop_sound_sum.engine_us+=engine_us;coop_sound_sum.given_us+=given_us;
+ ((SoundTracksFn)((U8 *)backend+SOUND_TRACKS_TARGET_RVA))(manager,bits);
+}
+/* Install the call redirect at server.dll 2a1fc once, only on the verified
+ * Europe-family image and only if the original bytes are present. Failure
+ * leaves the engine original and is logged; it is never fatal. */
+static void coop_install_sound_clock(const U8 back_sha[32]){
+ U8 *site=(U8 *)backend+SOUND_TRACKS_CALL_RVA,hooked[5];U32 rel,old,restore;
+ if(coop_sound_clock_installed)return;
+ if(!same(back_sha,bsp_original_hash,32)){log_file("[KPCFix Co-op] CoopSoundClock unsupported for this original server.dll hash; sound timers unchanged.");return;}
+ rel=(U32)coop_sound_update-((U32)site+5);hooked[0]=0xe8;copy(hooked+1,(const U8 *)&rel,4);
+ if(!same(site,original_sound_call,5)){log_file("[KPCFix Co-op] CoopSoundClock: original bytes not found at server.dll 2a1fc; sound timers unchanged.");return;}
+ if(!VirtualProtect(site,5,0x40,&old)){log_file("[KPCFix Co-op] CoopSoundClock: cannot unprotect server.dll 2a1fc; sound timers unchanged.");return;}
+ copy(site,hooked,5);
+ if(!VirtualProtect(site,5,old,&restore)||!FlushInstructionCache(GetCurrentProcess(),site,5))
+  fatal("[KPCFix Server Tools] ERROR: could not finalize the sound clock hook.");
+ coop_script_clock_reset(&coop_sound);coop_sound_clock_installed=1;
+ log_file("[KPCFix Co-op] sound clock hook installed (server.dll 2a1fc -> 29f0b)");
+}
 static void coop_intro_trace_begin(void){
  U32 count,array,script;
  coop_intro_trace.active=0;coop_intro_trace.script=0;
@@ -1129,6 +1285,7 @@ static void coop_intro_trace_begin(void){
  coop_intro_trace.active=1;coop_intro_trace.next=0;coop_intro_trace.logged=0;
  coop_intro_trace.t0=GetTickCount();coop_intro_trace.frames0=coop_clock_sum.frames;
  coop_intro_trace.engine0=coop_clock_sum.engine_us;coop_intro_trace.given0=coop_clock_sum.given_us;
+ coop_intro_trace.sframes0=coop_sound_sum.frames;coop_intro_trace.sengine0=coop_sound_sum.engine_us;coop_intro_trace.sgiven0=coop_sound_sum.given_us;
  if(coop_rd((U32)coop_image+0x15a0a4u,&count)&&count&&count<=256u&&
     coop_rd((U32)coop_image+0x15a0a8u,&array)&&coop_rd(array+(count-1u)*4u,&script))coop_intro_trace.script=script;
  else coop_log("intro-trace","script object not found; event lines unavailable");
@@ -1138,6 +1295,15 @@ static void coop_intro_trace_end(void){
  coop_clock_line("intro-clock",coop_clock_sum.frames-coop_intro_trace.frames0,
    coop_clock_sum.engine_us-coop_intro_trace.engine0,coop_clock_sum.given_us-coop_intro_trace.given0,
    GetTickCount()-coop_intro_trace.t0);
+ if(coop_sound_clock_installed){
+  char line[160];U32 n=0;
+  coop_text(line,&n,"frames=",sizeof line);coop_dec(line,&n,coop_sound_sum.frames-coop_intro_trace.sframes0,sizeof line);
+  coop_text(line,&n," engine_ms=",sizeof line);coop_dec(line,&n,(coop_sound_sum.engine_us-coop_intro_trace.sengine0)/1000u,sizeof line);
+  coop_text(line,&n," sound_ms=",sizeof line);coop_dec(line,&n,(coop_sound_sum.given_us-coop_intro_trace.sgiven0)/1000u,sizeof line);
+  coop_text(line,&n," wall_ms=",sizeof line);coop_dec(line,&n,GetTickCount()-coop_intro_trace.t0,sizeof line);
+  coop_text(line,&n,coop_sound_clock?" governor=on":" governor=off",sizeof line);
+  coop_log("sound-clock",line);
+ }
  coop_intro_trace.script=0;coop_intro_trace.active=0;
 }
 static void coop_intro_frame(U32 now){
@@ -1145,6 +1311,7 @@ static void coop_intro_frame(U32 now){
  if(act==COOP_ACT_INTRO_START){
   int playing;
   coop_log("intro-start",coop_intro_snap.name);
+  coop_sb_pump(now);   /* close the start scoreboard before the cinematic */
   runtime_broadcast(coop_image,r.msg);
   ((ScriptPlayFn)(coop_image+0xc5340u))(coop_intro_snap.name);
   playing=((ScriptIsPlayingFn)(coop_image+0xc55b0u))(coop_intro_snap.name)!=0;
@@ -1221,6 +1388,47 @@ static void __attribute__((thiscall)) coop_frame(void *shell){
  ((ShellFn)(coop_image+0x100720u))(shell);
  if(coop_session_enabled&&coop_music)coop_music_frame(GetTickCount());
  if(coop_session_enabled&&coop_intro)coop_intro_frame(GetTickCount());
+ if(coop_session_enabled&&coop_start_scoreboard){
+  U32 now=GetTickCount(),sh;
+  if(coop_sb_take_change(&coop_sb,&coop_state,now)&&coop_rd((U32)coop_image+COOP_SHELL_RVA,&sh)&&sh)
+   coop_set_pending_next_level(sh);
+  coop_sb_pump(now);
+ }
+}
+/* [Coop] CoopHealthBars (default 1 in a session): the original enemy health
+ * bar manager in multiplayer. Evidence (object.lto 3a03f879, cshell 703813a4):
+ *  - f8fe0 returns 1 only when the game type [shell+0x1d0] is 0 (single
+ *    player). Its only four callers are the bar manager: Update ea6d0 (ea6d2,
+ *    each frame from ffbab), OnDamage ea7c0 (ea7c3, 69 AI/monster call sites),
+ *    Remove ea810/eaa10 (eaa10, on death) and Send eab10 (eab11, only from
+ *    Update ea783). In multiplayer every path returns at its gate, so no bar
+ *    data is ever built or sent: a missing show-event, not missing health data.
+ *  - Send broadcasts MID_MONSTER_HEALTH_BAR_DATA 0x56 to all clients
+ *    (vtbl+0xc4, hClient 0, guaranteed) with the global 10-entry table
+ *    (101642d8): style, monster key, name, health/max from the server's own
+ *    values. The stock client handles 0x56 (cshell cb998 -> b8c80) with no
+ *    multiplayer test; the bar draw (b8dc0 via cdb48) is gated only by its UI
+ *    state, so the original client UI and scale are used unchanged.
+ * The four calls are redirected to session predicates (1 = proceed as in
+ * single player). Send is limited to 10 Hz: in single player it runs once per
+ * frame, which on a dedicated server (up to 125 frames/s) would be a
+ * guaranteed broadcast storm. Player health uses other messages and is not
+ * touched. CoopHealthBars=0 leaves all four sites original. */
+static int coop_health_bars=1;
+static U32 coop_bars_last_send,coop_bars_sends,coop_bars_damage_epoch=0xffffffffu;
+static U32 CDECL coop_bars_gate(void){return 1;}
+static U32 CDECL coop_bars_damage_gate(void){
+ if(coop_bars_damage_epoch!=coop_state.epoch){
+  coop_bars_damage_epoch=coop_state.epoch;
+  coop_log("health-bar","first monster damage in this epoch; original bar data enabled");
+ }
+ return 1;
+}
+#define COOP_BARS_SEND_MS 100u
+static U32 CDECL coop_bars_send_gate(void){
+ U32 now=GetTickCount();
+ if(coop_bars_sends&&now-coop_bars_last_send<COOP_BARS_SEND_MS)return 0;
+ coop_bars_last_send=now;coop_bars_sends++;return 1;
 }
 /* Optional in-memory call/load redirects inside the original object image.
  * Each site's original bytes are verified; disabled sites must stay original. */
@@ -1230,7 +1438,7 @@ static void make_call(OptionalSite *s,U8 *b,const void *target){
  s->hooked[0]=0xe8;copy(s->hooked+1,(const U8 *)&rel,4);
  for(i=5;i<s->size;i++)s->hooked[i]=0x90;
 }
-#define OPTIONAL_SITES 11u
+#define OPTIONAL_SITES 17u
 static void optional_sites(OptionalSite *s,U8 *b){
  static const struct {U32 rva,size;U8 original[6];} table[OPTIONAL_SITES]={
   {SPAWN_POS_CALL_RVA,6,{0xff,0x91,0xe0,0x01,0x00,0x00}},
@@ -1244,6 +1452,12 @@ static void optional_sites(OptionalSite *s,U8 *b){
   {0x10494b,5,{0xe8,0x00,0x64,0xfb,0xff}},       /* WorldProperties -> music event bad50 */
   {0xffbbf,5,{0xe8,0x5c,0x0b,0x00,0x00}},        /* shell Update -> 100720 (per frame) */
   {0xffba5,5,{0xe8,0x86,0x5a,0xfc,0xff}},        /* shell Update -> script clock c5630 */
+  {0xea6d2,5,{0xe8,0x09,0xe9,0x00,0x00}},        /* bar Update -> single-player test f8fe0 */
+  {0xea7c3,5,{0xe8,0x18,0xe8,0x00,0x00}},        /* bar OnDamage -> f8fe0 */
+  {0xeaa10,5,{0xe8,0xcb,0xe5,0x00,0x00}},        /* bar Remove -> f8fe0 */
+  {0xeab11,5,{0xe8,0xca,0xe4,0x00,0x00}},        /* bar Send -> f8fe0 */
+  {0x93c5d,2,{0x0c,0x10}},                       /* CMonsterSpawner: or al,0x10 (forced MP-off) */
+  {0x93c65,5,{0xe8,0x96,0x53,0x06,0x00}},        /* CMonsterSpawner -> skill/game-type filter f9000 */
  };
  U32 i;
  for(i=0;i<OPTIONAL_SITES;i++){s[i].rva=table[i].rva;s[i].size=table[i].size;copy(s[i].original,table[i].original,6);}
@@ -1258,14 +1472,23 @@ static void optional_sites(OptionalSite *s,U8 *b){
  make_call(&s[8],b,(const void *)coop_music_event);
  make_call(&s[9],b,(const void *)coop_frame);
  make_call(&s[10],b,(const void *)coop_script_update);
+ make_call(&s[11],b,(const void *)coop_bars_gate);
+ make_call(&s[12],b,(const void *)coop_bars_damage_gate);
+ make_call(&s[13],b,(const void *)coop_bars_gate);
+ make_call(&s[14],b,(const void *)coop_bars_send_gate);
+ s[15].hooked[0]=0x90;s[15].hooked[1]=0x90;   /* pass the authored MiscFlags */
+ make_call(&s[16],b,(const void *)coop_spawner_filter);
  s[0].enabled=spawn_trace_enabled;
  s[1].enabled=spawn_separation_enabled||coop_session_enabled;
  s[2].enabled=campaign_trace||coop_session_enabled;
  s[3].enabled=campaign_trace||(coop_session_enabled&&coop_intro);
  for(i=4;i<8;i++)s[i].enabled=coop_session_enabled;
  s[8].enabled=coop_session_enabled&&(coop_trace_music||coop_music);
- s[9].enabled=coop_session_enabled&&(coop_music||coop_intro);
+ s[9].enabled=coop_session_enabled&&(coop_music||coop_intro||coop_start_scoreboard);
  s[10].enabled=coop_session_enabled&&(coop_script_clock||coop_trace_timing);
+ for(i=11;i<15;i++)s[i].enabled=coop_session_enabled&&coop_health_bars;
+ s[15].enabled=coop_session_enabled&&coop_spawners;
+ s[16].enabled=coop_session_enabled&&coop_trace_spawners;
 }
 static int apply_object(HMODULE module){
  U8 *b=(U8 *)module;U8 hash[32],expected[8];U32 i,j,old,restore,already=1;
@@ -1308,8 +1531,9 @@ static int apply_object(HMODULE module){
  }
  if(coop_session_enabled){
   coop_image=b;coop_session_init(&coop_state,coop_min_players,coop_max_players);coop_t0=GetTickCount();
-  coop_script_clock_reset(&coop_clock);
+  coop_script_clock_reset(&coop_clock);coop_sb_reset(&coop_sb);
   coop_state.start_pos=coop_start_pos;
+  coop_apply_skill();
  }
  for(i=0;i<OPTIONAL_SITES;i++)if(site[i].enabled)copy(b+site[i].rva,site[i].hooked,site[i].size);
  /* LoadLibrary has already applied relocations and may have run table init. */
@@ -1415,6 +1639,13 @@ static void initialize(void){
  coop_music=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopMusic",1,ini_path)!=0;
  coop_intro=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopIntro",0,ini_path)!=0;
  coop_script_clock=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopScriptClock",coop_intro,ini_path)!=0;
+ coop_start_scoreboard=coop_session_enabled&&!coop_intermission&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopStartScoreboard",1,ini_path)!=0;
+ coop_spawners=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSpawners",1,ini_path)!=0;
+ coop_trace_spawners=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawners",0,ini_path)!=0;
+ coop_skill=-1;
+ if(coop_session_enabled){U32 v=GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSkill",0xffffffffu,ini_path);if(v<=4u)coop_skill=(I32)v;}
+ coop_health_bars=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopHealthBars",1,ini_path)!=0;
+ coop_sound_clock=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSoundClock",coop_script_clock,ini_path)!=0;
  /* Test-only start world: accepted only if it names a route world exactly
   * (case-insensitive ASCII); anything else is ignored (start stays R1M2B). */
  coop_start_pos=0;coop_start_state=0;
@@ -1448,10 +1679,29 @@ static void initialize(void){
   if(coop_session_enabled)log_file(coop_music?
     "[KPCFix Co-op] effective CoopMusic=1 (per-player world music start after spawn)":
     "[KPCFix Co-op] effective CoopMusic=0");
+  if(coop_session_enabled)log_file(coop_start_scoreboard?
+    "[KPCFix Co-op] effective CoopStartScoreboard=1 (stock scoreboard from !start until the intro begins)":
+    "[KPCFix Co-op] effective CoopStartScoreboard=0");
+  if(coop_session_enabled)log_file(coop_spawners?
+    "[KPCFix Co-op] effective CoopSpawners=1 (authored monster spawner flags)":
+    "[KPCFix Co-op] effective CoopSpawners=0 (stock: monster spawners off in multiplayer)");
+  if(coop_trace_spawners)log_file("[KPCFix Co-op] effective TraceSpawners=1");
+  if(coop_session_enabled){
+   char line[80];U32 m=0;
+   coop_text(line,&m,"[KPCFix Co-op] effective CoopSkill=",sizeof line);
+   if(coop_skill<0)coop_text(line,&m,"unchanged",sizeof line);else coop_dec(line,&m,(U32)coop_skill,sizeof line);
+   log_file(line);
+  }
+  if(coop_session_enabled)log_file(coop_health_bars?
+    "[KPCFix Co-op] effective CoopHealthBars=1 (original enemy health bars, 10 Hz broadcast)":
+    "[KPCFix Co-op] effective CoopHealthBars=0");
   if(coop_intro)log_file("[KPCFix Co-op] effective CoopIntro=1 (original starting_cinematic after all players are in; R1M3A only)");
   if(coop_session_enabled&&(coop_intro||coop_script_clock))log_file(coop_script_clock?
     "[KPCFix Co-op] effective CoopScriptClock=1 (script clock limited to wall-clock time)":
     "[KPCFix Co-op] effective CoopScriptClock=0 (script clock = engine frame time)");
+  if(coop_session_enabled&&(coop_script_clock||coop_sound_clock))log_file(coop_sound_clock?
+    "[KPCFix Co-op] effective CoopSoundClock=1 (server sound timers limited to wall-clock time)":
+    "[KPCFix Co-op] effective CoopSoundClock=0 (sound timers = engine frame time)");
   if(coop_start_state==1){
    char line[96];U32 m=0;coop_text(line,&m,"[KPCFix Co-op] effective CoopTestStartWorld=",sizeof line);
    coop_text(line,&m,coop_route_label(coop_start_pos),sizeof line);coop_text(line,&m," (test start)",sizeof line);log_file(line);
@@ -1467,6 +1717,7 @@ static void initialize(void){
   if(!intercept_backend())fatal("[KPCFix Server Tools] ERROR: could not install engine loading hook.");
   hooked=1;
  }
+ if(active&&coop_sound_clock)coop_install_sound_clock(back_sha);
  log_file(active?"[KPCFix Server Tools] Dedicated DLL active.":"[KPCFix Server Tools] Original engine pass-through.");
 }
 I32 CDECL CreateServer(U32 version,const char *name,void **out){
