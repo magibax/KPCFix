@@ -162,6 +162,14 @@ The open questions above are now answered for the intro path; see
 * every cinematic presentation message is broadcast to all clients by the original code.
 
 `CoopIntro` therefore plays the original script once, server-side, behind a session barrier,
-rather than replaying scripts per client. Not yet verified on clients:
-* the camera presentation;
-* `player`-targeted events (voice-over), and the missing invulnerability.
+rather than replaying scripts per client.
+
+**Live result (2026-11-11, desktop + laptop, DLL `13ca1d0a…`):**
+* The original R1M3A camera presentation (pans, letterbox, scripted events) worked on both
+  clients, and the two matched each other.
+* **Open:** the narration (`streamsound player … local`) trails the subtitles by about 2 s on
+  both clients, and the window smash cuts it off. Root cause unknown.
+* **Still open:** the missing invulnerability (gated off in multiplayer), the join-during-
+  cinematic policy, and spawn-based rather than acknowledged client readiness.
+* The investigation order and the resume steps are in
+  [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md).
