@@ -1,5 +1,5 @@
 """Run the compiled proxy with mapped original images and mocked Win32 APIs.
-Usage: python check_proxy.py FIXTURE_DIRECTORY [--cheats] [--off] [--bad-object]
+Usage: python check_proxy.py FIXTURE_DIRECTORY [--cheats] [--off] [--bad-object] [--coop-session]
 SHA compression is accelerated with hashlib in this emulator; the same C SHA
 implementation is separately tested natively by the build validation workflow.
 """
@@ -87,14 +87,27 @@ functions['LoadLibraryW']=stub('LoadLibraryW',1,lambda a:engine if wstr(a[0])==p
 functions['DisableThreadLibraryCalls']=stub('DisableThreadLibraryCalls',1,lambda a:1)
 functions['GetCurrentProcess']=stub('GetCurrentProcess',0,lambda a:0xffffffff)
 functions['GetStdHandle']=stub('GetStdHandle',1,lambda a:99)
-functions['GetPrivateProfileIntW']=stub('GetPrivateProfileIntW',4,lambda a:(0 if '--off' in sys.argv else 1) if wstr(a[1])=='Enabled' else int('--cheats' in sys.argv))
+coop_session='--coop-session' in sys.argv
+def profile_int(a):
+ key=wstr(a[1])
+ if key=='Enabled':return 0 if '--off' in sys.argv else 1
+ if key=='CoopSession':return int(coop_session)
+ if key in ('CoopMinPlayers','CoopMaxPlayers'):return a[2]
+ return int('--cheats' in sys.argv)
+functions['GetPrivateProfileIntW']=stub('GetPrivateProfileIntW',4,profile_int)
+clock=[1000]
+functions['GetTickCount']=stub('GetTickCount',0,lambda a:clock[0])
 protect=[]
 def virtualprotect(a):
  protect.append(tuple(a[:3]));write(a[3],0x20 if obj<=a[0]<obj+0x117000 else 2);return 1
 functions['VirtualProtect']=stub('VirtualProtect',4,virtualprotect)
 functions['FlushInstructionCache']=stub('FlushInstructionCache',3,lambda a:1)
+def mapped(address):
+ return any(b<=address<=e for b,e,_ in u.mem_regions())
 def query(a):
- vals=[obj+0x129000,obj,4,0x4c000,0x1000,4,0x1000000]
+ # One committed read/write page per query; unmapped addresses fail.
+ if not mapped(a[0]):return 0
+ vals=[a[0]&~0xfff,obj,4,0x1000,0x1000,4,0x1000000]
  for i,v in enumerate(vals):write(a[1]+i*4,v)
  return 28
 functions['VirtualQuery']=stub('VirtualQuery',3,query)
@@ -149,10 +162,104 @@ stop=scratch+0x1f0000
 def call(at,args,stdcall=False):
  sp=scratch+0x1df000;write(sp,stop)
  for i,v in enumerate(args):write(sp+4+i*4,v)
- u.reg_write(UC_X86_REG_ESP,sp);u.emu_start(at,stop,count=3000000)
+ u.reg_write(UC_X86_REG_ESP,sp);u.emu_start(at,stop,count=400000000)
  assert u.reg_read(UC_X86_REG_EIP)==stop,hex(u.reg_read(UC_X86_REG_EIP))
  assert u.reg_read(UC_X86_REG_ESP)==sp+4+(4*len(args) if stdcall else 0)
  return u.reg_read(UC_X86_REG_EAX)
+
+def call_regs(at,args,regs,pop):
+ sp=scratch+0x1df000;write(sp,stop)
+ for i,v in enumerate(args):write(sp+4+i*4,v)
+ for r,v in regs.items():u.reg_write(r,v)
+ u.reg_write(UC_X86_REG_ESP,sp);u.emu_start(at,stop,count=400000000)
+ assert u.reg_read(UC_X86_REG_EIP)==stop,hex(u.reg_read(UC_X86_REG_EIP))
+ assert u.reg_read(UC_X86_REG_ESP)==sp+4+pop,(hex(u.reg_read(UC_X86_REG_ESP)),hex(sp))
+
+def coop_scenario():
+ """Drive the installed co-op hooks with a synthetic shell/player world.
+ Native engine routines are replaced by recording stubs; the patch sites,
+ compiled proxy and assembled broadcast adapter are the shipped bytes."""
+ sites={0xf13c4:(6,'ff91e0010000'),0xf13a4:(5,'e817fdffff'),0x2d455:(6,'8b90d0010000'),0x1045b1:(5,'e80a0bfcff'),
+        0xfeec4:(6,'81c6e8010000'),0xf167a:(5,'e841faffff'),0x100744:(5,'e877feffff'),0xfde97:(5,'e824270000')}
+ target={}
+ for rva,(size,orig) in sites.items():
+  now=bytes(u.mem_read(obj+rva,size))
+  if rva in (0xf13c4,0x1045b1):
+   assert now==bytes.fromhex(orig),hex(rva)
+   continue
+  assert now[0]==0xe8 and all(x==0x90 for x in now[5:]),hex(rva)
+  target[rva]=(obj+rva+5+struct.unpack('<i',now[1:5])[0])&0xffffffff
+  assert proxy<=target[rva]<proxy+0x100000
+ assert target[0x100744]==target[0xfde97]
+ said=[];ends=[];telefrag=[];nextlevels=[]
+ base=scratch+0x100000;shell=base;manager=base+0x4000;players=base+0x5000;strings=base+0x8000
+ write(obj+0x16de60,shell);write(shell+0x1d0,1);write(shell+0x1ae0,2)
+ u.mem_write(shell+0x210,b'worlds\\realm1\\R1M2B\0');u.mem_write(shell+0x210+0x7f,b'worlds\\realm1\\R1M2C\0')
+ write(obj+0x16da88,0);write(obj+0x157724,manager)
+ def broadcast():
+  said.append(cstr(u.reg_read(UC_X86_REG_EDX)));sp=u.reg_read(UC_X86_REG_ESP)
+  u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+ def thiscall_stub(record,pop):
+  def run():
+   record.append(u.reg_read(UC_X86_REG_ECX));sp=u.reg_read(UC_X86_REG_ESP)
+   if record is nextlevels:
+    c=read(obj+0x16da88)+1;write(obj+0x16da88,0 if c>read(shell+0x1ae0)-1 else c)
+   u.reg_write(UC_X86_REG_ESP,sp+4+pop);u.reg_write(UC_X86_REG_EIP,read(sp))
+  return run
+ stubs[obj+report['hook_symbols']['broadcast_only']]=broadcast
+ stubs[obj+0x100760]=thiscall_stub(ends,0)
+ stubs[obj+0x1005c0]=thiscall_stub(nextlevels,0)
+ stubs[obj+0xf10c0]=thiscall_stub(telefrag,12)
+ def player(i,client,hobj,name):
+  at=players+i*0x400;write(at+8,hobj);write(at+0x120,client);u.mem_write(at+0x1e8,name.encode()+b'\0');return at
+ alice=player(0,0x111,0xa1,'Alice');bob=player(1,0x222,0xb2,'Bob')
+ def roster(*objs):
+  node=manager+0x100;write(manager+4,node if objs else 0)
+  for i,h in enumerate(objs):
+   write(node,h);write(node+4,node+8 if i+1<len(objs) else 0);node+=8
+ def spawn(who,path=0xf13a4,z=0xc5380000):
+  pos=strings+0x800;write(pos,0x44c80000);write(pos+4,0xc3800000);write(pos+8,z)
+  call_regs(target[path],[pos,0x10168660,0x10168650],{UC_X86_REG_ECX:who},12)
+  return read(pos+8)
+ def chat(who,text):
+  u.mem_write(strings,text.encode()+b'\0');n=len(said)
+  call_regs(target[0xfeec4],[],{UC_X86_REG_ESI:who,UC_X86_REG_EAX:strings},0)
+  assert u.reg_read(UC_X86_REG_ESI)==who+0x1e8 and u.reg_read(UC_X86_REG_EAX)==strings
+  return said[n:]
+ def exit_trigger(world,flag=0):
+  trig=strings+0x400;u.mem_write(trig+0x54,world.encode()+b'\0');u.mem_write(trig+0x152,bytes([flag]))
+  call_regs(target[0x2d455],[],{UC_X86_REG_EAX:shell,UC_X86_REG_ECX:trig},0)
+  assert u.reg_read(UC_X86_REG_EDX)==1  # native multiplayer gate preserved
+ def next_level():
+  clock[0]+=4000;call_regs(target[0x100744],[],{UC_X86_REG_ECX:shell},0)
+ roster(0xa1);assert spawn(alice)==0xc5380000
+ roster(0xa1,0xb2);assert spawn(bob)==0xc5320000          # slot 1: +96 Z
+ assert not telefrag,'native telefrag loop must be skipped in a session'
+ assert any('Bob joined the lobby' in m for m in said),said
+ assert chat(alice,'hello')==[]
+ assert any('Alice(R)' in m for m in chat(alice,'!ready'))
+ assert any('Only the host' in m for m in chat(bob,'!start'))
+ chat(bob,'!READY')
+ out=chat(alice,'!start');assert any('Starting -> R1M2B' in m for m in out),out
+ assert len(ends)==1 and ends[0]==shell and read(obj+0x16da88)==1
+ next_level();assert len(nextlevels)==1 and read(obj+0x16da88)==0
+ spawn(alice);assert any('R1M2B started (epoch 1)' in m for m in said),said
+ spawn(bob)
+ exit_trigger('worlds\\realm1\\R1M2C',flag=1);assert len(ends)==1   # unverified flag: no change
+ exit_trigger('worlds\\realm1\\R1M2C');assert len(ends)==2 and read(obj+0x16da88)==0
+ for i in range(5):exit_trigger('worlds\\realm1\\R1M2C')
+ assert len(ends)==2,'exit must be debounced'
+ next_level();assert read(obj+0x16da88)==1
+ spawn(alice,path=0xf167a);spawn(bob);assert not telefrag
+ roster(0xa1)                                              # Bob disconnected
+ clock[0]+=1000;out=chat(alice,'!coop')
+ assert any('Bob left' in m for m in said) and any('PLAYING R1M2C e2' in m for m in out),(said,out)
+ assert any('End of the MVP route' in m for m in chat(alice,'!next'))
+ text=b''.join(log).decode('latin1')
+ for marker in ('build=coop-session-v1 proto=kpc-coop/1 sha256=','effective CoopSession=1','session armed kpc-coop/1',
+                'change [Co-op] All ready','world-loaded worlds\\realm1\\R1M2C','telefrag=skipped'):
+  assert marker in text,marker
+ print('PASS co-op session hooks:',len(said),'broadcasts,',len(ends),'native end-level requests,',len(nextlevels),'NextLevel calls, telefrag skipped')
 
 call(proxy+ps['_DllMain'],[proxy,1,0],True)
 u.mem_write(scratch+0x90000,b'KPC\0')
@@ -191,5 +298,6 @@ else:
  assert call(read(slot),[obj,scratch+0x90100],True)==obj+0xfdab0
  assert len(protect)==count,'second lookup reinstalled hooks'
  assert object_file==files[prefix+'object.lto']
+ if coop_session:coop_scenario()
  call(proxy+ps['_DeleteServer'],[0x30080000]);assert setup_calls[-1]==('delete',0x30080000)
  print('PASS compiled DLL:',fixtures.name,'proxy relocation, export forwarding, IAT interception, object relocation, guarded memory patching, initial policy, idempotence, unchanged headers/relocations and unchanged original file')

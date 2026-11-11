@@ -22,6 +22,7 @@ SHA-256 is not automatically evidence for a later build sharing its banner.
 | General automatic spawn allocator | Synthetic tests only | Not connected to live runtime; UNKNOWN/UNSUPPORTED must fail closed |
 | Experimental v8 spawn-list and campaign traces | Implemented, **not yet Windows-tested** | Same banner may identify differing DLL bytes; require SHA-256 per test |
 | Scripts, intro and level-transition synchronisation | Design proposal only | No general co-op campaign sync shipped |
+| **Co-op MVP session** (`CoopSession=1`): chat lobby, host start, no player telefrag, R1M2B placements, server-coordinated R1M2B → R1M2C change | Implemented; synthetic C tests + private emulation of the shipped DLL against original `object.lto`; **not Windows-tested** | See [COOP-MVP.md](COOP-MVP.md). Exit-trigger delivery in multiplayer, scripts/AI and intros are unverified; mirrors are blocked |
 
 **All experimental feature switches remain off by default.** For a
 new Windows observation, save the exact `KPCServerTools.dll` SHA-256
@@ -129,7 +130,8 @@ not a verified collision transform, live-solid roster, or spawn gate.
 - [ ] **Automatic spawning:** Connect the general allocator only after the collision/grounding contract is verified. Spawn two or more clients safely near campaign entry anchors on R1M2B and at least one additional map.
 - [ ] **Player lifecycle:** Verify departure, death, respawn, reconnect, world restart and reservation reuse; reject occupied positions and prevent telefrags.
 - [ ] **Campaign startup and synchronisation:** Establish original script execution timing with zero, one and multiple players; coordinate intro presentation, joining mid-sequence, reliable state replication and scripted gameplay effects. See [campaign sync design](CAMPAIGN-SYNC-DESIGN.md).
-- [ ] **Map progression:** Make right-click mirror exits and corridor triggers transition all clients exactly once, with consistent objectives, pickups and player state. Demonstrate a complete two-level playthrough before extending across realms.
+- [ ] **Map progression:** Make right-click mirror exits and corridor triggers transition all clients exactly once, with consistent objectives, pickups and player state. Demonstrate a complete two-level playthrough before extending across realms. *Implemented for the corridor exit on R1M2B → R1M2C with a host `!next` fallback ([COOP-MVP.md](COOP-MVP.md)); awaiting Windows evidence. Mirrors remain blocked.*
+- [ ] **Lobby:** Chat-command lobby (`!ready`, `!start`, …) implemented and emulator-tested; awaiting the two-client Windows protocol in [COOP-MVP.md](COOP-MVP.md).
 - [ ] **Windows regressions and release gate:** Test multiplayer deathmatch, disabled passthrough, supported regional 1.13 profiles, installation/upgrade/rollback, unchanged original assets and safe defaults. Document results before publishing an experimental build.
 
 Checked items should be backed by reproducible tests or linked Windows observations; keep intermediate reverse-engineering logs in the relevant research Markdown files.

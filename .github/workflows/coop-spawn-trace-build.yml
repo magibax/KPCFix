@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - feature/coop-campaign
+      - 'coop/**'
+  pull_request:
+    branches:
+      - feature/coop-campaign
   workflow_dispatch:
 
 permissions:
@@ -66,7 +70,7 @@ jobs:
         shell: bash
         run: |
           for bits in 64 32; do
-            flag=""; if [ "$bits" = 32 ]; then sudo apt-get install -y -qq gcc-multilib >/dev/null; flag=-m32; fi
+            flag=""; if [ "$bits" = 32 ]; then sudo apt-get update -qq && sudo apt-get install -y -qq gcc-multilib >/dev/null; flag=-m32; fi
             gcc $flag -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src               server-tools/server-tools-source/tests/test_coop_session.c -o /tmp/kpc-coop-session-test-$bits
             /tmp/kpc-coop-session-test-$bits
           done
@@ -137,7 +141,11 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           dll=Path('server-tools/KPCServerTools.dll').read_bytes()
-          assert b'diagnostics build=spawn-list-control-v8' in dll
+          assert b'build=coop-session-v1 proto=kpc-coop/1 sha256=' in dll
+          assert b'effective CoopSession=1' in dll
+          assert b'session armed kpc-coop/1 route=R1M2B>R1M2C' in dll
+          assert 'CoopSession'.encode('utf-16le') in dll
+          assert b'telefrag=skipped' in dll
           assert b'effective TraceModelRegistry=1' in dll
           assert b'effective TraceModelState=1' in dll
           assert b'[KPCFix Co-op] model flags 2000=' in dll
@@ -162,95 +170,40 @@ jobs:
           assert len(b)==m['proxy_bytes']
           print('PASS: tracked experimental artifact SHA256='+m['proxy_sha256'])
           PY
-      - name: Stage experimental test-only package
+      - name: Stage experimental co-op MVP package (full Server Tools tree)
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p dist
-          cp server-tools/KPCServerTools.dll server-tools/SERVER_TOOLS_BUILD.json dist/
-          cat > dist/TEST-INSTRUCTIONS.txt <<'TXT'
-          EXPERIMENTAL KPCFIX CO-OP WORLDMODEL TYPE-HISTOGRAM AND RAW GEOMETRY DIAGNOSTIC
-          Not a stable release. No automatic spawning or collision edits.
-
-          Back up server.dll, KPCServerTools.dll, SERVER_TOOLS_BUILD.json
-          and KPCServerTools.ini. With the dedicated server stopped,
-          copy this artifact's DLL and JSON, run Setup-KPCServerTools.cmd.
-
-          Use KPCServerTools.ini:
-            [ServerTools]
-            Enabled=1
-            AllowCheats=0
-
-            [Coop]
-            TracePlayerClearance=1
-            TraceBspVolume=1
-            TraceModelRegistry=1
-            TraceModelState=1
-            TrialSeparateSpawns=0
-            TraceCollisionABI=0
-
-          Load worlds\\realm1\\R1M2B with maxclients=2, join once
-          with ONE client, inspect KPCServerTools.log:
-          Three navigable candidates should give volume gate=UNSUPPORTED.
-          The deliberately obstructed wall should give volume gate=BLOCKED.
-          Additionally collect [KPCFix Co-op] base BSP box=... lines
-          AND [KPCFix Co-op] model registry=... lines
-          AND [KPCFix Co-op] model refs matched=... lines
-          AND [KPCFix Co-op] model state=... / model types / model flags
-          / model type bucket=... / type2 masks=... / other masks=...
-          / model vectors / model delta object / model vector source
-          / model vector current / model adjacent / model raw bounds lines.
-          The type histogram separates the 52 non-type-2 objects.
-          Raw adjacent words at object+0x4c..0x58 and model
-          source bounds at +0xe0..+0xf4 are only diagnostic field
-          samples, not a proven world-to-model transform.
-          Original 1.13 WorldModel-specific native branches test
-          type==2, not type==1. The log now separates both.
-          At most two differing vectors are logged as raw float
-          bit-patterns; these differences do not prove movement.
-          Raw object+0x28 bit masks are NOT proven solid flags.
-          Vector equal/changed only compares model+0x11c..124 against
-          object+0x40..48; this is NOT a verified collision transform.
-          Every attached pointer is checked read-only against the
-          expected resource-record pointer at object+0x140. All
-          matched/mismatched/unreadable counts should sum to attached.
-          Matching DOES NOT prove live solidity or a valid transform.
-          Confirm the log says diagnostics build=spawn-list-control-v8 and
-          effective TraceModelRegistry=1 at the top. If there is no
-          build marker, the dedicated server is loading an older DLL
-          (or this ZIP was not installed). If it reports effective
-          TraceModelRegistry=0 or model registry=DISABLED, verify
-          TraceModelRegistry=1 in the actual KPCServerTools.ini next
-          to the active server.dll, then restart the dedicated server.
-          The model registry is a resource list, not the active solid
-          object roster. Its roots are only pointer candidates, not
-          validated collision geometry or collision clearance.
-          INTERIOR_ONLY means primary BSP tree interior only (not SAFE).
-          TOUCHES_CLASS_ZERO means the player box reaches the other
-          BSP leaf class. UNKNOWN means unsafe/unsupported data or
-          search-budget exhaustion.
-          Do not assume the known wall is in the primary BSP until
-          this live differential confirms it. Send the full diagnostic.
-
-          The native tree probe is read-only with guarded pointer reads,
-          bounded stack and per-candidate visitation budget. It runs
-          only on the exact hash-matched original 1.13 DLL, with one
-          client and the opt-in TraceBspVolume switch.
-          A BSP interior-only result still does not cover other
-          WorldModels, current players or scripted hazards.
-          This test only detects positive obstructions and verifies that
-          unknown hull or actor clearance is never marked SAFE.
-          It does not prove arbitrary full-body clearance.
-          Disable TracePlayerClearance and restart to stop tracing.
-          Roll back all backed-up files (including server.dll) if needed.
-
-          No original proprietary game binaries or maps are included.
+          python3 tools/package_release.py --component server --output-dir "${RUNNER_TEMP}/coop-mvp"
+          short="${GITHUB_SHA::7}"
+          name="KPCFix-Server-Tools-COOP-MVP-EXPERIMENTAL-${short}.zip"
+          cp "${RUNNER_TEMP}/coop-mvp/KPCFix-Server-Tools-1.0.0.zip" "dist/${name}"
+          (cd dist && sha256sum "${name}" > "${name}.sha256")
+          cp server-tools/SERVER_TOOLS_BUILD.json dist/
+          sha256sum server-tools/KPCServerTools.dll | tee dist/KPCServerTools.dll.sha256
+          cp coop/COOP-MVP.md dist/TEST-INSTRUCTIONS.md
+          cat > dist/README-FIRST.txt <<'TXT'
+          EXPERIMENTAL KPCFIX CO-OP MVP (kpc-coop/1). NOT A STABLE RELEASE.
+          Feature-branch build of KPCFix Server Tools with a chat lobby and the
+          fixed R1M2B -> R1M2C route. Not Windows-gameplay-tested by the
+          developers; follow TEST-INSTRUCTIONS.md and report the logs.
+          Back up server.dll, server.original.dll, KPCServerTools.dll,
+          SERVER_TOOLS_BUILD.json and KPCServerTools.ini first. Extract the ZIP
+          into the game folder, run Setup-KPCServerTools.cmd, then start
+          KPC-Server-Launcher.cmd and tick the EXPERIMENTAL co-op box.
+          Verify: Get-FileHash .\KPCServerTools.dll equals proxy_sha256 in
+          SERVER_TOOLS_BUILD.json and the "build=coop-session-v1 ... sha256="
+          line at the top of KPCServerTools.log.
+          AllowCheats=0 must stay under [ServerTools].
+          No original proprietary game binaries, maps or assets are included.
           TXT
       - name: Verify packaged INI example meets launcher contract
         shell: bash
         run: |
           python3 - <<'PY'
           import pathlib
-          instruction=(pathlib.Path('dist')/'TEST-INSTRUCTIONS.txt').read_text()
+          instruction=(pathlib.Path('dist')/'README-FIRST.txt').read_text()+(pathlib.Path('dist')/'TEST-INSTRUCTIONS.md').read_text()
           default=pathlib.Path('server-tools/KPCServerTools-default.ini').read_text()
           readme=pathlib.Path('server-tools/README-Server-Tools.md').read_text()
           assert 'AllowCheats=0' in default, 'Default INI must include launcher-required AllowCheats'
@@ -261,7 +214,7 @@ jobs:
       - name: Upload local-test files
         uses: actions/upload-artifact@v4
         with:
-          name: KPCFix-Coop-Model-Geometry-Survey
+          name: KPCFix-Coop-MVP-Session
           path: dist/
           if-no-files-found: error
           retention-days: 14

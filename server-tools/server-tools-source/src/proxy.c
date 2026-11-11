@@ -8,6 +8,7 @@
 #include "coop_model_registry.h"
 #include "coop_aabb_overlap.h"
 #include "coop_model_state.h"
+#include "coop_session.h"
 extern HANDLE WINAPI GetStdHandle(DWORD);
 extern void WINAPI ExitProcess(UINT) __attribute__((noreturn));
 extern DWORD WINAPI VirtualQuery(const void *,void *,DWORD);
@@ -614,12 +615,202 @@ static void CDECL trace_spawn_position(void *object,const U32 *pos){
     __sync_fetch_and_add(&collision_trace_count,1)<COLLISION_DIAG_LIMIT)
   diagnostic_intersect_segment(pos,object);
 }
+/* ------------------------------------------------------------------------
+ * Experimental co-op session (CoopSession=1, protocol kpc-coop/1).
+ * Every engine location below was verified in the original 1.13 object.lto
+ * (SHA-256 3a03f879...) by static disassembly; see coop/COOP-MVP.md.
+ *   0x16de60  CServerShell* global; +0x1d0 game type, +0x210 + i*0x7f maplist
+ *             names, +0x1ae0 maplist count (fc640)
+ *   0x16da88  maplist cursor (object 0x16da78 +0x10, advanced by fc640)
+ *   0x100760  native multiplayer end-of-level (time/frag-limit path, fc626)
+ *   0x1005c0  native NextLevel; called from 0x100744 (pending change) and
+ *             0xfde97 (dedicated "nextlevel" console command)
+ *   0x157724  object manager; [+4] selector-0 player list {HOBJECT,next}
+ *   player+8 HOBJECT, +0x120 HCLIENT, +0x1e8 name[32]
+ *   0xf10c0   telefrag loop over the player list; only side effect is damage
+ * --------------------------------------------------------------------- */
+#define COOP_SHELL_RVA 0x16de60u
+#define COOP_MAPCURSOR_RVA 0x16da88u
+#define COOP_PLAYERLIST_RVA 0x157724u
+#define COOP_END_LEVEL_RVA 0x100760u
+#define COOP_NEXT_LEVEL_RVA 0x1005c0u
+#define COOP_LOG_BUDGET 3000u
+extern void CDECL runtime_broadcast(void *,const char *);
+static int coop_session_enabled;
+static U32 coop_min_players=2,coop_max_players=3;
+static U8 *coop_image;
+static CoopSession coop_state;
+static volatile U32 coop_log_count,campaign_log_count;
+typedef void (__attribute__((thiscall)) *ShellFn)(void *);
+
+static void coop_text(char *out,U32 *n,const char *s,U32 cap){while(s&&*s&&*n+1<cap)out[(*n)++]=*s++;out[*n]=0;}
+static void coop_dec(char *out,U32 *n,U32 v,U32 cap){
+ char t[11];U32 k=0;
+ do{t[k++]=(char)('0'+v%10u);v/=10u;}while(v&&k<10);
+ while(k&&*n+1<cap)out[(*n)++]=t[--k];
+ out[*n]=0;
+}
+/* Bounded, sequenced log: "[KPCFix Co-op] g=1 e=2 seq=7 PLAYING event detail" */
+static void coop_log(const char *event,const char *detail){
+ char line[240];U32 n=0;
+ if(__sync_fetch_and_add(&coop_log_count,1)>=COOP_LOG_BUDGET)return;
+ coop_text(line,&n,"[KPCFix Co-op] g=",sizeof line);coop_dec(line,&n,coop_state.generation,sizeof line);
+ coop_text(line,&n," e=",sizeof line);coop_dec(line,&n,coop_state.epoch,sizeof line);
+ coop_text(line,&n," seq=",sizeof line);coop_dec(line,&n,coop_state.seq,sizeof line);
+ coop_text(line,&n," ",sizeof line);coop_text(line,&n,coop_phase_name(coop_state.phase),sizeof line);
+ coop_text(line,&n," ",sizeof line);coop_text(line,&n,event,sizeof line);
+ if(detail){coop_text(line,&n," ",sizeof line);coop_text(line,&n,detail,sizeof line);}
+ log_file(line);
+}
+static int coop_rd(U32 address,U32 *value){return registry_read32(0,address,value);}
+/* Copy a C string through guarded reads (page checks), always terminated. */
+static U32 coop_copy_str(char *out,U32 src,U32 cap){
+ U32 i;
+ if(!cap)return 0;
+ for(i=0;i+1<cap;i++){
+  if((!i||((src+i)&0xfffu)==0)&&!bsp_mem_readable(src+i,1))break;
+  out[i]=*(const char *)(src+i);
+  if(!out[i])return i;
+ }
+ out[i]=0;return i;
+}
+static U32 coop_live_objects(U32 *live,U32 cap){
+ U32 manager,node,count=0,guard=0;
+ if(!coop_rd((U32)coop_image+COOP_PLAYERLIST_RVA,&manager)||!coop_rd(manager+4,&node))return 0;
+ while(node&&guard++<256){
+  U32 handle,next;
+  if(!coop_rd(node,&handle)||!coop_rd(node+4,&next))break;
+  if(count<cap)live[count++]=handle;
+  node=next;
+ }
+ return count;
+}
+static void coop_presence(U32 now){
+ U32 live[64],n=coop_live_objects(live,64);CoopResult r;
+ if(coop_session_presence(&coop_state,live,n,now,&r)){coop_log("presence",r.msg);if(r.action)runtime_broadcast(coop_image,r.msg);}
+}
+/* Select route[target] as the next native maplist entry. Fails closed if the
+ * server's maplist does not contain the route world. */
+static int coop_prepare_maplist(U32 target){
+ U32 shell,count,i,mbi[7];char name[0x80];
+ if(target>=COOP_ROUTE_LEN||!coop_rd((U32)coop_image+COOP_SHELL_RVA,&shell)||
+    !coop_rd(shell+0x1ae0u,&count)||!count||count>64)return 0;
+ for(i=0;i<count;i++){
+  coop_copy_str(name,shell+0x210u+i*0x7fu,0x7f);
+  if(coop_world_equal(name,coop_route[target])){
+   U32 *cursor=(U32 *)(coop_image+COOP_MAPCURSOR_RVA);
+   if(VirtualQuery(cursor,mbi,sizeof(mbi))!=sizeof(mbi)||mbi[4]!=0x1000||!(mbi[5]&0xccu)||(mbi[5]&0x100))return 0;
+   *cursor=i?i-1:count-1;   /* fc640 pre-increments and wraps */
+   return 1;
+  }
+ }
+ return 0;
+}
+static void coop_current_world(char out[0x80]){
+ U32 shell,count,cursor;out[0]=0;
+ if(coop_rd((U32)coop_image+COOP_SHELL_RVA,&shell)&&coop_rd(shell+0x1ae0u,&count)&&
+    coop_rd((U32)coop_image+COOP_MAPCURSOR_RVA,&cursor)&&count&&count<=64&&cursor<count)
+  coop_copy_str(out,shell+0x210u+cursor*0x7fu,0x7f);
+}
+static void coop_execute(CoopResult *r){
+ if(r->action==COOP_ACT_NONE)return;
+ coop_log(r->action==COOP_ACT_CHANGE_WORLD?"change":"say",r->msg);
+ runtime_broadcast(coop_image,r->msg);
+ if(r->action==COOP_ACT_CHANGE_WORLD){
+  U32 shell;
+  if(!coop_prepare_maplist(r->target_pos)||!coop_rd((U32)coop_image+COOP_SHELL_RVA,&shell)||!shell){
+   CoopResult failed;coop_session_change_failed(&coop_state,&failed);
+   coop_log("change-failed","maplist lacks route world or shell unreadable");
+   runtime_broadcast(coop_image,failed.msg);return;
+  }
+  /* Native multiplayer end-of-level: 3 s intermission, then NextLevel. */
+  ((ShellFn)(coop_image+COOP_END_LEVEL_RVA))((void *)shell);
+  coop_log("end-level","native intermission requested");
+ }
+}
+static void coop_tick(U32 now){CoopResult r;if(coop_session_tick(&coop_state,now,&r))coop_execute(&r);}
+static int coop_identify(U32 player,U32 *client,U32 *object,char name[COOP_NAME_MAX]){
+ name[0]=0;
+ if(!player||!coop_rd(player+0x120u,client)||!coop_rd(player+8u,object))return 0;
+ coop_copy_str(name,player+0x1e8u,COOP_NAME_MAX);
+ return *client!=0;
+}
+/* Both original spawn paths: register/refresh the member, place on R1M2B,
+ * and SKIP the native telefrag loop (co-op players are teammates). */
+static void coop_spawn_hook(U32 player,U32 *pos,int first_path){
+ U32 client=0,object=0,now=GetTickCount();char name[COOP_NAME_MAX],line[160];U32 n=0;
+ int slot=-1;CoopResult r;
+ coop_tick(now);coop_presence(now);
+ if(coop_identify(player,&client,&object,name)){
+  slot=coop_session_seen(&coop_state,client,player,object,name,now,&r);
+  coop_execute(&r);
+ }
+ if(first_path&&slot>=0&&slot<(int)COOP_TRIAL_SLOTS&&coop_is_r1m2b_anchor(pos))
+  coop_assign_trial_position(pos,slot);
+ coop_text(line,&n,first_path?"path=f13a4 slot=":"path=f167a slot=",sizeof line);
+ if(slot<0)coop_text(line,&n,"none",sizeof line);else coop_dec(line,&n,(U32)slot,sizeof line);
+ coop_text(line,&n," client=",sizeof line);coop_dec(line,&n,client,sizeof line);
+ coop_text(line,&n," name=",sizeof line);coop_text(line,&n,name,sizeof line);
+ if(pos){coop_text(line,&n," zbits=",sizeof line);coop_dec(line,&n,pos[2],sizeof line);}
+ coop_text(line,&n," telefrag=skipped",sizeof line);
+ coop_log("spawn",line);
+}
+static void __attribute__((used,noinline)) coop_chat_observe(U32 player,U32 text){
+ U32 client=0,object=0,now;char name[COOP_NAME_MAX],said[COOP_COMMAND_MAX+2];CoopResult r;U32 i=0;
+ if(!coop_session_enabled||!coop_image||!text)return;
+ coop_copy_str(said,text,sizeof said);
+ while(said[i]==' '||said[i]=='\t')i++;
+ if(said[i]!='!')return;
+ now=GetTickCount();coop_tick(now);coop_presence(now);
+ if(!coop_identify(player,&client,&object,name))return;
+ if(coop_find_client(&coop_state,client)<0){
+  coop_session_seen(&coop_state,client,player,object,name,now,&r);coop_execute(&r);
+ }
+ coop_session_command(&coop_state,client,said,now,&r);
+ if(r.action)coop_execute(&r);
+}
+/* Replaces "add esi,0x1e8" at 0xfeec4 inside the chat relay: ESI=player,
+ * EAX=chat text. Registers and flags are preserved; the add is replayed. */
+static void __attribute__((naked)) coop_chat_entry(void){
+ __asm__ volatile("pushfl; pushal; pushl %eax; pushl %esi; call coop_chat_observe;"
+                  "addl $8,%esp; popal; popfl; addl $0x1e8,%esi; ret");
+}
+static void coop_exit_trigger(U32 trigger){
+ char next[0x80],line[200];U32 n=0,now=GetTickCount(),flag=0;CoopResult r;
+ coop_tick(now);coop_presence(now);
+ coop_copy_str(next,trigger+0x54u,0x7f);
+ if(bsp_mem_readable(trigger+0x152u,1))flag=*(const U8 *)(trigger+0x152u);
+ coop_text(line,&n,"next=",sizeof line);coop_text(line,&n,next,sizeof line);
+ coop_text(line,&n," flag152=",sizeof line);coop_dec(line,&n,flag,sizeof line);
+ if(flag){
+  /* Single-player code takes a different, unverified branch for this flag
+   * (possibly mirror/activation). Do not guess: host may use !next. */
+  if(coop_state.phase==COOP_PHASE_GAMEPLAY&&coop_state.transition_epoch!=coop_state.epoch)
+   coop_log("exit-unsupported-flag",line);
+  return;
+ }
+ coop_session_exit(&coop_state,next,now,&r);
+ if(r.action==COOP_ACT_CHANGE_WORLD)coop_log("exit",line);
+ coop_execute(&r);
+}
+typedef void (__attribute__((thiscall)) *SpawnPrepareFn)(void *,U32 *,const U32 *,const U32 *);
+static void __attribute__((thiscall)) coop_next_level(void *shell){
+ char world[0x80];U32 now=GetTickCount();
+ if(coop_session_enabled){coop_session_world_loading(&coop_state,now);coop_log("world-loading","native NextLevel");}
+ ((ShellFn)(coop_image+COOP_NEXT_LEVEL_RVA))(shell);
+ if(coop_session_enabled){
+  coop_current_world(world);
+  coop_session_world_loaded(&coop_state,world);
+  coop_log("world-loaded",world[0]?world:"(unknown)");
+ }
+}
+
 /* RVA f13a4 precedes the engine's nearby-object / telefrag handling.
  * The callee is a thiscall method (ECX=player, ret 12). Adjust the private
  * local copy of the spawn vector BEFORE forwarding the original invocation.
  * This is an experimental trial, not a collision-validated placement API. */
-typedef void (__attribute__((thiscall)) *SpawnPrepareFn)(void *,U32 *,const U32 *,const U32 *);
 static void __attribute__((thiscall)) coop_before_telefrag(void *player,U32 *pos,const U32 *a,const U32 *b){
+ if(coop_session_enabled){coop_spawn_hook((U32)player,pos,1);return;}
  if(spawn_separation_enabled&&coop_is_r1m2b_anchor(pos)){
   int slot=coop_claim_slot(&spawn_trial_reservations,(U32)player);
   if(slot>=0){
@@ -638,14 +829,10 @@ static void __attribute__((thiscall)) coop_before_telefrag(void *player,U32 *pos
  }
  ((SpawnPrepareFn)(spawn_image+SPAWN_PREPARE_TARGET_RVA))(player,pos,a,b);
 }
-static void make_prepare_call(U8 *out,U8 *site){
- U32 relative=(U32)coop_before_telefrag-((U32)site+5);
- out[0]=0xe8;copy(out+1,(const U8 *)&relative,4);
-}
-
-static void make_spawn_call(U8 *out,U8 *site){
- U32 relative=(U32)trace_spawn_position-((U32)site+5);
- out[0]=0xe8;copy(out+1,(const U8 *)&relative,4);out[5]=0x90;
+/* Second original spawn path (call at 0xf167a). Installed only for sessions. */
+static void __attribute__((thiscall)) coop_respawn_telefrag(void *player,U32 *pos,const U32 *a,const U32 *b){
+ if(coop_session_enabled){coop_spawn_hook((U32)player,pos,0);return;}
+ ((SpawnPrepareFn)(spawn_image+SPAWN_PREPARE_TARGET_RVA))(player,pos,a,b);
 }
 
 static int campaign_trace;
@@ -653,39 +840,72 @@ static U8 *campaign_image;
 
 /* Replace only the native six-byte game-type load. Preserve the receiver,
  * original registers and flags, then replay the load before returning. */
-static void __attribute__((used,noinline)) campaign_exit_seen(U32 mode){
- log_file(mode?"[KPCFix Campaign] exit handler reached: multiplayer gate closed":
-               "[KPCFix Campaign] exit handler reached: single-player gate open");
+static void __attribute__((used,noinline)) campaign_exit_seen(U32 mode,U32 trigger){
+ if(campaign_trace&&__sync_fetch_and_add(&campaign_log_count,1)<32)
+  log_file(mode?"[KPCFix Campaign] exit handler reached: multiplayer gate closed":
+                "[KPCFix Campaign] exit handler reached: single-player gate open");
+ if(coop_session_enabled&&coop_image&&mode)coop_exit_trigger(trigger);
 }
 static void __attribute__((naked)) campaign_exit_load(void){
- __asm__ volatile("pushfl; pushal; pushl 0x1d0(%eax); call campaign_exit_seen;"
-                  "addl $4,%esp; popal; popfl; movl 0x1d0(%eax),%edx; ret");
+ __asm__ volatile("pushfl; pushal; pushl %ecx; pushl 0x1d0(%eax); call campaign_exit_seen;"
+                  "addl $8,%esp; popal; popfl; movl 0x1d0(%eax),%edx; ret");
 }
 typedef void *(CDECL *CampaignLookup)(const char *);
 static void *CDECL campaign_lookup(const char *path){
  void *result=((CampaignLookup)(campaign_image+0xc50c0))(path);
- log_file("[KPCFix Campaign] starting_cinematic lookup");
- log_file(path);
- log_file(result?"[KPCFix Campaign] script object found":"[KPCFix Campaign] script lookup returned null");
+ if(__sync_fetch_and_add(&campaign_log_count,1)<32){
+  log_file("[KPCFix Campaign] starting_cinematic lookup");
+  log_file(path);
+  log_file(result?"[KPCFix Campaign] script object found":"[KPCFix Campaign] script lookup returned null");
+ }
  return result;
 }
+
+/* Optional in-memory call/load redirects inside the original object image.
+ * Each site's original bytes are verified; disabled sites must stay original. */
+typedef struct {U32 rva,size;U8 original[6],hooked[6];int enabled;} OptionalSite;
+static void make_call(OptionalSite *s,U8 *b,const void *target){
+ U32 i,rel=(U32)target-((U32)b+s->rva+5);
+ s->hooked[0]=0xe8;copy(s->hooked+1,(const U8 *)&rel,4);
+ for(i=5;i<s->size;i++)s->hooked[i]=0x90;
+}
+#define OPTIONAL_SITES 8u
+static void optional_sites(OptionalSite *s,U8 *b){
+ static const struct {U32 rva,size;U8 original[6];} table[OPTIONAL_SITES]={
+  {SPAWN_POS_CALL_RVA,6,{0xff,0x91,0xe0,0x01,0x00,0x00}},
+  {SPAWN_PREPARE_CALL_RVA,5,{0xe8,0x17,0xfd,0xff,0xff}},
+  {0x2d455,6,{0x8b,0x90,0xd0,0x01,0x00,0x00}},
+  {0x1045b1,5,{0xe8,0x0a,0x0b,0xfc,0xff}},
+  {0xfeec4,6,{0x81,0xc6,0xe8,0x01,0x00,0x00}},   /* chat relay: add esi,0x1e8 */
+  {0xf167a,5,{0xe8,0x41,0xfa,0xff,0xff}},        /* second spawn path telefrag */
+  {0x100744,5,{0xe8,0x77,0xfe,0xff,0xff}},       /* pending change -> NextLevel */
+  {0xfde97,5,{0xe8,0x24,0x27,0x00,0x00}},        /* console nextlevel -> NextLevel */
+ };
+ U32 i;
+ for(i=0;i<OPTIONAL_SITES;i++){s[i].rva=table[i].rva;s[i].size=table[i].size;copy(s[i].original,table[i].original,6);}
+ make_call(&s[0],b,(const void *)trace_spawn_position);
+ make_call(&s[1],b,(const void *)coop_before_telefrag);
+ make_call(&s[2],b,(const void *)campaign_exit_load);
+ make_call(&s[3],b,(const void *)campaign_lookup);
+ make_call(&s[4],b,(const void *)coop_chat_entry);
+ make_call(&s[5],b,(const void *)coop_respawn_telefrag);
+ make_call(&s[6],b,(const void *)coop_next_level);
+ make_call(&s[7],b,(const void *)coop_next_level);
+ s[0].enabled=spawn_trace_enabled;
+ s[1].enabled=spawn_separation_enabled||coop_session_enabled;
+ s[2].enabled=campaign_trace||coop_session_enabled;
+ s[3].enabled=campaign_trace;
+ for(i=4;i<OPTIONAL_SITES;i++)s[i].enabled=coop_session_enabled;
+}
 static int apply_object(HMODULE module){
- U8 *b=(U8 *)module;U8 hash[32],expected[8],spawn_call[6],prepare_call[5];U32 i,j,old,restore,already=1;
- U32 mbi[7],delta=(U32)b-0x10000000u;
+ U8 *b=(U8 *)module;U8 hash[32],expected[8];U32 i,j,old,restore,already=1;
+ U32 mbi[7],delta=(U32)b-0x10000000u;OptionalSite site[OPTIONAL_SITES];
  if(!module_hash(module,hash)||!same(hash,object_hash,32)||!valid_image(b,0x196000))return 0;
- make_spawn_call(spawn_call,b+SPAWN_POS_CALL_RVA);
- make_prepare_call(prepare_call,b+SPAWN_PREPARE_CALL_RVA);
+ optional_sites(site,b);
  for(i=0;i<PATCH_COUNT;i++)if(!same(b+patches[i].rva,patches[i].after,patches[i].size))already=0;
- U8 exit_call[6]={0xe8,0,0,0,0,0x90},intro_call[5]={0xe8};
- const U8 exit_original[]={0x8b,0x90,0xd0,0x01,0,0},intro_original[]={0xe8,0x0a,0x0b,0xfc,0xff};
- U32 exit_rel=(U32)campaign_exit_load-(U32)(b+0x2d455+5);
- U32 intro_rel=(U32)campaign_lookup-(U32)(b+0x1045b1+5);
- copy(exit_call+1,(U8 *)&exit_rel,4);copy(intro_call+1,(U8 *)&intro_rel,4);
- if(campaign_trace&&(!same(b+0x2d455,already?exit_call:exit_original,6)||
-                      !same(b+0x1045b1,already?intro_call:intro_original,5)))return 0;
  if(already){
-  if(!same(b+SPAWN_POS_CALL_RVA,spawn_trace_enabled?spawn_call:original_spawn_pos_call,6))return 0;
-  if(!same(b+SPAWN_PREPARE_CALL_RVA,spawn_separation_enabled?prepare_call:original_prepare_call,5))return 0;
+  for(i=0;i<OPTIONAL_SITES;i++)
+   if(!same(b+site[i].rva,site[i].enabled?site[i].hooked:site[i].original,site[i].size))return 0;
   if(b[HOOK_RVA+INITIAL_OFFSET]>1||!same(b+0x116550,noclip_init,sizeof(noclip_init)))return 0;
   for(i=0;i<sizeof(hook_code);i++)if(i!=INITIAL_OFFSET&&b[HOOK_RVA+i]!=hook_code[i])return 0;
   return 1;
@@ -695,8 +915,7 @@ static int apply_object(HMODULE module){
   if(patches[i].reloc>=0)*(U32 *)(expected+patches[i].reloc)+=delta;
   if(!same(b+patches[i].rva,expected,patches[i].size))return 0;
  }
- if(!same(b+SPAWN_POS_CALL_RVA,original_spawn_pos_call,6))return 0;
- if(!same(b+SPAWN_PREPARE_CALL_RVA,original_prepare_call,5))return 0;
+ for(i=0;i<OPTIONAL_SITES;i++)if(!same(b+site[i].rva,site[i].original,site[i].size))return 0;
  for(i=0;i<sizeof(hook_code);i++)if(b[HOOK_RVA+i])return 0;
  for(i=0;i<sizeof(noclip_init);i++)if(b[0x116550+i])return 0;
  /* The known .data section's final page includes unused, writable padding.
@@ -707,22 +926,20 @@ static int apply_object(HMODULE module){
  for(i=0;i<0x90;i++)if(b[0x174f00+i])return 0;
  if(rd(b+0x16d950)!=3&&rd(b+0x16d950)!=0)return 0;
  if(!VirtualProtect(b+0x1000,0x116000,0x40,&old))return 0;
- if(campaign_trace){
-  campaign_image=b;
-  copy(b+0x2d455,exit_call,6);
-  copy(b+0x1045b1,intro_call,5);
-  log_file("[KPCFix Campaign] startup and exit trace armed");
- }
+ campaign_image=b;
+ if(campaign_trace)log_file("[KPCFix Campaign] startup and exit trace armed");
  copy(b+HOOK_RVA,hook_code,sizeof(hook_code));
  b[HOOK_RVA+INITIAL_OFFSET]=(U8)initial_cheats;
  copy(b+0x116550,noclip_init,sizeof(noclip_init));
  for(i=0;i<PATCH_COUNT;i++)for(j=0;j<patches[i].size;j++)b[patches[i].rva+j]=patches[i].after[j];
- if(spawn_trace_enabled||spawn_separation_enabled){
+ if(spawn_trace_enabled||spawn_separation_enabled||coop_session_enabled){
   spawn_image=b;clearance_started=0;spawn_trace_count=0;collision_trace_count=0;
   for(i=0;i<COOP_TRIAL_SLOTS;i++)spawn_trial_reservations.player[i]=0;
-  if(spawn_trace_enabled)copy(b+SPAWN_POS_CALL_RVA,spawn_call,6);
-  if(spawn_separation_enabled)copy(b+SPAWN_PREPARE_CALL_RVA,prepare_call,5);
  }
+ if(coop_session_enabled){
+  coop_image=b;coop_session_init(&coop_state,coop_min_players,coop_max_players);
+ }
+ for(i=0;i<OPTIONAL_SITES;i++)if(site[i].enabled)copy(b+site[i].rva,site[i].hooked,site[i].size);
  /* LoadLibrary has already applied relocations and may have run table init. */
  *(U32 *)(b+0x16d950)&=~3u;
  if(!VirtualProtect(b+0x1000,0x116000,old,&restore)||
@@ -731,6 +948,13 @@ static int apply_object(HMODULE module){
  object_installs++;
  {const char *message="[KPCFix Server Tools] Runtime hooks installed; original object.lto unchanged.";runtime_print(b,message,len(message));}
  log_file("[KPCFix Server Tools] Runtime object hooks installed; file unchanged.");
+ if(coop_session_enabled){
+  char msg[96];U32 n=0;
+  coop_text(msg,&n,"session armed kpc-coop/1 route=R1M2B>R1M2C min=",sizeof msg);
+  coop_dec(msg,&n,coop_min_players,sizeof msg);coop_text(msg,&n," max=",sizeof msg);
+  coop_dec(msg,&n,coop_max_players,sizeof msg);
+  coop_log("armed",msg);
+ }
  return 1;
 }
 static FARPROC WINAPI proxy_get_proc(HMODULE module,const char *name){
@@ -808,8 +1032,20 @@ static void initialize(void){
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TracePlayerClearance",0,ini_path)!=0);
  spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
- if(active&&spawn_trace_enabled){
-  log_file("[KPCFix Co-op] diagnostics build=spawn-list-control-v8 (reads KPCServerTools.ini)");
+ coop_session_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSession",0,ini_path)!=0;
+ coop_min_players=GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopMinPlayers",2,ini_path);
+ coop_max_players=GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopMaxPlayers",3,ini_path);
+ if(coop_max_players<1||coop_max_players>3)coop_max_players=3;
+ if(coop_min_players<1||coop_min_players>coop_max_players)coop_min_players=coop_max_players<2?coop_max_players:2;
+ if(active&&(spawn_trace_enabled||coop_session_enabled||campaign_trace)){
+  /* Diagnostic identity tied to the exact bytes of this DLL file. */
+  U8 own[32];WCHAR own_path[1024];U32 k,n=GetModuleFileNameW(self,own_path,1024);
+  char line[128];static const char hex[]="0123456789abcdef";U32 m=0;
+  coop_text(line,&m,"[KPCFix Co-op] build=coop-session-v1 proto=kpc-coop/1 sha256=",sizeof line);
+  if(n&&n<1024&&file_hash(own_path,own))for(k=0;k<32&&m+3<sizeof line;k++){line[m++]=hex[own[k]>>4];line[m++]=hex[own[k]&15];}
+  else coop_text(line,&m,"unavailable",sizeof line);
+  line[m]=0;log_file(line);
+  log_file(coop_session_enabled?"[KPCFix Co-op] effective CoopSession=1":"[KPCFix Co-op] effective CoopSession=0");
   log_file(model_registry_enabled?
     "[KPCFix Co-op] effective TraceModelRegistry=1":
     "[KPCFix Co-op] effective TraceModelRegistry=0 (set [Coop] TraceModelRegistry=1; restart)");

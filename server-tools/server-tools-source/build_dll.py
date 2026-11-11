@@ -51,7 +51,18 @@ runtime_print:
  call eax
  pop ebp
  ret
-'''%symbols['console_line'])
+# Co-op lobby: C ABI adapter into the Windows-tested chat broadcast routine
+# (the same path that announces cheat permission changes).
+.global runtime_broadcast
+runtime_broadcast:
+ push ebp
+ mov ebp,[esp+8]
+ mov edx,[esp+12]
+ lea eax,[ebp+%d]
+ call eax
+ pop ebp
+ ret
+'''%(symbols['console_line'],symbols['broadcast_only']))
 flags=['-m32','-O2','-std=c11','-ffreestanding','-fno-builtin','-fno-pic','-fno-pie','-fno-stack-protector','-fstack-clash-protection','-fno-asynchronous-unwind-tables','-fno-unwind-tables','-fno-ident','-fshort-wchar','-mno-sse','-mno-mmx','-mpreferred-stack-boundary=2','-mincoming-stack-boundary=2','-Wall','-Wextra','-I',str(root/'src'),'-I',str(work)]
 objects=[]
 for name in ['proxy.c','sha256.c','runtime_print.S']:
@@ -62,7 +73,7 @@ for name in ['proxy.c','sha256.c','runtime_print.S']:
 # Import library generated from build-only stubs; no system DLL is shipped.
 (work/'stub.S').write_text('.text\n.global api_stub\napi_stub:\n ret\n')
 run(['as','--32',work/'stub.S','-o',work/'stub.o']);elf_to_coff(work/'stub.o',work/'stub.obj')
-apis=['GetModuleHandleW','GetModuleFileNameW','LoadLibraryW','GetProcAddress','DisableThreadLibraryCalls','GetCurrentProcess','VirtualProtect','VirtualQuery','FlushInstructionCache','CreateFileW','GetFileSizeEx','ReadFile','WriteFile','CloseHandle','GetPrivateProfileIntW','GetStdHandle','ExitProcess']
+apis=['GetModuleHandleW','GetModuleFileNameW','LoadLibraryW','GetProcAddress','DisableThreadLibraryCalls','GetCurrentProcess','VirtualProtect','VirtualQuery','FlushInstructionCache','CreateFileW','GetFileSizeEx','ReadFile','WriteFile','CloseHandle','GetPrivateProfileIntW','GetStdHandle','ExitProcess','GetTickCount']
 (work/'KERNEL32.def').write_text('LIBRARY KERNEL32.dll\nEXPORTS\n'+''.join(' '+v+'=api_stub\n' for v in apis))
 run(['ld','-m','i386pe','--dll','--entry','_api_stub','--no-insert-timestamp','--out-implib',work/'KERNEL32.a','-o',work/'KERNEL32.build-only.dll',work/'stub.obj',work/'KERNEL32.def'])
 (work/'server.def').write_text('LIBRARY server.dll\nEXPORTS\n CreateServer=CreateServer @1\n DeleteServer=DeleteServer @2\n')
@@ -94,6 +105,9 @@ previous_proxies=[
     'b0404468077d0aec012fa9268618d375b99361d16dc669178dc8df0c45f0fa38',
     '8de76e10a81be3ceb1ca13b93fe2c9606dc5bf0f7a27784592b15bb7698f0807',
     'bac7696bc79f10b637134b7bbffea1ead01e67c8207452f5c3f339a8b5a353d4',
+    # spawn-list-control-v8 (f94affd): previously tracked experimental DLL;
+    # reviewed so testers can upgrade it in place to the co-op session build.
+    '7ea0dfa44dc7870579de6b4e6ffea9018903b7525c3aa7d1b8c9d91013d3fc0d',
 ]
 if new_hash in previous_proxies:
  raise SystemExit('Current proxy SHA-256 unexpectedly appears in the previous allowlist')

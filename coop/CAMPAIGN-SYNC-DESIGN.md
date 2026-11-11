@@ -1,6 +1,6 @@
 # Campaign startup and scripted-sequence synchronisation
 
-Status: **design proposal and research plan, not implemented or live-verified**. Research branch: `feature/coop-campaign`. Recorded 2026-11-10.
+Status: **design proposal and research plan, not implemented or live-verified**. A minimal subset (lobby barrier, epochs, debounced server-coordinated exit, intro skipped) is implemented as the [co-op MVP](COOP-MVP.md); the rest of this design remains open. Research branch: `feature/coop-campaign`. Recorded 2026-11-10.
 
 ## Problem
 
