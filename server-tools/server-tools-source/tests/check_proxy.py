@@ -257,7 +257,8 @@ def coop_scenario():
  assert any('End of the MVP route' in m for m in chat(alice,'!next'))
  text=b''.join(log).decode('latin1')
  for marker in ('build=coop-session-v1 proto=kpc-coop/1 sha256=','effective CoopSession=1','session armed kpc-coop/1',
-                'change [Co-op] All ready','world-loaded worlds\\realm1\\R1M2C','telefrag=skipped'):
+                'change [Co-op] All ready','world-loaded worlds\\realm1\\R1M2C','telefrag=skipped',
+                'exit-seen next=worlds\\realm1\\R1M2C flag152=1'):
   assert marker in text,marker
  print('PASS co-op session hooks:',len(said),'broadcasts,',len(ends),'native end-level requests,',len(nextlevels),'NextLevel calls, telefrag skipped')
 

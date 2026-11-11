@@ -775,6 +775,7 @@ static void __attribute__((naked)) coop_chat_entry(void){
  __asm__ volatile("pushfl; pushal; pushl %eax; pushl %esi; call coop_chat_observe;"
                   "addl $8,%esp; popal; popfl; addl $0x1e8,%esi; ret");
 }
+static U32 coop_exit_seen_epoch=0xffffffffu;
 static void coop_exit_trigger(U32 trigger){
  char next[0x80],line[200];U32 n=0,now=GetTickCount(),flag=0;CoopResult r;
  coop_tick(now);coop_presence(now);
@@ -782,6 +783,9 @@ static void coop_exit_trigger(U32 trigger){
  if(bsp_mem_readable(trigger+0x152u,1))flag=*(const U8 *)(trigger+0x152u);
  coop_text(line,&n,"next=",sizeof line);coop_text(line,&n,next,sizeof line);
  coop_text(line,&n," flag152=",sizeof line);coop_dec(line,&n,flag,sizeof line);
+ /* Runtime evidence for the open question: does multiplayer deliver the
+  * exit object's 0x27 trigger message at all? One line per epoch. */
+ if(coop_exit_seen_epoch!=coop_state.epoch){coop_exit_seen_epoch=coop_state.epoch;coop_log("exit-seen",line);}
  if(flag){
   /* Single-player code takes a different, unverified branch for this flag
    * (possibly mirror/activation). Do not guess: host may use !next. */
