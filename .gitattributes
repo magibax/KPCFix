@@ -12,3 +12,8 @@
 
 # The externally supplied Claude audit uses its original BOM/CRLF formatting.
 KPCFix-audit-report.md -text
+
+# Preserve committed CRLF of legacy license texts and CMD wrapper.
+LICENSES/DDrawCompat-0BSD.txt -text
+LICENSES/KPCFix-MIT.txt -text
+Launch-KPCFix.cmd -text

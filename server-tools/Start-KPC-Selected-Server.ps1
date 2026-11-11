@@ -30,7 +30,9 @@ if($ini -notmatch '(?im)^[ \t]*AllowCheats[ \t]*=') {
  $separator=if($header.Value.EndsWith("`n") -or $header.Value.EndsWith("`r")){''}else{$nl}
  $ini=$ini.Insert($header.Index+$header.Length,$separator+'AllowCheats='+$value+$nl)
 }else{
- $ini=[regex]::Replace($ini,'(?im)^[ \t]*AllowCheats[ \t]*=.*
+ $ini=[regex]::Replace($ini,'(?im)^[ \t]*AllowCheats[ \t]*=.*$',('AllowCheats='+$value))
+}
+[IO.File]::WriteAllText($iniPath,$ini,$iniEncoding)
 # Write to this console's input buffer, not the active desktop window.
 Add-Type -TypeDefinition @'
 using System;
