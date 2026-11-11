@@ -17,7 +17,7 @@ foreach ($Required in @('kpc-gui-server.cfg','kpc-gui-maps.txt','KPCServerTools.
 $iniPath=Join-Path $PSScriptRoot 'KPCServerTools.ini'
 # Keep existing INI encoding and newline layout. Older installs can lack
 # AllowCheats; insert the missing key under [ServerTools] rather than failing.
-$reader=New-Object System.IO.StreamReader($iniPath,(New-Object System.Text.UTF8Encoding($false)),$true)
+$reader=[IO.StreamReader]::new($iniPath,([Text.UTF8Encoding]::new($false)),$true)
 try {
  $ini=$reader.ReadToEnd()
  $iniEncoding=$reader.CurrentEncoding
@@ -30,7 +30,9 @@ if($ini -notmatch '(?im)^[ \t]*AllowCheats[ \t]*=') {
  $separator=if($header.Value.EndsWith("`n") -or $header.Value.EndsWith("`r")){''}else{$nl}
  $ini=$ini.Insert($header.Index+$header.Length,$separator+'AllowCheats='+$value+$nl)
 }else{
- $ini=[regex]::Replace($ini,'(?im)^[ \t]*AllowCheats[ \t]*=.*
+ $ini=[regex]::Replace($ini,'(?im)^[ \t]*AllowCheats[ \t]*=[^\r\n]*',('AllowCheats='+$value))
+}
+[IO.File]::WriteAllText($iniPath,$ini,$iniEncoding)
 # Write to this console's input buffer, not the active desktop window.
 Add-Type -TypeDefinition @'
 using System;

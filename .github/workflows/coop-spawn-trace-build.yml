@@ -244,3 +244,11 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 14
+
+  launcher-ini-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate launcher INI compatibility without game files
+        shell: pwsh
+        run: ./tools/Test-KPCServerIni.ps1

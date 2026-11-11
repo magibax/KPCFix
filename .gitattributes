@@ -1,4 +1,5 @@
-# Keep checkout bytes identical to SHA256SUMS on Windows and Linux.
+# Preserve the LF bytes used by published SHA256SUMS manifests on all OSes.
+# Never use global core.autocrlf conversion for repository source files.
 * text=auto eol=lf
 *.dll -text
 *.exe -text
@@ -8,3 +9,11 @@
 *.png -text
 *.jpg -text
 *.ico -text
+
+# The externally supplied Claude audit uses its original BOM/CRLF formatting.
+KPCFix-audit-report.md -text
+
+# Preserve committed CRLF of legacy license texts and CMD wrapper.
+LICENSES/DDrawCompat-0BSD.txt -text
+LICENSES/KPCFix-MIT.txt -text
+Launch-KPCFix.cmd -text
