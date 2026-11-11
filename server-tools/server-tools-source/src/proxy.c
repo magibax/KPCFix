@@ -663,10 +663,12 @@ static int coop_trace_music;
 /* [Coop] CoopMusic (default 1 in a session): per-player world music delivery. */
 static int coop_music=1;
 /* Snapshot of the world's music event (object.lto event class, vtable 11d240):
- * +0x108 song name, +0x188 song present, +0x189 intensity, +0x18a groove,
- * +0x18b transition (0xff = unset), +0x18c fadeout. Taken when WorldProperties
- * creates it; epoch tags which world it belongs to. */
-static struct {int valid;U32 epoch;char song[0x80];U8 has_song,intensity,groove,transition,fadeout;} coop_music_snap;
+ * +0x108 song name, +0x188 "play" flag, +0x189 intensity, +0x18a groove,
+ * +0x18b transition (0xff = unset), +0x18c fadeout. baa90 sends the song when
+ * the name is non-empty: with the play flag as PLAY 0x4e/READY 0x4f chosen by
+ * intensity (string 0x4b/0x4c), without it always READY 0x4f/0x4c (bac0f,
+ * bad2b). Taken when WorldProperties creates it; epoch tags its world. */
+static struct {int valid;U32 epoch;char song[0x80];U8 has_song,play,intensity,groove,transition,fadeout;} coop_music_snap;
 /* Bounded, sequenced log: "[KPCFix Co-op] g=1 e=2 seq=7 PLAYING event detail" */
 static void coop_log(const char *event,const char *detail){
  char line[240];U32 n=0;
@@ -783,7 +785,7 @@ static int coop_msg_api(void **de,U32 **vt){
 /* Send one client exactly the sequence the original event method baa90 would
  * broadcast, preceded by the load from bad50, using the string forms the
  * client resolves through the same routines: LOAD_STRING 0x4a, [GROOVE 0x52],
- * [TRANSITION 0x51], PLAY_STRING 0x4b (no intensity) or READY_STRING 0x4c,
+ * [TRANSITION 0x51], PLAY_STRING 0x4b (play flag, no intensity) or READY_STRING 0x4c,
  * [INTENSITY 0x50], [FADEOUT 0x53]. */
 static int coop_music_send(U32 client){
  void *de;U32 *vt,msg;
@@ -793,7 +795,7 @@ static int coop_music_send(U32 client){
  COOP_MSG_BEGIN(0x4au);((MsgStrFn)vt[0x14/4])(de,msg,coop_music_snap.song);COOP_MSG_END();
  if(coop_music_snap.groove!=0xffu){COOP_MSG_BEGIN(0x52u);((MsgByteFn)vt[0x8/4])(de,msg,coop_music_snap.groove);COOP_MSG_END();}
  if(coop_music_snap.transition!=0xffu){COOP_MSG_BEGIN(0x51u);((MsgByteFn)vt[0x8/4])(de,msg,coop_music_snap.transition);COOP_MSG_END();}
- COOP_MSG_BEGIN(coop_music_snap.intensity!=0xffu?0x4cu:0x4bu);((MsgStrFn)vt[0x14/4])(de,msg,coop_music_snap.song);COOP_MSG_END();
+ COOP_MSG_BEGIN(coop_music_snap.play&&coop_music_snap.intensity==0xffu?0x4bu:0x4cu);((MsgStrFn)vt[0x14/4])(de,msg,coop_music_snap.song);COOP_MSG_END();
  if(coop_music_snap.intensity!=0xffu){COOP_MSG_BEGIN(0x50u);((MsgByteFn)vt[0x8/4])(de,msg,coop_music_snap.intensity);COOP_MSG_END();}
  if(coop_music_snap.fadeout){COOP_MSG_BEGIN(0x53u);COOP_MSG_END();}
 #undef COOP_MSG_BEGIN
@@ -1000,7 +1002,8 @@ static void *CDECL coop_music_event(const char *label,U32 argc,U32 argv){
   U32 i;const char *src=(const char *)(ev+0x108u);
   for(i=0;i+1<sizeof coop_music_snap.song&&src[i];i++){char c=src[i];coop_music_snap.song[i]=c=='\\'?'/':c;}
   coop_music_snap.song[i]=0;
-  coop_music_snap.has_song=*(const U8 *)(ev+0x188u)&&coop_music_snap.song[0];
+  coop_music_snap.has_song=coop_music_snap.song[0]!=0;
+  coop_music_snap.play=*(const U8 *)(ev+0x188u)!=0;
   coop_music_snap.intensity=*(const U8 *)(ev+0x189u);
   coop_music_snap.groove=*(const U8 *)(ev+0x18au);
   coop_music_snap.transition=*(const U8 *)(ev+0x18bu);
@@ -1019,6 +1022,7 @@ static void *CDECL coop_music_event(const char *label,U32 argc,U32 argv){
   coop_text(line,&n,result?" event=created":" event=none",sizeof line);
   if(coop_music_snap.valid){
    coop_text(line,&n," song=",sizeof line);coop_text(line,&n,coop_music_snap.song,sizeof line);
+   coop_text(line,&n,coop_music_snap.play?" play=1":" play=0",sizeof line);
    coop_text(line,&n," intensity=",sizeof line);coop_dec(line,&n,coop_music_snap.intensity,sizeof line);
    coop_text(line,&n," transition=",sizeof line);coop_dec(line,&n,coop_music_snap.transition,sizeof line);
   }
