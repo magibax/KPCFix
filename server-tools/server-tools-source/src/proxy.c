@@ -1,4 +1,6 @@
 #include "winmini.h"
+/* Not in the shared winmini.h (kept byte-identical with the client). */
+extern U32 WINAPI GetPrivateProfileStringW(const WCHAR *,const WCHAR *,const WCHAR *,WCHAR *,U32,const WCHAR *);
 #include "sha256.h"
 #include "runtime_data.h"
 #include "coop_spawn.h"
@@ -669,6 +671,16 @@ static int coop_music=1;
  * intensity (string 0x4b/0x4c), without it always READY 0x4f/0x4c (bac0f,
  * bad2b). Taken when WorldProperties creates it; epoch tags its world. */
 static struct {int valid;U32 epoch;char song[0x80];U8 has_song,play,intensity,groove,transition,fadeout;} coop_music_snap;
+/* [Coop] CoopIntro (default 0): play the world's original starting_cinematic
+ * once for the session when all present members are in (see coop_intro_frame).
+ * Snapshot of the script name from the WorldProperties lookup, per epoch. */
+static int coop_intro;
+static struct {int valid;U32 epoch;char name[0x100];} coop_intro_snap;
+/* Proof of concept: only R1M3A's intro (cathedral1start.scr) is enabled. */
+static int coop_intro_world_allowed(U32 route_pos){return route_pos==2u;}
+/* [Coop] CoopTestStartWorld: route world that !start loads (test option). */
+static U32 coop_start_pos;
+static int coop_start_state;   /* 0 unset, 1 accepted, 2 rejected */
 /* Bounded, sequenced log: "[KPCFix Co-op] g=1 e=2 seq=7 PLAYING event detail" */
 static void coop_log(const char *event,const char *detail){
  char line[240];U32 n=0;
@@ -921,6 +933,11 @@ static void __attribute__((thiscall)) coop_next_level(void *shell){
  if(coop_session_enabled){
   coop_current_world(world);
   coop_session_world_loaded(&coop_state,world);
+  if(coop_intro){
+   int playable=coop_intro_snap.valid&&coop_intro_snap.epoch==coop_state.epoch&&coop_intro_world_allowed(coop_state.route_pos);
+   coop_session_intro_arm(&coop_state,playable);
+   if(coop_state.intro_armed)coop_log("intro-armed",coop_intro_snap.name);
+  }
   coop_log("world-loaded",world[0]?world:"(unknown)");
  }
 }
@@ -974,14 +991,58 @@ static void __attribute__((naked)) campaign_exit_load(void){
                   "addl $12,%esp; popal; popfl; movl 0x1d0(%eax),%edx; ret");
 }
 typedef void *(CDECL *CampaignLookup)(const char *);
+/* WorldProperties' property reader (1045b1) looks up its starting_cinematic
+ * script with c50c0(path); in multiplayer it never plays it (104830 gates the
+ * c5340 call on game type 0). Snapshot the name per epoch for CoopIntro. */
 static void *CDECL campaign_lookup(const char *path){
  void *result=((CampaignLookup)(campaign_image+0xc50c0))(path);
- if(__sync_fetch_and_add(&campaign_log_count,1)<32){
+ coop_intro_snap.valid=0;
+ if(path&&result){
+  U32 i;
+  for(i=0;i+1<sizeof coop_intro_snap.name&&path[i];i++)coop_intro_snap.name[i]=path[i];
+  coop_intro_snap.name[i]=0;
+  coop_intro_snap.epoch=coop_state.epoch;coop_intro_snap.valid=i>0&&!path[i];
+ }
+ if(campaign_trace&&__sync_fetch_and_add(&campaign_log_count,1)<32){
   log_file("[KPCFix Campaign] starting_cinematic lookup");
   log_file(path);
   log_file(result?"[KPCFix Campaign] script object found":"[KPCFix Campaign] script lookup returned null");
  }
  return result;
+}
+/* Original script player (object.lto, all cdecl, one argument): c5340(name)
+ * starts a loaded script ("Playing Script: %s") by adding it to the playing
+ * list that the server Update advances every frame (ffba5 -> c5630);
+ * c55b0(name) returns 1 while it is in that list. Cinematic helpers c5a10
+ * (user input, 1 = on) and c59a0 (letterbox, 0 = off) broadcast MID_CINEMATIC
+ * 0x3d to all clients, exactly as the script's own release events do. */
+typedef void (CDECL *ScriptPlayFn)(const char *);
+typedef U8 (CDECL *ScriptIsPlayingFn)(const char *);
+typedef void (CDECL *CinematicFlagFn)(U32);
+static void coop_intro_frame(U32 now){
+ CoopResult r;int act=coop_session_intro_tick(&coop_state,now,&r);
+ if(act==COOP_ACT_INTRO_START){
+  int playing;
+  coop_log("intro-start",coop_intro_snap.name);
+  runtime_broadcast(coop_image,r.msg);
+  ((ScriptPlayFn)(coop_image+0xc5340u))(coop_intro_snap.name);
+  playing=((ScriptIsPlayingFn)(coop_image+0xc55b0u))(coop_intro_snap.name)!=0;
+  if(!playing){
+   coop_session_intro_done(&coop_state,0,&r);
+   coop_log("intro-failed","script did not enter the playing list");
+   runtime_broadcast(coop_image,r.msg);
+  }else coop_log("intro-playing",r.msg);
+ }else if(act==COOP_ACT_INTRO_ABORT){
+  ((CinematicFlagFn)(coop_image+0xc5a10u))(1u);
+  ((CinematicFlagFn)(coop_image+0xc59a0u))(0u);
+  coop_log("intro-abort","overran; user_input on and letterbox off broadcast");
+  runtime_broadcast(coop_image,r.msg);
+ }else if(coop_state.phase==COOP_PHASE_INTRO_RUNNING&&
+          !((ScriptIsPlayingFn)(coop_image+0xc55b0u))(coop_intro_snap.name)){
+  coop_session_intro_done(&coop_state,1,&r);
+  coop_log("intro-finished",coop_intro_snap.name);
+  runtime_broadcast(coop_image,r.msg);
+ }
 }
 
 /* WorldProperties (object.lto 104940-104950) splits the world's music property
@@ -1036,6 +1097,7 @@ static void *CDECL coop_music_event(const char *label,U32 argc,U32 argv){
 static void __attribute__((thiscall)) coop_frame(void *shell){
  ((ShellFn)(coop_image+0x100720u))(shell);
  if(coop_session_enabled&&coop_music)coop_music_frame(GetTickCount());
+ if(coop_session_enabled&&coop_intro)coop_intro_frame(GetTickCount());
 }
 /* Optional in-memory call/load redirects inside the original object image.
  * Each site's original bytes are verified; disabled sites must stay original. */
@@ -1074,10 +1136,10 @@ static void optional_sites(OptionalSite *s,U8 *b){
  s[0].enabled=spawn_trace_enabled;
  s[1].enabled=spawn_separation_enabled||coop_session_enabled;
  s[2].enabled=campaign_trace||coop_session_enabled;
- s[3].enabled=campaign_trace;
+ s[3].enabled=campaign_trace||(coop_session_enabled&&coop_intro);
  for(i=4;i<8;i++)s[i].enabled=coop_session_enabled;
  s[8].enabled=coop_session_enabled&&(coop_trace_music||coop_music);
- s[9].enabled=coop_session_enabled&&coop_music;
+ s[9].enabled=coop_session_enabled&&(coop_music||coop_intro);
 }
 static int apply_object(HMODULE module){
  U8 *b=(U8 *)module;U8 hash[32],expected[8];U32 i,j,old,restore,already=1;
@@ -1120,6 +1182,7 @@ static int apply_object(HMODULE module){
  }
  if(coop_session_enabled){
   coop_image=b;coop_session_init(&coop_state,coop_min_players,coop_max_players);coop_t0=GetTickCount();
+  coop_state.start_pos=coop_start_pos;
  }
  for(i=0;i<OPTIONAL_SITES;i++)if(site[i].enabled)copy(b+site[i].rva,site[i].hooked,site[i].size);
  /* LoadLibrary has already applied relocations and may have run table init. */
@@ -1223,6 +1286,23 @@ static void initialize(void){
  coop_intermission=GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopIntermission",0,ini_path)!=0;
  coop_trace_music=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceMusic",0,ini_path)!=0;
  coop_music=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopMusic",1,ini_path)!=0;
+ coop_intro=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopIntro",0,ini_path)!=0;
+ /* Test-only start world: accepted only if it names a route world exactly
+  * (case-insensitive ASCII); anything else is ignored (start stays R1M2B). */
+ coop_start_pos=0;coop_start_state=0;
+ if(coop_session_enabled){
+  WCHAR w[16];U32 wn=GetPrivateProfileStringW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopTestStartWorld",(const WCHAR *)L"",w,16,ini_path),k,pos;
+  if(wn>0&&wn<15){
+   char a[16];int ascii=1;
+   for(k=0;k<wn;k++){if(w[k]<32||w[k]>126)ascii=0;a[k]=(char)coop_lower((char)w[k]);}
+   a[wn]=0;coop_start_state=2;
+   for(pos=0;ascii&&pos<COOP_ROUTE_LEN;pos++){
+    const char *label=coop_route_label(pos);int same_label=1;
+    for(k=0;label[k]||a[k];k++)if(coop_lower(label[k])!=a[k]){same_label=0;break;}
+    if(same_label){coop_start_pos=pos;coop_start_state=1;break;}
+   }
+  }else if(wn)coop_start_state=2;
+ }
  if(active&&(spawn_trace_enabled||coop_session_enabled||campaign_trace)){
   /* Diagnostic identity tied to the exact bytes of this DLL file. */
   U8 own[32];WCHAR own_path[1024];U32 k,n=GetModuleFileNameW(self,own_path,1024);
@@ -1240,6 +1320,11 @@ static void initialize(void){
   if(coop_session_enabled)log_file(coop_music?
     "[KPCFix Co-op] effective CoopMusic=1 (per-player world music start after spawn)":
     "[KPCFix Co-op] effective CoopMusic=0");
+  if(coop_intro)log_file("[KPCFix Co-op] effective CoopIntro=1 (original starting_cinematic after all players are in; R1M3A only)");
+  if(coop_start_state==1){
+   char line[96];U32 m=0;coop_text(line,&m,"[KPCFix Co-op] effective CoopTestStartWorld=",sizeof line);
+   coop_text(line,&m,coop_route_label(coop_start_pos),sizeof line);coop_text(line,&m," (test start)",sizeof line);log_file(line);
+  }else if(coop_start_state==2)log_file("[KPCFix Co-op] CoopTestStartWorld ignored: not a route world (R1M2B, R1M2C, R1M3A)");
   log_file(model_registry_enabled?
     "[KPCFix Co-op] effective TraceModelRegistry=1":
     "[KPCFix Co-op] effective TraceModelRegistry=0 (set [Coop] TraceModelRegistry=1; restart)");

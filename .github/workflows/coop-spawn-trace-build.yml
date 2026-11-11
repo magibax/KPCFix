@@ -151,6 +151,8 @@ jobs:
           assert b'effective TraceMusic=1' in dll and b'music-world' in dll
           assert b'effective TraceTiming=1' in dll
           assert b'effective CoopMusic=1 (per-player world music start after spawn)' in dll
+          assert b'effective CoopIntro=1 (original starting_cinematic after all players are in; R1M3A only)' in dll
+          assert b'CoopTestStartWorld ignored: not a route world' in dll and b'intro-start' in dll
           assert 'CoopMusic'.encode('utf-16le') in dll and b'client=' in dll
           assert b'effective TraceModelRegistry=1' in dll
           assert b'effective TraceModelState=1' in dll

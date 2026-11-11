@@ -260,8 +260,64 @@ static void test_music_delivery(void){
  coop_session_music_schedule(&s,-1,0);coop_session_music_schedule(&s,99,0);
 }
 
+/* Synchronised original intro: test start world, barrier, start-once, refusal of
+ * world changes while it runs, completion, timeouts and zero-player safety. */
+static void intro_epoch(CoopSession *s,unsigned int now){
+ native_change(s,"worlds\\realm1\\R1M3A",now);
+ assert(s->phase==COOP_PHASE_INTRO_PENDING&&s->route_pos==2);
+ coop_session_intro_arm(s,1);assert(s->intro_armed);
+}
+static void test_intro(void){
+ CoopSession s;
+ coop_session_init(&s,2,3);s.start_pos=2;               /* CoopTestStartWorld=R1M3A */
+ spawn(&s,A,"Alice",0);spawn(&s,B,"Bob",0);
+ cmd(&s,A,"!ready");cmd(&s,B,"!ready");cmd(&s,A,"!start");
+ assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==2&&strstr(r.msg,"Starting -> R1M3A"));
+ intro_epoch(&s,1000);
+ /* Alice is in; Bob is still loading: no start, and the wait is announced. */
+ spawn(&s,A,"Alice",2000);
+ assert(s.phase==COOP_PHASE_INTRO_PENDING&&r.action==COOP_ACT_ANNOUNCE&&strstr(r.msg,"Intro starts when all players are in (1/2)"));
+ assert(coop_session_intro_tick(&s,9000,&r)==0);
+ spawn(&s,B,"Bob",9000);
+ assert(coop_session_intro_tick(&s,9000+COOP_INTRO_SETTLE_MS-1,&r)==0);       /* settle */
+ assert(coop_session_intro_tick(&s,9000+COOP_INTRO_SETTLE_MS,&r)==COOP_ACT_INTRO_START);
+ assert(s.phase==COOP_PHASE_INTRO_RUNNING&&strstr(r.msg,"R1M3A intro starting (epoch 1, 2/2 players)"));
+ assert(coop_session_intro_tick(&s,13000,&r)==0);                              /* start once */
+ /* No world change while it runs: repeated !start, host !next and exits. */
+ cmd(&s,A,"!start");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Already started"));
+ cmd(&s,A,"!next");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Not in play"));
+ coop_session_exit(&s,"worlds/realm1/r1m3b",14000,&r);assert(r.action!=COOP_ACT_CHANGE_WORLD);
+ /* Respawn/late spawn during the intro does not restart anything. */
+ spawn(&s,B,"Bob",15000);assert(s.phase==COOP_PHASE_INTRO_RUNNING);
+ coop_session_intro_done(&s,1,&r);
+ assert(s.phase==COOP_PHASE_GAMEPLAY&&strstr(r.msg,"Intro finished"));
+ coop_session_intro_done(&s,1,&r);assert(r.action==COOP_ACT_NONE);           /* duplicate completion */
+ /* A world without an intro (not armed): first spawn plays immediately. */
+ native_change(&s,"worlds\\realm1\\R1M3A",20000);coop_session_intro_arm(&s,0);
+ spawn(&s,A,"Alice",21000);assert(s.phase==COOP_PHASE_GAMEPLAY&&strstr(r.msg,"Intro skipped"));
+ /* Barrier timeout: Bob never arrives; start once Alice is in and the barrier expires. */
+ intro_epoch(&s,30000);spawn(&s,A,"Alice",31000);
+ assert(coop_session_intro_tick(&s,30000+COOP_INTRO_BARRIER_MS-1,&r)==0);
+ assert(coop_session_intro_tick(&s,30000+COOP_INTRO_BARRIER_MS,&r)==COOP_ACT_INTRO_START&&strstr(r.msg,"1/2 players"));
+ /* Overrun: release clients after the cap. */
+ assert(coop_session_intro_tick(&s,s.intro_ms+COOP_INTRO_MAX_MS-1,&r)==0);
+ assert(coop_session_intro_tick(&s,s.intro_ms+COOP_INTRO_MAX_MS,&r)==COOP_ACT_INTRO_ABORT&&s.phase==COOP_PHASE_GAMEPLAY);
+ /* Zero players in the new world: the intro is never consumed. */
+ intro_epoch(&s,200000);
+ assert(coop_session_intro_tick(&s,200000+10*COOP_INTRO_BARRIER_MS,&r)==0&&s.phase==COOP_PHASE_INTRO_PENDING);
+ /* Disconnect while waiting: Bob leaves; Alice alone completes the barrier. */
+ spawn(&s,A,"Alice",600000);
+ {unsigned int live[1];live[0]=s.m[0].object;coop_session_presence(&s,live,1,600100,&r);}
+ assert(coop_find_client(&s,B)<0);
+ assert(coop_session_intro_tick(&s,600000+COOP_INTRO_SETTLE_MS,&r)==COOP_ACT_INTRO_START&&strstr(r.msg,"1/1 players"));
+ /* Default start position is unchanged. */
+ coop_session_init(&s,1,3);spawn(&s,A,"Alice",0);cmd(&s,A,"!ready");cmd(&s,A,"!start");
+ assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==0);
+}
+
 int main(void){
  test_normalize();
+ test_intro();
  test_music_delivery();
  test_lobby_ready_start();
  test_transition_debounce_and_route();
@@ -270,6 +326,6 @@ int main(void){
  test_slow_joiner_and_all_left();
  test_untrusted_input();
  test_offroute_native_level();
- puts("PASS coop session: lobby FSM, readiness, host, capacity, disconnect/reconnect, slow join, epochs, debounce, route, timeouts, input bounds, music delivery");
+ puts("PASS coop session: lobby FSM, readiness, host, capacity, disconnect/reconnect, slow join, epochs, debounce, route, timeouts, input bounds, music delivery, synchronised intro");
  return 0;
 }

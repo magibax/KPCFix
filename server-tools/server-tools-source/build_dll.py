@@ -73,7 +73,7 @@ for name in ['proxy.c','sha256.c','runtime_print.S']:
 # Import library generated from build-only stubs; no system DLL is shipped.
 (work/'stub.S').write_text('.text\n.global api_stub\napi_stub:\n ret\n')
 run(['as','--32',work/'stub.S','-o',work/'stub.o']);elf_to_coff(work/'stub.o',work/'stub.obj')
-apis=['GetModuleHandleW','GetModuleFileNameW','LoadLibraryW','GetProcAddress','DisableThreadLibraryCalls','GetCurrentProcess','VirtualProtect','VirtualQuery','FlushInstructionCache','CreateFileW','GetFileSizeEx','ReadFile','WriteFile','CloseHandle','GetPrivateProfileIntW','GetStdHandle','ExitProcess','GetTickCount']
+apis=['GetModuleHandleW','GetModuleFileNameW','LoadLibraryW','GetProcAddress','DisableThreadLibraryCalls','GetCurrentProcess','VirtualProtect','VirtualQuery','FlushInstructionCache','CreateFileW','GetFileSizeEx','ReadFile','WriteFile','CloseHandle','GetPrivateProfileIntW','GetPrivateProfileStringW','GetStdHandle','ExitProcess','GetTickCount']
 (work/'KERNEL32.def').write_text('LIBRARY KERNEL32.dll\nEXPORTS\n'+''.join(' '+v+'=api_stub\n' for v in apis))
 run(['ld','-m','i386pe','--dll','--entry','_api_stub','--no-insert-timestamp','--out-implib',work/'KERNEL32.a','-o',work/'KERNEL32.build-only.dll',work/'stub.obj',work/'KERNEL32.def'])
 (work/'server.def').write_text('LIBRARY server.dll\nEXPORTS\n CreateServer=CreateServer @1\n DeleteServer=DeleteServer @2\n')
@@ -119,6 +119,9 @@ previous_proxies=[
     # coop-session-v2 565dec76 (c5ce65a): live scoreboard-free natural
     # transitions R1M2B -> R1M2C -> R1M3A with one client on 2026-11-11.
     '565dec766967ceede2a010969a9f851f2232b2e7d213f2d2878f887c18c67758',
+    # coop-session-v2 e17c150f (872de1e): live per-player DirectMusic, also
+    # on a second laptop joining an active server (2026-11-11).
+    'e17c150ff920aa9865fe06c8e0109bad9426215cfb1fdf943115af67be7dbf27',
 ]
 if new_hash in previous_proxies:
  raise SystemExit('Current proxy SHA-256 unexpectedly appears in the previous allowlist')
