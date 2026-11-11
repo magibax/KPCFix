@@ -4,7 +4,7 @@ Windows dedicated-server tools for official game version **1.13**. Supports the 
 
 ## Update an existing DLL installation
 
-Close the game and server, copy these files into the game directory, then run **Setup-KPCServerTools.cmd** again to deploy the new DLL. Keep your existing `server.original.dll` and `KPCServerTools.ini`. The setup recognizes the preceding proxy build.
+Close the game and server, copy these files into the game directory, then run **Setup-KPCServerTools.cmd** again to deploy the new DLL. Keep your existing `server.original.dll` and `KPCServerTools.ini`. The setup recognizes published stable proxies and the explicitly listed experimental v7/v8 test builds for migration back to stable R3. Other unrecognized proxies are refused; if the original backup is verified, move the unknown active `server.dll` to a separate backup before rerunning setup. Never overwrite `server.original.dll`.
 
 ## Install or migrate
 
@@ -38,7 +38,7 @@ Enabled=1
 AllowCheats=0
 ```
 
-`Enabled=0` makes the proxy pass calls through to the official engine without installing Server Tools hooks; restart the server after changing it. `AllowCheats` sets initial permission, which the graphical launcher updates from its checkbox. Use the console command for live changes. Chat logging and announcements are active whenever the tools are enabled. Startup/errors are also appended to `KPCServerTools.log`.
+`Enabled=0` makes the proxy pass calls through to the official engine without installing Server Tools hooks; restart the server after changing it. `AllowCheats` sets initial permission, which the graphical launcher updates from its checkbox. If an older INI lacks this key, the launcher inserts it under `[ServerTools]` while retaining the existing newline layout and detected encoding. Use the console command for live changes. Chat logging and announcements are active whenever the tools are enabled. Startup/errors are also appended to `KPCServerTools.log`.
 
 To remove the proxy, close the game/server and run **Restore-Original-Server.cmd**. It restores the preserved official engine to `server.dll`; `object.lto` remains stock. Old on-disk patch installers are moved to `KPCServerTools-Legacy` during migration; do not run them with this DLL installation.
 
