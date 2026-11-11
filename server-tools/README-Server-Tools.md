@@ -60,7 +60,7 @@ Server Tools uses its own README, license, checksums, compatibility checker, bui
 
 ## Unreleased co-op MVP session (experimental)
 
-Development builds include an opt-in chat lobby and a fixed two-map route (R1M2B → R1M2C). Tick **EXPERIMENTAL co-op session** in the launcher; players type `!ready` and the host types `!start`. Nothing in it is Windows-tested yet. See [coop/COOP-MVP.md](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/COOP-MVP.md) for the test protocol and limitations.
+Development builds include an opt-in chat lobby and a fixed route (R1M2B → R1M2C → R1M3A). Tick **EXPERIMENTAL co-op session** in the launcher; players type `!ready` and the host types `!start`. Lobby, Start and a host `!next` change were tested live with one client; natural exits and two clients are not yet Windows-tested. See [coop/COOP-MVP.md](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/COOP-MVP.md) for the test protocol and limitations.
 
 ## Unreleased co-op diagnostics and spawn-point instrumentation
 

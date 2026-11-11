@@ -16,7 +16,7 @@ after changing a switch.
 | `TraceModelRegistry` | 0 | Read-only named WorldModel resource and reciprocal object reference survey; implies clearance sampling |
 | `TraceModelState` | 0 | Read-only raw model type/flags/vector statistics; requires `TraceModelRegistry=1` |
 | `TraceCampaign` | 0 | Opt-in research trace of authored intro and campaign exit paths; not campaign synchronization |
-| `CoopSession` | 0 | Co-op MVP session (kpc-coop/1): chat lobby, host start, no telefrag between players, R1M2B placements, R1M2B → R1M2C change. Written by the launcher co-op checkbox. See [COOP-MVP.md](COOP-MVP.md) |
+| `CoopSession` | 0 | Co-op MVP session (kpc-coop/1): chat lobby, host start, no telefrag between players, R1M2B placements, server-coordinated changes along R1M2B → R1M2C → R1M3A (natural exits from v2; not yet Windows-tested). Written by the launcher co-op checkbox. See [COOP-MVP.md](COOP-MVP.md) |
 | `CoopMinPlayers` | 2 | 1–3 players required before the host can `!start` |
 | `CoopMaxPlayers` | 3 | 1–3 session capacity; keep server `maxclients` at or below |
 
