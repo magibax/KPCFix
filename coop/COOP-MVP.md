@@ -428,6 +428,63 @@ native intermission is already active. `CoopIntermission=1` restores the stock b
 * **Possible extra bar.** The stock broadcast still reaches clients that are reloading a
   world, so the short phrase after `!start` may still be heard before the per-player start.
 
+### C. Synchronised original intro (R1M3A proof of concept)
+
+**Confirmed by static analysis** (`object.lto` `3a03f879…`, `cshell.dll` `703813a4…`):
+
+| Step | Code | Finding |
+| --- | --- | --- |
+| Script lookup | `WorldProperties` → `0x1045b1` → `0xc50c0(path)` | Runs in every mode. Native R1M3A trace on the multiplayer server: `mapdata\realm1\r1m3\r1m3a\cathedral1start.scr`, `script object found` |
+| Play gate | `WorldProperties` `0x104830` | Calls `0xc5340(name)` **only when the game type is 0**. This is why multiplayer never shows the intro |
+| Script player | `0xc5340` / `0xc55b0` | `0xc5340` resets a loaded script and appends it to the playing list (`Playing Script: %s`). `0xc55b0(name)` = still playing. Both cdecl, one argument |
+| Script clock | server Update `0xffb70` → `0xffba5` → `0xc5630` | Advances playing scripts every frame, with no game-type gate |
+| Presentation | `0xc5770`…`0xc5a10` | All eight `MID_CINEMATIC` (`0x3d`) senders (camera, letterbox, user input) broadcast to **all clients** (`hClient 0`, guaranteed) |
+| Client | cshell `0xcb203` → `0xa7a60` | `MID_CINEMATIC` dispatcher with 8 subtypes; no game-type gate in the dispatcher or its handlers |
+| Input/letterbox values | parse `0xbfb90`/`0xb7490` | `on` = 1, `off` = 0: `user_input on` = `0xc5a10(1)`, `letterbox off` = `0xc59a0(0)` |
+| `player invulnerable` | `Player` event `0xc1a80` | Gated off in multiplayer (and in single player it affects only the first player). Not reproduced |
+
+The R1M3A script (`CATHEDRAL1START.SCR`, 51.7 s) sets letterbox on and user input off at 0 s,
+loads further level scripts, plays four camera paths with subtitles and fog fades, sets `music song1
+intensity 3` at 47.7 s, triggers `spawn6`, briefly disables AI, and releases at 51.7 s
+(letterbox off, user input on, camera reset). Its ending script is `cathedral1astart.scr`.
+
+**Implementation (commit `23c68f4`, DLL `13ca1d0a…`):**
+* `[Coop] CoopIntro=1` (default 0) arms the intro when the R1M3A route world loads in a started
+  session. The proof-of-concept allowlist is R1M3A only.
+* The session stays in `INTRO_PENDING` until every present member has spawned in the new epoch,
+  plus a 3 s settle. Readiness means the server has created that player in the new world after
+  the client entered it.
+* After a 30 s barrier timeout it starts with whoever is in. It **never** starts with zero
+  players.
+* It then calls the original `0xc5340` **once**. The script runs server-side once, so its
+  gameplay side effects (script loads, `spawn6`, AI) happen once. Its presentation events go
+  to every client through the original broadcasts.
+* During `INTRO_RUNNING`, `!start`, `!next` and exits are refused. When `0xc55b0` reports the
+  script finished, the session returns to `GAMEPLAY`.
+* After 120 s the session sends `user_input on` and `letterbox off` with the original helpers and
+  returns to `GAMEPLAY` (best effort; no camera reset is sent).
+* `[Coop] CoopTestStartWorld=R1M3A` (test only) makes `!start` load R1M3A. Only the three route
+  names are accepted; anything else is ignored and logged.
+
+**Policies and limits:**
+* **Timing:** all clients receive the same broadcast stream, so they start the pan within network
+  latency of each other. There is no frame-level synchronisation.
+* **Late joiners:** a player who joins during the intro sees its remaining broadcasts from that
+  point. It is never restarted.
+* **Disconnects:** a disconnect while waiting is removed from the barrier (detected at the next
+  event). A disconnect during playback has no effect on the others.
+* **Invulnerability:** players are input-locked but not invulnerable. The original
+  `player invulnerable` line is gated off in multiplayer.
+* **Voice-over:** `streamsound player … local` targets "player". Whether every client hears
+  the voice-over is not verified.
+
+| Evidence | Status |
+| --- | --- |
+| Session policy (barrier, settle, timeouts, start once, refusals, completion) | Unit tests (64/32-bit) |
+| Compiled DLL against stock `object.lto`: lookup snapshot inside NextLevel, arm, barrier, single `c5340` call, `!next` refused, completion via `c55b0`, overrun release `c5a10(1)`/`c59a0(0)`, invalid test start | **Emulated** (script player and helpers are recording stubs) |
+| Native server: DLL loads, intro and test-start settings effective, lookup hook active, R1M2B/R1M3A load, server keeps running | **Windows, no client** (3 runs in a disposable copy). One earlier run exited silently during a world start; it left no crash record and did not reproduce |
+| Camera pan, letterbox, input lock and subtitles on clients; two-client presentation | **NOT TESTED** |
+
 ### Client-side evidence (no code change)
 * In the client console, `c_DebugMessages 1` makes the stock client print
   `Client OnMessage: <id> <MID name>` for every message from the server.
