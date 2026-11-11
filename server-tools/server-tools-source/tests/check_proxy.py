@@ -96,6 +96,7 @@ def profile_int(a):
  if key=='TraceTiming':return int('--trace-timing' in sys.argv)
  if key=='CoopIntermission':return int('--intermission' in sys.argv)
  if key=='TraceMusic':return int('--trace-music' in sys.argv)
+ if key=='CoopMusic':return 0 if '--no-music' in sys.argv else a[2]
  return int('--cheats' in sys.argv)
 functions['GetPrivateProfileIntW']=stub('GetPrivateProfileIntW',4,profile_int)
 clock=[1000]
@@ -184,11 +185,13 @@ def coop_scenario():
  compiled proxy and assembled broadcast adapter are the shipped bytes."""
  sites={0xf13c4:(6,'ff91e0010000'),0xf13a4:(5,'e817fdffff'),0x2d455:(6,'8b90d0010000'),0x1045b1:(5,'e80a0bfcff'),
         0xfeec4:(6,'81c6e8010000'),0xf167a:(5,'e841faffff'),0x100744:(5,'e877feffff'),0xfde97:(5,'e824270000'),
-        0x10494b:(5,'e80064fbff')}
+        0x10494b:(5,'e80064fbff'),0xffbbf:(5,'e85c0b0000')}
+ music_flag='--no-music' not in sys.argv
+ hooked_optional={0x10494b:music_flag or '--trace-music' in sys.argv,0xffbbf:music_flag}
  target={}
  for rva,(size,orig) in sites.items():
   now=bytes(u.mem_read(obj+rva,size))
-  if rva in (0xf13c4,0x1045b1) or (rva==0x10494b and '--trace-music' not in sys.argv):
+  if rva in (0xf13c4,0x1045b1) or (rva in hooked_optional and not hooked_optional[rva]):
    assert now==bytes.fromhex(orig),hex(rva)
    continue
   assert now[0]==0xe8 and all(x==0x90 for x in now[5:]),hex(rva)
@@ -249,8 +252,41 @@ def coop_scenario():
   assert u.mem_read(shell+0x1ae8,1)[0]==0,'no native intermission flag in co-op default mode'
   if u.mem_read(shell+0x1ae9,1)[0]:pending[0]+=1;u.mem_write(shell+0x1ae9,b'\0')
   return pending[0]
+ # Per-player music (CoopMusic, default on). A fake g_pServerDE (16de80) whose
+ # thiscall vtable slots record StartMessage(+0xac), WriteByte(+0x8),
+ # WriteString(+0x14) and EndMessage(+0xb4) as [client, id, payload...].
+ music_on='--no-music' not in sys.argv;msgs=[];frames=[]
+ de=base+0x9000;vt=base+0x9100;code=base+0x9200;write(obj+0x16de80,de);write(de,vt)
+ def tstub(pop,fn):
+  def run():
+   sp=u.reg_read(UC_X86_REG_ESP);r=fn([read(sp+4+4*k) for k in range(pop//4)])
+   if r is not None:u.reg_write(UC_X86_REG_EAX,r)
+   u.reg_write(UC_X86_REG_ESP,sp+4+pop);u.reg_write(UC_X86_REG_EIP,read(sp))
+  return run
+ def m_start(a):msgs.append([a[0],a[1]]);return 0x5000+len(msgs)
+ def m_byte(a):assert a[0]==0x5000+len(msgs);msgs[-1].append(a[1]&0xff)
+ def m_str(a):assert a[0]==0x5000+len(msgs);msgs[-1].append(cstr(a[1]))
+ for off,(pop,fn) in {0xac:(8,m_start),0x8:(8,m_byte),0x14:(8,m_str),0xb4:(4,lambda a:None)}.items():
+  write(vt+off,code+off);stubs[code+off]=tstub(pop,fn)
+ stubs[obj+0x100720]=thiscall_stub(frames,0)
+ event=base+0xa000
+ def music_world(song,intensity=1,transition=2):
+  # Fake music event as built by bad50 (fields verified in baa90), then the
+  # hooked WorldProperties call site 10494b.
+  u.mem_write(event+0x108,song.encode()+b'\0');u.mem_write(event+0x188,bytes([1,intensity,0xff,transition,0]))
+  stubs[obj+0xbad50]=tstub(0,lambda a:event)
+  call_regs(target[0x10494b],[obj+0x14c06c,3,strings+0x900],{},0)
+ def frame(ms=1600):
+  clock[0]+=ms;call_regs(target[0xffbbf],[],{UC_X86_REG_ECX:shell},0)
+ def start_seq(client,song):return [[client,0x4a,song],[client,0x51,2],[client,0x4c,song],[client,0x50,1]]
+ if music_on:music_world('song5')                          # preloaded world, before anyone joins
  roster(0xa1);assert spawn(alice)==0xc5380000
  roster(0xa1,0xb2);assert spawn(bob)==0xc5320000          # slot 1: +96 Z
+ if music_on:
+  frame(100);assert msgs==[],'music waits for the delivery delay'
+  frame();assert msgs==start_seq(0x111,'song5')+start_seq(0x222,'song5'),msgs
+  n=len(msgs);spawn(alice,path=0xf167a);frame();frame();assert len(msgs)==n,'no resend on respawn in the same epoch'
+  assert frames and all(f==shell for f in frames),'per-frame hook forwards to 100720 with the shell'
  assert not telefrag,'native telefrag loop must be skipped in a session'
  assert any('Bob joined the lobby' in m for m in said),said
  assert chat(alice,'hello')==[]
@@ -260,15 +296,21 @@ def coop_scenario():
  out=chat(alice,'!start');assert any('Starting -> R1M2B' in m for m in out),out
  assert changes()==1 and (not intermission or ends[0]==shell) and read(obj+0x16da88)==2   # count-1: native pre-increment wraps to R1M2B
  next_level();assert len(nextlevels)==1 and read(obj+0x16da88)==0
+ if music_on:n=len(msgs);music_world('song5')               # reloaded world creates its music (epoch 1)
  spawn(alice);assert any('R1M2B started (epoch 1)' in m for m in said),said
  spawn(bob)
+ if music_on:
+  frame();assert msgs[n:]==start_seq(0x111,'song5')+start_seq(0x222,'song5'),msgs[n:]
+  frame();assert len(msgs)==n+8,'exactly one delivery per player per epoch'
  exit_trigger('worlds\\realm1\\R1M2C',flag=0,activator=0xa1);assert changes()==1   # not the native MP value: refused
  exit_trigger('',activator=0xa1);assert changes()==1                               # missing NextWorld: refused
  exit_trigger('worlds\\realm1\\R1M2C',activator=0xa1);assert changes()==2 and read(obj+0x16da88)==0
  for i in range(5):exit_trigger('worlds\\realm1\\R1M2C',activator=0xb2)
  assert changes()==2,'exit must be debounced'
  next_level();assert read(obj+0x16da88)==1
+ if music_on:n=len(msgs)                                    # this world creates no music event
  spawn(alice,path=0xf167a);spawn(bob);assert not telefrag
+ if music_on:frame();frame();assert len(msgs)==n,'no stale previous-world track'
  roster(0xa1)                                              # Bob disconnected
  clock[0]+=1000;out=chat(alice,'!coop')
  assert any('Bob left' in m for m in said) and any('PLAYING R1M2C e2' in m for m in out),(said,out)
@@ -277,7 +319,9 @@ def coop_scenario():
  assert changes()==3 and read(obj+0x16da88)==1 and any('Exit reached -> R1M3A' in m for m in said[n:]),said[n:]
  exit_trigger('worlds/realm1/r1m3a',activator=0xa1);assert changes()==3
  next_level();assert read(obj+0x16da88)==2
+ if music_on:n=len(msgs);music_world('song1')
  spawn(alice);assert any('R1M3A started (epoch 3)' in m for m in said),said
+ if music_on:frame();assert msgs[n:]==start_seq(0x111,'song1'),'R1M3A song1 only to the remaining player'
  n=len(said)
  for i in range(4):exit_trigger('worlds/realm1/r1m3b',activator=0xa1)
  assert changes()==3 and sum('outside the MVP route' in m for m in said[n:])==1,said[n:]
@@ -293,6 +337,12 @@ def coop_scenario():
   assert marker in text,marker
  assert text.count('exit-seen')<=3*8,'exit logging must stay bounded per epoch'
  assert intermission or not ends,'default co-op mode must not call the native end-level (MID_MULTI_INTERMISSION)'
+ if music_on:
+  assert 'effective CoopMusic=1' in text
+  assert 'music-send client=273 name=Alice song=song5 intensity=1 transition=2 sent' in text
+  assert 'music-send client=273 name=Alice song=song1 intensity=1 transition=2 sent' in text
+ else:
+  assert 'effective CoopMusic=0' in text and 'music-send' not in text and not msgs
  if '--trace-music' in sys.argv:
   # Drive the hooked WorldProperties call: bad50 is stubbed to record its arguments.
   music=[]

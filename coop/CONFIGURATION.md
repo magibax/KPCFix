@@ -20,10 +20,11 @@ after changing a switch.
 | `CoopMinPlayers` | 2 | 1–3 players required before the host can `!start` |
 | `CoopMaxPlayers` | 3 | 1–3 session capacity; keep server `maxclients` at or below |
 | `CoopIntermission` | 0 | 0: change world through the native pending-NextLevel flag, without the multiplayer scoreboard. 1: native intermission (scoreboard; waits for a player's fire/use) |
+| `CoopMusic` | 1 | Session only: send each player, once per map and after it spawns, the world's original music start (LOAD_STRING, TRANSITION, READY/PLAY, INTENSITY), to that client only. 0 restores the stock one-time broadcast at world initialisation |
 | `TraceMusic` | 0 | Session diagnostic: log `music-world …` when a world creates its music event (call site `0x10494b`) |
 | `TraceTiming` | 0 | Session diagnostic: prefix co-op log lines with `t=<ms since session armed>` |
 
-These are fourteen `[Coop]` keys (ten diagnostics plus four session keys). The ninth INI-related setting
+These are fifteen `[Coop]` keys (ten diagnostics plus five session keys). The ninth INI-related setting
 often counted in audits is `[ServerTools] AllowCheats`, a stable
 hosting permission independent of co-op. `[ServerTools] Enabled=1`
 is additionally required for experimental hooks.

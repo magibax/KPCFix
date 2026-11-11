@@ -116,6 +116,9 @@ previous_proxies=[
     # coop-session-v2 0018a3f8 (9b01c2f): live natural R1M2B -> R1M2C and
     # R1M2C mirror -> R1M3A transitions with one client on 2026-11-11.
     '0018a3f8b655bb616cf07be8737378716855365045b643946ee9db97ec143557',
+    # coop-session-v2 565dec76 (c5ce65a): live scoreboard-free natural
+    # transitions R1M2B -> R1M2C -> R1M3A with one client on 2026-11-11.
+    '565dec766967ceede2a010969a9f851f2232b2e7d213f2d2878f887c18c67758',
 ]
 if new_hash in previous_proxies:
  raise SystemExit('Current proxy SHA-256 unexpectedly appears in the previous allowlist')

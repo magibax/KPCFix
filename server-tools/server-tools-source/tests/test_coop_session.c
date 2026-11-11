@@ -221,8 +221,48 @@ static void test_offroute_native_level(void){
  assert(s.phase==COOP_PHASE_LOBBY&&!s.started&&!s.m[0].ready&&s.epoch==2);
 }
 
+/* Per-player world music: once per member per epoch, after the delay, only for
+ * the epoch the music snapshot belongs to. */
+static void test_music_delivery(void){
+ CoopSession s;int i;
+ coop_session_init(&s,1,3);
+ /* First join into a preloaded world (lobby, epoch 0). */
+ i=spawn(&s,A,"Alice",1000);coop_session_music_schedule(&s,i,1000);
+ assert(coop_session_music_take(&s,1000+COOP_MUSIC_DELAY_MS-1,1)==-1);   /* not yet due */
+ assert(coop_session_music_take(&s,1000+COOP_MUSIC_DELAY_MS,1)==i);      /* due: Alice */
+ assert(coop_session_music_take(&s,9000,1)==-1);                         /* exactly once */
+ /* Respawn / duplicate spawn in the same epoch: no second delivery. */
+ coop_session_music_schedule(&s,spawn(&s,A,"Alice",5000),5000);
+ assert(coop_session_music_take(&s,99999,1)==-1);
+ /* Second player joins mid-level: only Bob is delivered; Alice untouched. */
+ i=spawn(&s,B,"Bob",6000);coop_session_music_schedule(&s,i,6000);
+ assert(coop_session_music_take(&s,6000+COOP_MUSIC_DELAY_MS,1)==i&&s.m[i].client==B);
+ assert(coop_session_music_take(&s,99999,1)==-1);
+ /* Map change: pending requests from the old world are dropped; each member
+  * is delivered once in the new epoch. */
+ coop_session_music_schedule(&s,0,7000);           /* already delivered: ignored */
+ native_change(&s,"worlds\\realm1\\R1M2C",8000);
+ assert(s.epoch==1);
+ coop_session_music_schedule(&s,spawn(&s,A,"Alice",9000),9000);
+ coop_session_music_schedule(&s,spawn(&s,B,"Bob",9100),9100);
+ {int a=coop_session_music_take(&s,20000,1),b=coop_session_music_take(&s,20000,1);
+  assert(a>=0&&b>=0&&a!=b&&coop_session_music_take(&s,20000,1)==-1);}
+ /* A world without a music snapshot for this epoch sends nothing (no stale track). */
+ native_change(&s,"worlds\\realm1\\R1M3A",21000);
+ coop_session_music_schedule(&s,spawn(&s,A,"Alice",22000),22000);
+ assert(coop_session_music_take(&s,30000,0)==-1);
+ assert(coop_session_music_take(&s,30000,1)==-1);  /* request was consumed, not retried */
+ /* Reconnect under a new client handle: a fresh member, delivered again. */
+ i=spawn(&s,0x300u,"Alice",31000);
+ coop_session_music_schedule(&s,i,31000);
+ assert(i>=0&&coop_session_music_take(&s,31000+COOP_MUSIC_DELAY_MS,1)==i&&s.m[i].client==0x300u);
+ /* Out-of-range indices are ignored. */
+ coop_session_music_schedule(&s,-1,0);coop_session_music_schedule(&s,99,0);
+}
+
 int main(void){
  test_normalize();
+ test_music_delivery();
  test_lobby_ready_start();
  test_transition_debounce_and_route();
  test_host_override_and_timeout();
@@ -230,6 +270,6 @@ int main(void){
  test_slow_joiner_and_all_left();
  test_untrusted_input();
  test_offroute_native_level();
- puts("PASS coop session: lobby FSM, readiness, host, capacity, disconnect/reconnect, slow join, epochs, debounce, route, timeouts, input bounds");
+ puts("PASS coop session: lobby FSM, readiness, host, capacity, disconnect/reconnect, slow join, epochs, debounce, route, timeouts, input bounds, music delivery");
  return 0;
 }
