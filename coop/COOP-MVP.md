@@ -1,6 +1,6 @@
 # Co-op MVP: chat lobby and the R1M2B → R1M2C route (kpc-coop/1)
 
-**Status (2026-11-11): IMPLEMENTED and CI/emulator-tested. NOT YET WINDOWS-TESTED with real clients.**
+**Status (2026-11-11): IMPLEMENTED and CI/emulator-tested. Server side WINDOWS-TESTED without clients (DLL `262b6ead…`). NOT YET WINDOWS-TESTED with real clients.**
 Experimental: this code is only on `feature/coop-campaign` and its child branches. It is not
 part of the stable Server Tools R3 on `main`. Every switch defaults to off.
 
@@ -18,7 +18,10 @@ part of the stable Server Tools R3 on `main`. Every switch defaults to off.
 | Generic safe spawning on other maps (allocator) | **DISABLED** | full-body clearance is not proven; see `GENERAL-ALLOCATOR.md` |
 | Install / idempotent re-run / in-place upgrade from the live-tested v7 proxy (`7112b5ed`) / uninstall | WINDOWS-TESTED (scripts only, disposable copy, 2026-11-11) | original `server.dll` `83b7bce8…` restored; `object.lto` `3a03f879…` unchanged throughout |
 | Launcher worker co-op validation (wrong start map, maplist without R1M2C) | WINDOWS-TESTED (scripts only) | rejected after the real version checks, before any server start; INI untouched |
-| Windows gameplay (2 clients, combat, transition) | **NOT TESTED** | follow the test protocol below and return the logs |
+| Native empty server: DLL load, hash gates, hooks on stock `object.lto`, session armed, build line names the loaded DLL's SHA-256 | WINDOWS-TESTED (no clients, 2026-11-11) | [server smoke evidence](#native-windows-server-smoke-evidence-no-clients) |
+| Hooked native NextLevel: epoch per level change, world name matches the engine's `Loaded world`, phase stays LOBBY before Start, object module loaded once per server run | WINDOWS-TESTED (console `nextlevel`, no clients) | as above |
+| Regressions: PM01 normal start writes `CoopSession=0`; `[ServerTools] Enabled=0` is pure pass-through; altered `object.lto` is rejected by the launcher checks and, if started directly, by the DLL (exit 1) | WINDOWS-TESTED (no clients) | as above |
+| Windows gameplay (2 clients: lobby chat, Start, spawns, combat, exit, transition, rejoin) | **NOT TESTED** | follow the test protocol below and return the logs |
 
 ## How it works
 
@@ -181,6 +184,55 @@ reverses this. Original game files are never rewritten.
 9. **Send back:** the full `KPCServerTools.log`, the effective `KPCServerTools.ini`, the
    three hashes from step 1, the client region and edition, and notes or screenshots for
    steps 3–8.
+
+## Native Windows server smoke evidence (no clients)
+
+Run on 2026-11-11 on Windows 11 Pro (10.0.26300) in a **disposable copy** of an
+installed Europe/USA 1.13 game. The copy was upgraded from the live-tested v7 proxy
+with the packaged `Setup-KPCServerTools.cmd`. No client connected. Hashes:
+`KPCServerTools.dll` = `server.dll` = `262b6ead146e2ca33639d5ecf6435e67b9e42033de7fa1aae57bc06891bc0f5d`,
+`server.original.dll` `83b7bce8…`, `object.lto` `3a03f879…` (stock), `dedicated.exe` `b940fd6d…`.
+
+[`tools/Invoke-CoopServerSmoke.ps1`](tools/Invoke-CoopServerSmoke.ps1) drives the real
+launcher worker and types console commands into the server's own console:
+
+| Mode | Result | What it showed |
+| --- | --- | --- |
+| `Coop` | PASS (15 checks) | build line with the loaded DLL's SHA-256, `effective CoopSession=1`, hooks on stock `object.lto`, `session armed … min=2 max=3`. Three console `nextlevel` commands gave `e=1 R1M2B`, `e=2 R1M2C`, `e=3 R1M2B` (`seq` 1-3, phase LOBBY); world names equal the engine's own `Loaded world:` lines; no player events; clean `quit` (exit 0) |
+| `Normal` (PM01) | PASS | `effective CoopSession=0`, normal hooks, PM01 loaded |
+| `PassThrough` | PASS | `Original engine pass-through.` only; INI restored |
+| Coop hold (`-CommandFile`, `-MinPlayers 1`) | PASS | server held until `quit` from the command file; INI restored byte-for-byte |
+| Tampered `object.lto` (one byte flipped, separate copy) | Rejected | launcher worker refuses before starting the server; `dedicated.exe` started directly logs `ERROR: unsupported or altered object.lto` and exits with code 1 |
+
+Findings from these runs:
+* **`start <map>` prepends the map to the maplist** (documented in the game's
+  `dedicated.txt`), so a co-op start uses the list `R1M2B, R1M2B, R1M2C`. The
+  session is unaffected: it selects route worlds by name, and the first matching
+  entry wins.
+* **The object module stays loaded across native level changes.** Hooks were
+  installed once per server run, so session state (generation, epoch, members)
+  survives the R1M2B → R1M2C change. A server restart creates a fresh session.
+* The server version check named the wrong file when `object.lto` was altered
+  ("active server.dll is not the selected Server Tools build"). It now reports the
+  `object.lto` mismatch when the active proxy is recognised. The same check exists
+  on `main`.
+
+**Local client automation was not possible.** In the disposable copy, `client.exe`
+and `Psycho.exe` exit with code 0 within about 1.5 s, before `dinput.dll` loads.
+This happened with `+connect`/`+name`/windowed arguments and with the
+`WINXPSP3 DWM8And16BitMitigation` compatibility layer applied per process. The
+original install additionally has `RUNASADMIN`, which needs an interactive UAC
+prompt. Client-side tests therefore still need a person at real client PCs.
+**Testers:** a copied game folder does not inherit the original folder's
+compatibility settings. Start clients from your normal installation.
+
+Reproduce (in a disposable copy with the CI package installed):
+```powershell
+Start-Process powershell.exe -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File .\Invoke-CoopServerSmoke.ps1 -GameDir C:\KPCTest\Psycho -Mode Coop -Report C:\KPCTest\coop.json'
+```
+Repeat with `-Mode Normal` and `-Mode PassThrough`. For a client session, add
+`-CommandFile C:\KPCTest\cmd.txt`, then append console commands (for example
+`say hello`, `list_ids`, `quit`) to that file. Send back the JSON reports.
 
 ## Known limitations and risks
 * The exit trigger may never fire in multiplayer. This is the largest unknown, and `!next`
