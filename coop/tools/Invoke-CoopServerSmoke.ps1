@@ -45,7 +45,17 @@ $GameDir=(Resolve-Path -LiteralPath $GameDir).Path
 foreach($required in 'dedicated.exe','server.dll','server.original.dll','KPCServerTools.dll','KPCServerTools.ini','server-template.cfg','Start-KPC-Selected-Server.ps1'){
  if(-not (Test-Path -LiteralPath (Join-Path $GameDir $required))){throw "Missing $required in $GameDir; install Server Tools in a disposable copy first."}
 }
-if(Get-Process -Name @('dedicated','DEDICA~1') -ErrorAction SilentlyContinue){throw 'A dedicated server is already running.'}
+# Another server (for example a player's test server in a different copy) may
+# keep running: refuse only a server from this folder or an occupied game port.
+function Get-OwnServers{
+ @(Get-Process -Name @('dedicated','DEDICA~1') -ErrorAction SilentlyContinue | Where-Object {
+  $_.Path -and $_.Path.StartsWith($GameDir+'\',[StringComparison]::OrdinalIgnoreCase) })
+}
+if(@(Get-OwnServers).Count){throw "A dedicated server from $GameDir is already running."}
+$portMatch=[regex]::Match((Get-Content -LiteralPath (Join-Path $GameDir 'server-template.cfg') -Raw),'(?m)^"port"\s+"(\d+)"')
+if(-not $portMatch.Success){throw 'server-template.cfg has no "port" line.'}
+$gamePort=[int]$portMatch.Groups[1].Value
+if(Get-NetUDPEndpoint -LocalPort $gamePort -ErrorAction SilentlyContinue){throw "UDP port $gamePort is already in use; use a copy with a free port in server-template.cfg."}
 
 Add-Type -TypeDefinition @'
 using System;
@@ -211,7 +221,7 @@ try{
  if(-not $worker.HasExited){[KPCSmokeConsole]::Submit("quit`r");$events.Add('typed quit')}
  if(-not $worker.WaitForExit(30000)){
   $events.Add('quit timed out; stopping dedicated server')
-  Get-Process -Name @('dedicated','DEDICA~1') -ErrorAction SilentlyContinue | Stop-Process -Force
+  Get-OwnServers | Stop-Process -Force   # never a server from another folder
   [void]$worker.WaitForExit(10000)
  }
  $worker.Refresh(); if($worker.HasExited){$exitCode=$worker.ExitCode}
