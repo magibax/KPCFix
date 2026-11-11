@@ -28,12 +28,15 @@ after changing a switch.
 | `CoopHealthBars` | 1 | Session only: enable the original enemy health-bar manager (gated to single player at `0xf8fe0`); bar data is broadcast at most 10 times per second. Stock clients draw it unchanged. 0 = stock (no bars). See [section F](COOP-MVP.md#f-enemy-health-bars-in-co-op) |
 | `CoopSpawners` | 1 | Session only: create the map's authored monster spawners. Stock multiplayer forces them off (`0x93c5d`), which left R1M3A's `spawn6` empty. Applies to every route world; difficulty bits still apply. 0 = stock. See [section G](COOP-MVP.md#g-enemies-missing-after-the-r1m3a-window-smash-spawn6) |
 | `CoopSkill` | absent | Session only: server difficulty written before each world load: 0 Lullaby, 1 Daydream, 2 Sleepless, 3 Cold Sweat, 4 Nightmare. Absent or out of range = unchanged (the native test server reported 2) |
+| `CoopCampaign` | 0 | Session only: replace the fixed MVP route with the 48-world campaign graph from the original `WORLDORDER.TXT` (`coop_campaign.h`, checked against the user's REZ by `coop/tools/check_campaign_table.py`). Host commands `!campaign full`, `!campaign from <realm>`, `!campaign realm <realm>` (water, earth, air, fire, nightmare or 1-5; changes clear readiness), `!abort` (back to the lobby). Default selection: full campaign from R1M0. Exits must lead to the WORLDORDER successor; leaving the last world of the selection completes it. Worlds missing from the native 50-entry maplist are written into the next maplist slot in memory. See [CAMPAIGN-ARCHITECTURE.md](CAMPAIGN-ARCHITECTURE.md) |
+| `CoopLobbyWorld` | empty | Session + campaign: world loaded after completion or `!abort` (any normalisable world path). Empty = first world of the current selection |
+| `CoopIntroAll` | 0 | TEST ONLY: allow the `starting_cinematic` of every route world, not just the verified ones (R1M3A) |
 | `CoopTestStartWorld` | empty | TEST ONLY: route world `!start` loads (`R1M2B`, `R1M2C` or `R1M3A`, case-insensitive). Any other value is ignored and logged |
 | `TraceMusic` | 0 | Session diagnostic: log `music-world …` when a world creates its music event (call site `0x10494b`) |
 | `TraceSpawners` | 0 | Session diagnostic: log the first 64 monster spawner filter decisions (`spawner-filter skill=… miscflags=… create=…`) and per-world accepted/rejected counts in the `world-content` line |
 | `TraceTiming` | 0 | Session diagnostic: prefix co-op log lines with `t=<ms since session armed>`; log one `clock-calibration` line (engine versus wall time over the first 10 s of frames) and, during an intro, `intro-event` per dispatched script event plus an `intro-clock` summary (and `sound-clock` when `CoopSoundClock` is installed) |
 
-These are twenty-four `[Coop]` keys (eleven diagnostics plus thirteen session keys). The ninth INI-related setting
+These are twenty-seven `[Coop]` keys (twelve diagnostics/test keys plus fifteen session keys). The ninth INI-related setting
 often counted in audits is `[ServerTools] AllowCheats`, a stable
 hosting permission independent of co-op. `[ServerTools] Enabled=1`
 is additionally required for experimental hooks.

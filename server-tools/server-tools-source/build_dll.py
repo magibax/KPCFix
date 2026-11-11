@@ -128,6 +128,9 @@ previous_proxies=[
     # coop-session-v2 e86bb352 (5843fa9): CoopScriptClock; desktop + laptop
     # confirmed the subtitle/narration cadence fix (2026-11-11).
     'e86bb352df4a726c2a6c0d689df93ce39414cd5cc8206b959892add58f2e257d',
+    # coop-session-v2 1b8816cb (aa9949c): pass 2 (sound clock, health bars,
+    # spawners, start scoreboard); native server smoke only, installed in smoke3.
+    '1b8816cbeafb48ca9e058bda48363847c807d47d1982bd17a4eb40615097f523',
 ]
 if new_hash in previous_proxies:
  raise SystemExit('Current proxy SHA-256 unexpectedly appears in the previous allowlist')

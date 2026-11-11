@@ -77,6 +77,8 @@ jobs:
             /tmp/kpc-coop-script-clock-test-$bits
             gcc $flag -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src               server-tools/server-tools-source/tests/test_coop_scoreboard.c -o /tmp/kpc-coop-scoreboard-test-$bits
             /tmp/kpc-coop-scoreboard-test-$bits
+            gcc $flag -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src               server-tools/server-tools-source/tests/test_coop_campaign.c -o /tmp/kpc-coop-campaign-test-$bits
+            /tmp/kpc-coop-campaign-test-$bits
           done
       - name: Verify fail-closed general allocator policy
         shell: bash
