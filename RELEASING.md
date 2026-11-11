@@ -85,3 +85,28 @@ overwrite existing releases or retag history. If an action fails, inspect its
 logs and correct the cause before choosing a fresh release tag. An experimental
 co-op build must stay on its feature branch and must not trigger a stable
 release tag.
+
+## Stable / experimental isolation (2026-11-11)
+
+Production Server Tools source, DLL and build metadata on `main` were
+restored from the exact published `server-tools-v1.0.0-r3` baseline.
+New stable changes may be committed to `main` only after pinned-toolchain
+reproduction, package checksum validation and the manual tests above.
+
+All ongoing co-op code, diagnostics, experimental Windows ZIPs and
+co-op research remain on `feature/coop-campaign`. The experimental
+workflow uses the same GCC 14.2/binutils 2.44 environment as stable CI,
+and it must compare the rebuilt DLL and manifest with the **tracked**
+version before uploading those tracked files. A synthetic pass never
+authorizes general automatic spawning.
+
+The stable release workflow rejects binaries/source with experimental
+co-op signatures and requires stable client/server tags to reference
+commits on `main` history. Keep tag protections in both branch copies
+of the workflow. Do **not** merge a stable server-tree restoration or
+revert directly into the experimental branch: that would remove
+co-op implementation. Cherry-pick narrowly reviewed fixes instead.
+
+An existing stable tag remains immutable, even if a later stable main
+commit updates launcher scripts or checksum manifests; such fixes
+require a **new** release revision after Windows acceptance.

@@ -42,9 +42,4 @@ See the [client build instructions](source/BUILD.md), [architecture](ARCHITECTUR
 
 For edition fingerprints, see [compatibility notes](COMPATIBILITY-NOTES.md). Maintainers can find the packaging and tag procedure in the [release guide](https://github.com/magibax/KPCFix/blob/main/RELEASING.md). Experimental campaign hosting is tracked in [co-op research](https://github.com/magibax/KPCFix/tree/feature/coop-campaign/coop).
 
-## Graphics research
-
-- Engine performance optimisation: Inspect the engine for opportunities to improve FPS, reduce rendering overhead and optimise performance without introducing instability.
-- Anisotropic filtering & antialiasing: Investigate enabling or improving anisotropic filtering and antialiasing, including within the game's menus.
-- Graphics configuration: Investigate c_GlobalDetail, GibDetail, LodOffset and other graphics settings to understand their behaviour, performance impact and sensible defaults for modern hardware.
-- Graphics fidelity improvements: Investigate engine-level methods to improve rendering quality, texture filtering, model detail, draw distances and other visual effects.
+Future graphics investigations are tracked separately in the [graphics research roadmap](https://github.com/magibax/KPCFix/blob/main/GRAPHICS-RESEARCH.md).
