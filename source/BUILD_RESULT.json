@@ -1,8 +1,8 @@
 {
   "output": "dinput.dll",
   "platform": "windows",
-  "sha256": "3d7020511dd1b223cab2ed05a0180879ae7271d549a3a9324e9ef0a6b82a56e3",
-  "bytes": 42496,
+  "sha256": "66774c29356074a1600c678b5e5a0e7def09719fd186a1adcc843f30e004932a",
+  "bytes": 46592,
   "exports": [
     "DirectInputCreateA",
     "DirectInputCreateW",
@@ -17,8 +17,8 @@
   "elf_to_coff": [
     {
       "object": "kpcfix.obj",
-      "dir32": 683,
-      "rel32": 178
+      "dir32": 750,
+      "rel32": 185
     },
     {
       "object": "sha256.obj",
@@ -44,6 +44,31 @@
       "object": "cinematic.obj",
       "dir32": 18,
       "rel32": 5
+    },
+    {
+      "object": "loading.obj",
+      "dir32": 39,
+      "rel32": 4
+    },
+    {
+      "object": "netwatch.obj",
+      "dir32": 2,
+      "rel32": 0
+    },
+    {
+      "object": "netwatch_hook.obj",
+      "dir32": 1,
+      "rel32": 1
+    },
+    {
+      "object": "focus.obj",
+      "dir32": 8,
+      "rel32": 0
+    },
+    {
+      "object": "minstep_hook.obj",
+      "dir32": 1,
+      "rel32": 0
     },
     {
       "object": "cinematic_hook.obj",

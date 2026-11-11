@@ -4,6 +4,9 @@
 #include "ui.h"
 
 #include "shell_layout.h"
+#include "loading.h"
+#include "netwatch.h"
+#include "focus.h"
 #define KPC_VERSION "KPCFix 1.13 for Windows"
 #define KPC_CLOCK_DEFAULT 1
 const ShellLayout *g_shell_layout;
@@ -39,6 +42,10 @@ U32 g_input_late_events,g_input_zero_intervals,g_input_first_late_delta;
 static int late_event_reported;
 void *g_original_ftol;
 double g_carries[8];
+/* Optional minimum local-server step (minstep_hook.S); 0 = Timing V3 clock_v2. */
+float g_min_step_seconds;
+static U32 min_step_ms;
+extern void local_server_min_step(void);
 static void (*const carry_helpers[8])(void)={carry_0,carry_1,carry_2,carry_3,carry_4,carry_5,carry_6,carry_7};
 
 static HMODULE self_module;
@@ -515,6 +522,19 @@ static int queue_ui(Edit edits[48],U32 *count,U8 *base){
 }
 
 /* Called after LoadLibrary returns, before its caller can use cshell exports. */
+/* Campaign loading art (loading.c): the PreLoadWorld vtable slot, the 0x69
+ * close call and the per-frame screen draw call, all original values checked. */
+static int queue_loading(Edit edits[48],U32 *count,U8 *base){
+    const ShellLayout *L=g_shell_layout;U8 before[5],after[5];
+    if(!g_loading_enabled)return 1;
+    if(!L->preload_slot){g_loading_enabled=0;log_text("Campaign loading art: not verified for this cshell edition; stock loading retained.\r\n");return 1;}
+    store32(before,(U32)(base+L->preload_world));store32(after,(U32)kpc_preload_world);
+    if(!add_edit(edits,count,base+L->preload_slot,before,after,4))return 0;
+    near_call(before,base+L->close_call,base+L->screen_close);near_call(after,base+L->close_call,kpc_close_on_entry);
+    if(!add_edit(edits,count,base+L->close_call,before,after,5))return 0;
+    near_call(before,base+L->draw_call,base+L->screen_draw);near_call(after,base+L->draw_call,kpc_draw_screen);
+    return add_edit(edits,count,base+L->draw_call,before,after,5);
+}
 static int patch_shell(HMODULE module){
     WCHAR path[PATH_CAP];U8 digest[32],movement_call[7],guard_call[5];
     static const U8 original_move[7]={0x8b,0x46,0x38,0x50,0xff,0x52,0x40};U32 file_size,count=0,n;U8 *base=(U8 *)module;
@@ -536,11 +556,17 @@ static int patch_shell(HMODULE module){
        !add_edit(edits,&count,move,original_move,movement_call,7)){
         report_error("Unexpected movement dispatch in cshell.dll.");goto done;
     }
-    if(!queue_sensitivity(edits,&count,base)||!queue_hud(edits,&count,base)||!queue_ui(edits,&count,base)||!commit_edits(edits,count)){
+    if(!queue_sensitivity(edits,&count,base)||!queue_hud(edits,&count,base)||!queue_ui(edits,&count,base)||
+       !queue_loading(edits,&count,base)||!commit_edits(edits,count)){
         report_error("UI/HUD/sensitivity/movement instructions differ or their memory update failed. No changes in this cshell transaction were retained.");goto done;
     }
     g_hud_shell=base;
-    g_ui_shell=base;g_rate_setter_tail=base+g_shell_layout->rate_setter+6;
+    g_ui_shell=base;g_rate_setter_tail=base+g_shell_layout->rate_setter+6;g_loading_shell=base;
+    if(g_net_timeout_enabled){
+        if(g_shell_layout->client_shell_global)g_net_shell_slot=base+g_shell_layout->client_shell_global;
+        else log_text("Server timeout: not verified for this cshell edition; stock 120 s retained.\r\n");
+    }
+    if(g_loading_enabled){log_text("Campaign loading art: original R?M? pictures in multiplayer campaign loads, minimum ms=");log_hex(g_loading_min_ms);log_text(".\r\n");}
     log_text("Ground contact: V5 applied in memory.\r\n");
     kpc_status|=GROUND_READY|GROUND_RUNTIME;
     log_text("Sensitivity range: percent of original=");log_hex(sensitivity_range_percent);
@@ -622,6 +648,24 @@ static int install_game_fixes(void){
     if(g_tooltip_percent<50||g_tooltip_percent>400){
         report_error("[Tooltip] ScalePercent must be 0 (follow HUD), or an integer from 50 to 400. No client changes were applied.");return 0;
     }
+    {
+        U32 seconds=GetPrivateProfileIntW(L"Multiplayer",L"ServerTimeoutSeconds",15,ini_path);
+        if(seconds&&(seconds<5||seconds>120)){
+            report_error("[Multiplayer] ServerTimeoutSeconds must be 0 (stock 120 s) or an integer from 5 to 120. No client changes were applied.");return 0;
+        }
+        g_net_timeout_enabled=seconds!=0;g_net_timeout_seconds=(float)seconds;
+    }
+    min_step_ms=GetPrivateProfileIntW(L"KPCFix",L"LocalServerMinStepMs",0,ini_path);
+    if(min_step_ms>50){
+        report_error("[KPCFix] LocalServerMinStepMs must be 0 (off) or an integer from 1 to 50. No client changes were applied.");return 0;
+    }
+    g_min_step_seconds=(float)min_step_ms*0.001f;
+    g_focus_enabled=GetPrivateProfileIntW(L"Multiplayer",L"KeepAudioOnFocusLoss",1,ini_path)!=0;
+    g_loading_enabled=GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingArt",1,ini_path)!=0;
+    g_loading_min_ms=GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingMinimumMs",5000,ini_path);
+    if(g_loading_min_ms>30000){
+        report_error("[Multiplayer] CampaignLoadingMinimumMs must be an integer from 0 to 30000. No client changes were applied.");return 0;
+    }
     g_lock_input_rate=!stock_mouse && GetPrivateProfileIntW(L"KPCFix",L"LockInputRate",1,ini_path)!=0;
     g_hide_input_rate=g_lock_input_rate&&GetPrivateProfileIntW(L"KPCFix",L"HideInputRate",1,ini_path)!=0;
     normalize_configs_enabled=g_lock_input_rate&&GetPrivateProfileIntW(L"KPCFix",L"NormalizeInputRateConfigs",1,ini_path)!=0;
@@ -649,7 +693,13 @@ static int install_game_fixes(void){
         }
     }
     {
-        if(!add_edit(edits,&count,base+0x664b2,client_profile->clock,clock_v2,35)||
+        U8 clock_edit[35];
+        copy_bytes(clock_edit,clock_v2,35);
+        if(min_step_ms){
+            clock_edit[0]=0xe9;store32(clock_edit+1,(U32)local_server_min_step-((U32)base+0x664b2+5));
+            for(i=5;i<35;i++)clock_edit[i]=0x90;
+        }
+        if(!add_edit(edits,&count,base+0x664b2,client_profile->clock,clock_edit,35)||
            !add_edit(edits,&count,base+0x1396e,client_profile->limiter,limiter_v2,5))return 0;
         for(i=0;i<8;i++){
             near_call(replacement,base+animation_sites[i],carry_helpers[i]);
@@ -672,6 +722,28 @@ static int install_game_fixes(void){
     store32(after_iat,(U32)kpc_load_library_a);
     if(!add_edit(edits,&count,base+0x971f0,before_iat,after_iat,4))return 0;
     if(!queue_bind_fix(edits,&count,base)){report_error("Bind address patch validation failed. No client edits applied.");return 0;}
+    if(g_focus_enabled){
+        static const U32 sites[2]={0x6d5c,0x6cdb},targets[2]={0x74b90,0x74c10};
+        void *const hooks[2]={(void *)kpc_focus_release,(void *)kpc_focus_restore};
+        U8 before[5];
+        g_focus_client=base;
+        for(i=0;i<2;i++){
+            near_call(before,base+sites[i],base+targets[i]);near_call(replacement,base+sites[i],hooks[i]);
+            if(!add_edit(edits,&count,base+sites[i],before,replacement,5)){
+                report_error("The original focus-change sound calls differ. No client edits were applied.");return 0;
+            }
+        }
+    }
+    if(g_net_timeout_enabled){
+        static const U8 before[14]={0x8b,0x4e,0x30,0xd9,0x46,0x74,0xd8,0x59,0x4c,0xdf,0xe0,0xf6,0xc4,0x41};
+        static const U8 tail[2]={0x75,0x33};
+        if(!equal_bytes(base+0x4b50a,tail,2)){report_error("The original connection timeout branch differs. No client edits were applied.");return 0;}
+        near_call(replacement,base+0x4b4fc,net_timeout_compare);
+        for(i=5;i<14;i++)replacement[i]=0x90;
+        if(!add_edit(edits,&count,base+0x4b4fc,before,replacement,14)){
+            report_error("The original connection timeout comparison differs. No client edits were applied.");return 0;
+        }
+    }
     if(!queue_net_trace(edits,&count,base)){report_error("Network trace import transaction could not be prepared. No client edits were applied.");return 0;}
     if(!GetModuleHandleExW(5,(const WCHAR *)self_module,&pinned)||pinned!=self_module){report_error("The portable module could not be pinned for safe callback lifetime. No fixes were applied.");return 0;}
     if(!commit_edits(edits,count)){report_error("Client patch transaction failed validation or protection/cache updates. Use the tested V3/V5 setup.");return 0;}
@@ -692,6 +764,9 @@ static int install_game_fixes(void){
     kpc_status|=TIMING_READY|ANIMATION_READY;
     kpc_status|=TIMING_RUNTIME|ANIMATION_RUNTIME;
     log_text("Timing V3: clock guard and 8 independent carries applied in memory.\r\n");
+    if(min_step_ms){log_text("LocalServerMinStepMs=");log_hex(min_step_ms);log_text(": EXPERIMENTAL minimum local-server step; shorter frames are carried, not simulated.\r\n");}
+    if(g_focus_enabled)log_text("Focus loss: remote multiplayer keeps server-owned sounds running (single player and menus stock).\r\n");
+    if(g_net_timeout_enabled){log_text("Server timeout: in-world multiplayer connection seconds=");log_hex((U32)g_net_timeout_seconds);log_text(" (stock 120 s elsewhere).\r\n");}
     log_text(input_clock_enabled?"Input clock v2: timeGetTime plus delayed/zero interval guards; no global clock hook.\r\n":"InputClock=0: original input clocks and intervals retained; Timing V3/Ground V5 remain enabled.\r\n");
     if(GetModuleHandleExW(0,L"cshell.dll",&loaded)){
         i=(U32)patch_shell(loaded);

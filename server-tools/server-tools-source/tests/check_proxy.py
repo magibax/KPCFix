@@ -106,6 +106,7 @@ def profile_int(a):
   if '--script-clock' in sys.argv:return 1
   return a[2]
  if key=='CoopCampaign':return int('--campaign' in sys.argv)
+ if key=='CoopIntroSettleMs':return a[2]
  if key=='CoopIntroAll':return 0
  if key=='CoopStartScoreboard':return 0 if '--no-start-scoreboard' in sys.argv else a[2]
  if key=='CoopSpawners':return 0 if '--no-spawners' in sys.argv else a[2]
@@ -235,7 +236,8 @@ def coop_scenario():
  # CMonsterSpawner forced MP-off (or al,0x10 at 93c5d): NOPs with CoopSpawners.
  assert bytes(u.mem_read(obj+0x93c5d,2))==(b'\x90\x90' if spawners else bytes.fromhex('0c10'))
  del sites[0x93c5d]
- sb='--intermission' not in sys.argv and '--no-start-scoreboard' not in sys.argv
+ # Campaign mode defaults CoopStartScoreboard to 0 (KPCFix clients show the loading picture).
+ sb='--intermission' not in sys.argv and '--no-start-scoreboard' not in sys.argv and '--campaign' not in sys.argv
  hooked_optional[0xffbbf]=hooked_optional[0xffbbf] or sb   # per-frame hook also drives the start scoreboard
  skill=[int(x.split('=',1)[1]) for x in sys.argv if x.startswith('--skill=')]
  target={}
@@ -368,6 +370,7 @@ def coop_scenario():
   # slot NextLevel takes next (memory only).
   text=b''.join(log).decode('latin1')
   assert 'effective CoopCampaign=1 (WORLDORDER graph, 48 worlds' in text
+  assert 'effective CoopStartScoreboard=0' in text,'campaign default: no start scoreboard'
   roster(0xa1);spawn(alice);roster(0xa1,0xb2);spawn(bob)
   assert any('full campaign (R1M0..R5M1B, 48 worlds)' in m for m in chat(bob,'!campaign'))
   assert any('Only the host' in m for m in chat(bob,'!campaign realm fire'))

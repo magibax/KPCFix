@@ -100,6 +100,14 @@ static void test_full_route_and_exits(void){
   coop_session_exit(&i,"Worlds/Realm1/R1M1a",81000,&r);assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==1);
   i.route_pos=6;i.phase=COOP_PHASE_INTRO_RUNNING;i.transition_epoch=0;     /* R1M3A: not an INTRO world */
   coop_session_exit(&i,"worlds/realm1/r1m3b",82000,&r);assert(r.action!=COOP_ACT_CHANGE_WORLD);}
+ /* A configured settle (campaign default 6 s, longer than the clients' 5 s
+  * loading picture) holds the intro start accordingly. */
+ {CoopSession i;lobby(&i);assert(i.intro_settle_ms==COOP_INTRO_SETTLE_MS);i.intro_settle_ms=6000;
+  cmd(&i,A,"!ready");cmd(&i,B,"!ready");cmd(&i,A,"!start");
+  load(&i,"worlds/realm1/R1M0",2000);coop_session_intro_arm(&i,1);
+  spawn(&i,A,"Alice",2100);spawn(&i,B,"Bob",2200);
+  assert(coop_session_intro_tick(&i,2200+5999,&r)==0);
+  assert(coop_session_intro_tick(&i,2200+6000,&r)==COOP_ACT_INTRO_START);}
  /* The realm boundary inside a full campaign is an ordinary transition. */
  s.route_pos=11;s.phase=COOP_PHASE_GAMEPLAY;s.transition_epoch=0;
  coop_session_exit(&s,"Worlds/Realm2/R2M0",9000,&r);assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==12);

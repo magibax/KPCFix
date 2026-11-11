@@ -131,6 +131,9 @@ previous_proxies=[
     # coop-session-v2 1b8816cb (aa9949c): pass 2 (sound clock, health bars,
     # spawners, start scoreboard); native server smoke only, installed in smoke3.
     '1b8816cbeafb48ca9e058bda48363847c807d47d1982bd17a4eb40615097f523',
+    # coop-session-v2 009eacd6 (1524fb6): campaign graph; the user played
+    # the realm intros (R1M0 intro exit to R1M1A logged in smoke3), 2026-11-11.
+    '009eacd65ebc03627389a0bcac901193e33393b3188d1445d70d3d130546ab71',
 ]
 if new_hash in previous_proxies:
  raise SystemExit('Current proxy SHA-256 unexpectedly appears in the previous allowlist')

@@ -14,6 +14,11 @@ typedef struct {
     U32 rate_setter, rate_stack, menu_ready_call, menu_ready, menu_key_slot, menu_key;
     U32 widget_y[4];
     U8 widget_y_modrm; /* MOV [widget+0x2c], imm32: EBP or ESI */
+    /* Campaign loading art (loading.c); zero = not verified for this edition. */
+    U32 preload_slot, preload_world, load_background, screen_show, screen_close;
+    U32 close_call, screen_draw, draw_call, render_frame, multiplayer_test;
+    /* Server-connection timeout (netwatch.c): global holding the client shell. */
+    U32 client_shell_global;
 } ShellLayout;
 
 extern const ShellLayout *g_shell_layout;
