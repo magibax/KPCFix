@@ -108,6 +108,8 @@ previous_proxies=[
     # spawn-list-control-v8 (f94affd): previously tracked experimental DLL;
     # reviewed so testers can upgrade it in place to the co-op session build.
     '7ea0dfa44dc7870579de6b4e6ffea9018903b7525c3aa7d1b8c9d91013d3fc0d',
+    # coop-session-v1 first CI artifact (d8e3420, PR #10); same protocol.
+    '3048d6f3dcab6959628edc77fd5a5f5b164a455e346965b11ee0c61ba7eb4257',
 ]
 if new_hash in previous_proxies:
  raise SystemExit('Current proxy SHA-256 unexpectedly appears in the previous allowlist')

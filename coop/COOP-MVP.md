@@ -109,7 +109,7 @@ At startup `KPCServerTools.log` records:
 
 Each session event is one bounded line:
 `[KPCFix Co-op] g=<generation> e=<epoch> seq=<n> <PHASE> <event> <detail>`.
-Events are `spawn` (path, slot, client, name, telefrag=skipped), `say`, `change`, `end-level`,
+Events are `spawn` (path, slot, client, name, telefrag=skipped), `say`, `change`, `end-level`, `exit-seen` (first exit-gate arrival per epoch, whatever the lobby decides),
 `world-loading`, `world-loaded`, `presence`, `exit-unsupported-flag` and `change-failed`.
 At most 3000 lines are written per server process.
 
@@ -118,6 +118,8 @@ Static disassembly is recorded here. These are runtime targets, not redistribute
 
 | RVA | Finding |
 | --- | --- |
+| `0x2d400` | Exit object message handler: message `0x27` reads the activator HOBJECT and calls `vtbl+0x70` (`0x2d450`). Other messages go to base `0xd3b50` |
+| `0xc2785` | Generic target-message loop: sends `0x27` (sender NULL, activator written into the message) to listed targets. Whether trigger volumes run this loop in multiplayer is the open runtime question. The session logs one `exit-seen` line per epoch when the gate is reached |
 | `0x2d450` | Exit object handler (vtable `0x118aa4`). `[0x1016de60]+0x1d0` (game type) ≠ 0 returns; otherwise `0x2d510` → `0x2d530` sends message `0x19` to clients. Single-player level changes are client-driven, so they are not used |
 | `0xfb0d7` | Developer `ExitLevel` command finds `CExitTrigger` and prints `trigger+0x54` as "Exiting to level %s". This confirms `+0x54` is `NextWorld` |
 | `0xfde00` | Dedicated server app message handler: `GAMEINIT`, `NEXTLEVEL` → `0x1005c0`, `SERVHOST`, `SAY:` |
@@ -159,8 +161,9 @@ reverses this. Original game files are never rewritten.
    doors behave as in single player.
 5. **Objective and exit.** Play to the R1M2B hallway exit together.
    * Expected: `Exit reached -> R1M2C`, intermission, and both load R1M2C (epoch 2).
-   * If nothing happens at the exit, note it. The log will lack an `exit` line, which means
-     multiplayer does not deliver the trigger. The host then types `!next` to confirm that the
+   * If nothing happens at the exit, check the log. An `exit-seen` line without an `exit` line
+     means the trigger arrives but was refused (see its `flag152` and phase). No `exit-seen`
+     line means multiplayer does not deliver the trigger at all. The host then types `!next` to confirm that the
      server-coordinated change works.
    * Walk back into the exit volume repeatedly. There must be exactly one change (duplicate case).
 6. **Slow join / disconnect / rejoin.** On R1M2C, B disconnects. Within a minute A types
