@@ -1,12 +1,10 @@
-# KPCFix Server Tools
+# KPCFix Server Tools 1.0.0
 
 Windows dedicated-server tools for official game version **1.13**. Supports the supplied Europe/UK, USA, German and Italian 1.13 builds.
 
 ## Update an existing DLL installation
 
 Close the game and server, copy these files into the game directory, then run **Setup-KPCServerTools.cmd** again to deploy the new DLL. Keep your existing `server.original.dll` and `KPCServerTools.ini`. The setup recognizes the preceding proxy build.
-
-If setup reports an unrecognised active `server.dll`, leave the official `server.original.dll` in place. Once you have confirmed it is the matching original, move the active `server.dll` to a separate backup folder and rerun setup. Setup verifies the original against the dedicated executable before installing the proxy. Keep the moved DLL if you need to restore your previous installation.
 
 ## Install or migrate
 
@@ -40,8 +38,6 @@ Enabled=1
 AllowCheats=0
 ```
 
-**Important:** `Start-KPC-Selected-Server.ps1` explicitly requires the `AllowCheats` key in `KPCServerTools.ini`; if it is absent, the graphical server launcher stops with `AllowCheats is missing from KPCServerTools.ini.` Existing INI files are preserved by setup, so re-running setup does not fill a missing key. Retain `AllowCheats=0` (or `AllowCheats=1` when explicitly desired) under `[ServerTools]` whenever adding co-op settings. The key must exist even if cheats are disabled.
-
 `Enabled=0` makes the proxy pass calls through to the official engine without installing Server Tools hooks; restart the server after changing it. `AllowCheats` sets initial permission, which the graphical launcher updates from its checkbox. Use the console command for live changes. Chat logging and announcements are active whenever the tools are enabled. Startup/errors are also appended to `KPCServerTools.log`.
 
 To remove the proxy, close the game/server and run **Restore-Original-Server.cmd**. It restores the preserved official engine to `server.dll`; `object.lto` remains stock. Old on-disk patch installers are moved to `KPCServerTools-Legacy` during migration; do not run them with this DLL installation.
@@ -50,33 +46,10 @@ To remove the proxy, close the game/server and run **Restore-Original-Server.cmd
 
 The small 32-bit proxy forwards the engine's two exports and intercepts its lookup of `ObjectDLLSetup`. It validates the official binaries, then installs the established Server Tools hooks in the loaded object module. It does not change the object file, PE headers or relocation table. Original game binaries are not bundled.
 
-Compiled-proxy emulation passed for Europe and US engine profiles at relocated DLL/object addresses, with cheats enabled, disabled, pass-through and altered-object rejection. Hook tests cover separate player state, live revocation, client OFF acknowledgements, chat announcements and prompt restoration. These checks supplement Windows testing; they do not replace it. The stable R3 warning-spacing fix was confirmed in a Windows playtest. Record the DLL hash and repeat the applicable live checks when testing a different build.
+Compiled-proxy emulation passed for Europe and US engine profiles at relocated DLL/object addresses, with cheats enabled, disabled, pass-through and altered-object rejection. Hook tests cover separate player state, live revocation, client OFF acknowledgements, chat announcements and prompt restoration. These checks supplement Windows testing; they do not replace it. The preceding on-disk hooks were tested in game, but this DLL build still needs that confirmation.
 
-Source and build/test instructions are in `server-tools-source/README.md`. The stable download is [Server Tools R3](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3).
+Source and build/test instructions are in `server-tools-source/README.md`. This package includes the DLL conversion and chat-only announcements.
 
 ## Installing alongside KPCFix
 
 Server Tools uses its own README, license, checksums, compatibility checker, build list and source directory. Extracting either release over the other does not overwrite those files. Run `Check-KPCVersion.cmd` for the client; the server launcher automatically runs its separate `Check-KPCServerVersion.ps1` checks.
-
-## Unreleased co-op diagnostics and spawn-point instrumentation
-
-This section describes **unreleased development functionality**, not the tagged stable Server Tools R3 release. Development source includes a conditional spawn-position trace and an **opt-in, R1M2B-only three-client spawn trial**. Both hooks are off by default. The trial is not collision-validated and must not be used on public servers.
-
-Development checkouts include an experimental DLL and matching build metadata. After deploying it with setup, edit the existing `KPCServerTools.ini` and restart the server:
-
-```ini
-[ServerTools]
-Enabled=1
-AllowCheats=0
-
-[Coop]
-TrialSeparateSpawns=1
-TraceSpawns=1
-TraceCollisionABI=1
-```
-
-`AllowCheats` is required for the graphical server launcher to proceed. `TraceCollisionABI=1` enables read-only diagnostic segment rays and does **not** enable automatic collision-aware spawning.
-
-Run R1M2B with at most three clients in a fresh server session, then inspect `KPCServerTools.log`. The first 64 candidate position requests are written only to the log; no user-facing chat or screen text is generated. To end the trial, set all three `[Coop]` keys to 0 and restart the server. `Enabled=0` continues to pass through to the original engine. Do not ship a new release without rebuilding the tracked binary and build manifest, checking hashes, and performing Windows runtime verification.
-
-See [engine trace findings](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/SPAWN-ENGINE-TRACE.md), [site verifier](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/tools/check_spawn_site.py) and [log decoder](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/tools/decode_spawn_log.py).

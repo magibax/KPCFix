@@ -20,10 +20,7 @@ try {
   if((Get-FileHash -LiteralPath $backend -Algorithm SHA256).Hash -ne $originalHash){throw 'server.original.dll does not match this dedicated executable.'}
  }elseif($Uninstall){throw 'Original server DLL backup is missing.'}
  $currentHash=if(Test-Path $server){(Get-FileHash -LiteralPath $server -Algorithm SHA256).Hash}else{''}
- if($currentHash -and $currentHash -ne $originalHash -and $currentHash -notin $knownProxies){
-  if((Test-Path -LiteralPath $backend) -and -not $Uninstall){throw 'Unrecognized active server.dll. The original server.original.dll is verified. Move server.dll to a backup folder, keep server.original.dll in place, then rerun setup.'}
-  throw 'Unrecognized server.dll; it has not been replaced.'
- }
+ if($currentHash -and $currentHash -ne $originalHash -and $currentHash -notin $knownProxies){throw 'Unrecognized server.dll; it has not been replaced.'}
  if($Uninstall){
   if(Test-Path $server){
    $previous=Join-Path $PSScriptRoot ('server.proxy-'+[Guid]::NewGuid().ToString('N')+'.previous')

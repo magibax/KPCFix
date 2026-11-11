@@ -77,25 +77,6 @@ for line in subprocess.check_output(['nm','-an',str(work/'server.unstripped.dll'
   try:a=int(v[0],16)
   except ValueError:continue
   if 0x69000000<=a<0x69100000:proxy_symbols[v[2]]=a-0x69000000
-# Preserve the hash of the *previously shipped* proxy so Setup-KPCServerTools
-# accepts an upgrade from the installed stable DLL to this newly built DLL.
-new_hash=hashlib.sha256(out.read_bytes()).hexdigest()
-previous_proxies=['6d6b76ab4b04842464fc11a4e18e6a6c81f3318271d31b9602cb4604e889d380',
-                  '67a6be68223efb0321d41f270ae10923f0d6073731de57a61b600794c3f0eeea',
-                  '9b6bd69e894925e6b31f1ed32b6ff82331af104e2c20fbb6aeb43dc4bef5be9a',
-                  '66653630a0b717a70c3dd51a3b97efd75bd9b20495bd0b4d089b914b60942a37',
-                  'c2486afa934b7216486891dc640929018ec02cdd4341734c9adc7889bff94c3b',
-                  '354a75a1d56968a69ab47539a715f805c210fdcddab02ec0aa0c2fa93ceacd2b']
-old_manifest=package/'SERVER_TOOLS_BUILD.json'
-if old_manifest.is_file():
- try:
-  previous=json.loads(old_manifest.read_text())
-  for candidate in [previous.get('proxy_sha256'),*(previous.get('previous_proxy_hashes') or [])]:
-   if isinstance(candidate,str) and len(candidate)==64 and all(c in '0123456789abcdefABCDEF' for c in candidate):
-    candidate=candidate.lower()
-    if candidate!=new_hash and candidate not in previous_proxies:previous_proxies.append(candidate)
- except (ValueError,TypeError,KeyError):
-  raise SystemExit('Existing SERVER_TOOLS_BUILD.json is invalid; do not overwrite its upgrade history.')
-report=dict(previous_proxy_hashes=previous_proxies,proxy_sha256=new_hash,proxy_bytes=out.stat().st_size,proxy_symbols=proxy_symbols,hook_symbols=symbols,patches=patches,hook_bytes=len(code),exports=['CreateServer','DeleteServer'])
+report=dict(previous_proxy_hashes=['bac7696bc79f10b637134b7bbffea1ead01e67c8207452f5c3f339a8b5a353d4','67a6be68223efb0321d41f270ae10923f0d6073731de57a61b600794c3f0eeea'],proxy_sha256=hashlib.sha256(out.read_bytes()).hexdigest(),proxy_bytes=out.stat().st_size,proxy_symbols=proxy_symbols,hook_symbols=symbols,patches=patches,hook_bytes=len(code),exports=['CreateServer','DeleteServer'])
 (package/'SERVER_TOOLS_BUILD.json').write_text(json.dumps(report,indent=2)+'\n')
 print(out,report['proxy_bytes'],report['proxy_sha256'])
