@@ -1,10 +1,12 @@
-# KPCFix Server Tools 1.0.0
+# KPCFix Server Tools
 
 Windows dedicated-server tools for official game version **1.13**. Supports the supplied Europe/UK, USA, German and Italian 1.13 builds.
 
+Server Tools uses its own semantic version (MAJOR.MINOR.PATCH), independently of the KPCFix client. The game compatibility version remains 1.13.
+
 ## Update an existing DLL installation
 
-Close the game and server, copy these files into the game directory, then run **Setup-KPCServerTools.cmd** again to deploy the new DLL. Keep your existing `server.original.dll` and `KPCServerTools.ini`. The setup recognizes published stable proxies and the explicitly listed experimental v7/v8 test builds for migration back to stable R3. Other unrecognized proxies are refused; if the original backup is verified, move the unknown active `server.dll` to a separate backup before rerunning setup. Never overwrite `server.original.dll`.
+Close the game and server, copy these files into the game directory, then run **Setup-KPCServerTools.cmd** again to deploy the new DLL. Keep your existing `server.original.dll` and `KPCServerTools.ini`. The setup recognizes published stable proxies and the explicitly listed experimental v7/v8 test builds for migration back to a supported stable build. Other unrecognized proxies are refused; if the original backup is verified, move the unknown active `server.dll` to a separate backup before rerunning setup. Never overwrite `server.original.dll`.
 
 ## Install or migrate
 
