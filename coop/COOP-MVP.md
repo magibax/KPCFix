@@ -16,6 +16,8 @@ part of the stable Server Tools R3 on `main`. Every switch defaults to off.
 | Intro cinematics | **NOT SUPPORTED** (skipped) | native multiplayer did not start the authored intro in earlier trials; it is not forced |
 | Golden-mirror exits | **BLOCKED** | exit objects with flag `+0x152` take an unverified single-player branch; the session logs and ignores them |
 | Generic safe spawning on other maps (allocator) | **DISABLED** | full-body clearance is not proven; see `GENERAL-ALLOCATOR.md` |
+| Install / idempotent re-run / in-place upgrade from the live-tested v7 proxy (`7112b5ed`) / uninstall | WINDOWS-TESTED (scripts only, disposable copy, 2026-11-11) | original `server.dll` `83b7bce8…` restored; `object.lto` `3a03f879…` unchanged throughout |
+| Launcher worker co-op validation (wrong start map, maplist without R1M2C) | WINDOWS-TESTED (scripts only) | rejected after the real version checks, before any server start; INI untouched |
 | Windows gameplay (2 clients, combat, transition) | **NOT TESTED** | follow the test protocol below and return the logs |
 
 ## How it works
