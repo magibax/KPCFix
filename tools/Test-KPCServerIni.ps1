@@ -34,6 +34,18 @@ try {
  if($bytes.Length -lt 3 -or $bytes[0] -ne 239 -or $bytes[1] -ne 187 -or $bytes[2] -ne 191){throw 'UTF-8 BOM not preserved'}
  $actual=[IO.File]::ReadAllText($iniPath)
  if(-not $actual.Contains('; café') -or -not $actual.Contains("AllowCheats=0`r`n")){throw 'Unicode text or CRLF not preserved'}
+ # Reference observation on real Windows: the proxy DLL reads this file with
+ # GetPrivateProfileIntW. 1 = section found, 7 = fallback (section missed).
+ if($env:OS -eq 'Windows_NT'){
+  Add-Type -Namespace KPCTest -Name Ini -MemberDefinition '[DllImport("kernel32.dll",CharSet=CharSet.Unicode,ExactSpelling=true)] public static extern uint GetPrivateProfileIntW(string section,string key,int fallback,string file);'
+  $control=Join-Path $testDir 'bom-control.ini'
+  [IO.File]::WriteAllText($control,"[ServerTools]`r`nAllowCheats=1`r`n",$bom)
+  $withBom=[KPCTest.Ini]::GetPrivateProfileIntW('ServerTools','AllowCheats',7,$control)
+  $plain=Join-Path $testDir 'plain-control.ini'
+  [IO.File]::WriteAllText($plain,"[ServerTools]`r`nAllowCheats=1`r`n",([Text.UTF8Encoding]::new($false)))
+  $withoutBom=[KPCTest.Ini]::GetPrivateProfileIntW('ServerTools','AllowCheats',7,$plain)
+  Write-Host "INFO: GetPrivateProfileIntW first-line [ServerTools] AllowCheats: with UTF-8 BOM=$withBom, without BOM=$withoutBom"
+ }
  # Without [ServerTools], throw rather than insert into the wrong section.
  [IO.File]::WriteAllText($iniPath,"[Coop]`nTraceCampaign=0`n",([Text.UTF8Encoding]::new($false)))
  $failed=$false
