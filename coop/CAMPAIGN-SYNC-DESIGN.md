@@ -151,3 +151,17 @@ Before adding a new hook, recover and check the original callsite/ABI, thread co
 | Ordinary DM / co-op disabled | Native behaviour unaffected; no unwanted script/cinematic interception |
 
 This work is **not** a prerequisite for leaving the existing read-only spawn diagnostics enabled, but is required before claiming playable campaign progression. Implement it in separate verified gates: **(A) native lifecycle trace; (B) minimal first-player activation; (C) authoritative exits; (D) client-side presentation synchronisation; (E) late-join snapshots.** Do not bundle an experimental campaign runtime into a stable Server Tools or KPCFix release without Windows tests.
+
+## Status update: original intro in co-op (R1M3A proof of concept)
+
+The open questions above are now answered for the intro path; see
+[COOP-MVP.md](COOP-MVP.md#c-synchronised-original-intro-r1m3a-proof-of-concept):
+* the dedicated server **loads** the world's `starting_cinematic` script in multiplayer but
+  never plays it (game-type gate at `0x104830`);
+* the original script player and the per-frame script clock are not gated;
+* every cinematic presentation message is broadcast to all clients by the original code.
+
+`CoopIntro` therefore plays the original script once, server-side, behind a session barrier,
+rather than replaying scripts per client. Not yet verified on clients:
+* the camera presentation;
+* `player`-targeted events (voice-over), and the missing invulnerability.
