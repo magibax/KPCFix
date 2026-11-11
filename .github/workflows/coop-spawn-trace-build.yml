@@ -141,9 +141,9 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           dll=Path('server-tools/KPCServerTools.dll').read_bytes()
-          assert b'build=coop-session-v1 proto=kpc-coop/1 sha256=' in dll
+          assert b'build=coop-session-v2 proto=kpc-coop/1 sha256=' in dll
           assert b'effective CoopSession=1' in dll
-          assert b'session armed kpc-coop/1 route=R1M2B>R1M2C' in dll
+          assert b'session armed kpc-coop/1 route=R1M2B>R1M2C>R1M3A' in dll
           assert 'CoopSession'.encode('utf-16le') in dll
           assert b'telefrag=skipped' in dll
           assert b'effective TraceModelRegistry=1' in dll
@@ -187,14 +187,14 @@ jobs:
           cat > dist/README-FIRST.txt <<'TXT'
           EXPERIMENTAL KPCFIX CO-OP MVP (kpc-coop/1). NOT A STABLE RELEASE.
           Feature-branch build of KPCFix Server Tools with a chat lobby and the
-          fixed R1M2B -> R1M2C route. Not Windows-gameplay-tested by the
+          fixed R1M2B -> R1M2C -> R1M3A route. Not Windows-gameplay-tested by the
           developers; follow TEST-INSTRUCTIONS.md and report the logs.
           Back up server.dll, server.original.dll, KPCServerTools.dll,
           SERVER_TOOLS_BUILD.json and KPCServerTools.ini first. Extract the ZIP
           into the game folder, run Setup-KPCServerTools.cmd, then start
           KPC-Server-Launcher.cmd and tick the EXPERIMENTAL co-op box.
           Verify: Get-FileHash .\KPCServerTools.dll equals proxy_sha256 in
-          SERVER_TOOLS_BUILD.json and the "build=coop-session-v1 ... sha256="
+          SERVER_TOOLS_BUILD.json and the "build=coop-session-v2 ... sha256="
           line at the top of KPCServerTools.log.
           AllowCheats=0 must stay under [ServerTools].
           No original proprietary game binaries, maps or assets are included.

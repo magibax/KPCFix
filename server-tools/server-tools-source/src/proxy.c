@@ -775,26 +775,54 @@ static void __attribute__((naked)) coop_chat_entry(void){
  __asm__ volatile("pushfl; pushal; pushl %eax; pushl %esi; call coop_chat_observe;"
                   "addl $8,%esp; popal; popfl; addl $0x1e8,%esi; ret");
 }
-static U32 coop_exit_seen_epoch=0xffffffffu;
-static void coop_exit_trigger(U32 trigger){
- char next[0x80],line[200];U32 n=0,now=GetTickCount(),flag=0;CoopResult r;
+/* Exit object (CExitTrigger) evidence, original 1.13 object.lto 3a03f879...:
+ *   +0x54 NextWorld, +0xd3 StartPoint (both copied with '\' -> '/').
+ *   +0x152 is cleared by the constructor (2d18f) and set to 1 by the property
+ *   reader when NextWorld is missing/too long (2d250, 2d266), StartPoint is too
+ *   long (2d2e4) or the shell's game type is non-zero (2d33f-2d352). Every exit
+ *   in a multiplayer game therefore has +0x152 == 1. It is NOT a mirror flag.
+ *   Handler 2d450 returns at its multiplayer gate before reading it.
+ * So in multiplayer the flag cannot tell a valid exit from a broken one: the
+ * session validates NextWorld itself (non-empty, exactly the next route world).
+ * The activator HOBJECT comes from the trigger message (2d400 -> vtbl+0x70). */
+#define COOP_EXIT_LOG_PER_EPOCH 8u
+static U32 coop_exit_log_epoch=0xffffffffu,coop_exit_log_count;
+static void coop_exit_trigger(U32 trigger,U32 activator_ptr){
+ char next[0x80],start[0x80],line[240],who[COOP_NAME_MAX];
+ U32 n=0,now=GetTickCount(),flag=0x100u,act=0,i,logged;CoopResult r;const char *kind="none";
  coop_tick(now);coop_presence(now);
  coop_copy_str(next,trigger+0x54u,0x7f);
+ coop_copy_str(start,trigger+0xd3u,0x7f);
  if(bsp_mem_readable(trigger+0x152u,1))flag=*(const U8 *)(trigger+0x152u);
+ who[0]=0;
+ if(activator_ptr&&coop_rd(activator_ptr,&act)&&act){
+  U32 live[64],count=coop_live_objects(live,64);
+  kind="object";
+  for(i=0;i<count;i++)if(live[i]==act){kind="player";break;}
+  for(i=0;i<COOP_SESSION_MAX_MEMBERS;i++)if(coop_state.m[i].used&&coop_state.m[i].object==act){
+   U32 k=0;kind="member";coop_text(who,&k,coop_state.m[i].name,sizeof who);break;
+  }
+ }
+ if(coop_exit_log_epoch!=coop_state.epoch){coop_exit_log_epoch=coop_state.epoch;coop_exit_log_count=0;}
+ logged=coop_exit_log_count<COOP_EXIT_LOG_PER_EPOCH;
+ if(logged)coop_exit_log_count++;
  coop_text(line,&n,"next=",sizeof line);coop_text(line,&n,next,sizeof line);
  coop_text(line,&n," flag152=",sizeof line);coop_dec(line,&n,flag,sizeof line);
- /* Runtime evidence for the open question: does multiplayer deliver the
-  * exit object's 0x27 trigger message at all? One line per epoch. */
- if(coop_exit_seen_epoch!=coop_state.epoch){coop_exit_seen_epoch=coop_state.epoch;coop_log("exit-seen",line);}
- if(flag){
-  /* Single-player code takes a different, unverified branch for this flag
-   * (possibly mirror/activation). Do not guess: host may use !next. */
-  if(coop_state.phase==COOP_PHASE_GAMEPLAY&&coop_state.transition_epoch!=coop_state.epoch)
-   coop_log("exit-unsupported-flag",line);
+ coop_text(line,&n," exit=0x",sizeof line);
+ {static const char hex[]="0123456789abcdef";int b;for(b=7;b>=0&&n+1<sizeof line;b--)line[n++]=hex[(trigger>>(b*4))&15u];line[n]=0;}
+ coop_text(line,&n," activator=",sizeof line);coop_text(line,&n,kind,sizeof line);
+ if(who[0]){coop_text(line,&n,":",sizeof line);coop_text(line,&n,who,sizeof line);}
+ coop_text(line,&n," start=",sizeof line);coop_text(line,&n,start[0]?start:"-",sizeof line);
+ /* Bounded: at most COOP_EXIT_LOG_PER_EPOCH arrivals are logged per map epoch. */
+ if(logged)coop_log("exit-seen",line);
+ if(flag!=1u){
+  /* Not the native multiplayer state verified above: fail closed. */
+  if(logged)coop_log("exit-refused","flag152 differs from the native multiplayer value 1");
   return;
  }
  coop_session_exit(&coop_state,next,now,&r);
  if(r.action==COOP_ACT_CHANGE_WORLD)coop_log("exit",line);
+ else if(logged&&r.action==COOP_ACT_REPLY)coop_log("exit-refused",r.msg);
  coop_execute(&r);
 }
 typedef void (__attribute__((thiscall)) *SpawnPrepareFn)(void *,U32 *,const U32 *,const U32 *);
@@ -842,17 +870,20 @@ static void __attribute__((thiscall)) coop_respawn_telefrag(void *player,U32 *po
 static int campaign_trace;
 static U8 *campaign_image;
 
-/* Replace only the native six-byte game-type load. Preserve the receiver,
- * original registers and flags, then replay the load before returning. */
-static void __attribute__((used,noinline)) campaign_exit_seen(U32 mode,U32 trigger){
+/* Replace only the native six-byte game-type load at 2d455. Preserve the
+ * receiver, original registers and flags, then replay the load before
+ * returning. The handler 2d450 is a thiscall with one stack argument (pointer
+ * to the activator HOBJECT); after our return address, pushfl and pushal it is
+ * at 44(%esp). Nothing in 2d450 is pushed before 2d455. */
+static void __attribute__((used,noinline)) campaign_exit_seen(U32 mode,U32 trigger,U32 activator_ptr){
  if(campaign_trace&&__sync_fetch_and_add(&campaign_log_count,1)<32)
   log_file(mode?"[KPCFix Campaign] exit handler reached: multiplayer gate closed":
                 "[KPCFix Campaign] exit handler reached: single-player gate open");
- if(coop_session_enabled&&coop_image&&mode)coop_exit_trigger(trigger);
+ if(coop_session_enabled&&coop_image&&mode)coop_exit_trigger(trigger,activator_ptr);
 }
 static void __attribute__((naked)) campaign_exit_load(void){
- __asm__ volatile("pushfl; pushal; pushl %ecx; pushl 0x1d0(%eax); call campaign_exit_seen;"
-                  "addl $8,%esp; popal; popfl; movl 0x1d0(%eax),%edx; ret");
+ __asm__ volatile("pushfl; pushal; pushl 44(%esp); pushl %ecx; pushl 0x1d0(%eax); call campaign_exit_seen;"
+                  "addl $12,%esp; popal; popfl; movl 0x1d0(%eax),%edx; ret");
 }
 typedef void *(CDECL *CampaignLookup)(const char *);
 static void *CDECL campaign_lookup(const char *path){
@@ -954,7 +985,7 @@ static int apply_object(HMODULE module){
  log_file("[KPCFix Server Tools] Runtime object hooks installed; file unchanged.");
  if(coop_session_enabled){
   char msg[96];U32 n=0;
-  coop_text(msg,&n,"session armed kpc-coop/1 route=R1M2B>R1M2C min=",sizeof msg);
+  coop_text(msg,&n,"session armed kpc-coop/1 route=R1M2B>R1M2C>R1M3A min=",sizeof msg);
   coop_dec(msg,&n,coop_min_players,sizeof msg);coop_text(msg,&n," max=",sizeof msg);
   coop_dec(msg,&n,coop_max_players,sizeof msg);
   coop_log("armed",msg);
@@ -1045,7 +1076,7 @@ static void initialize(void){
   /* Diagnostic identity tied to the exact bytes of this DLL file. */
   U8 own[32];WCHAR own_path[1024];U32 k,n=GetModuleFileNameW(self,own_path,1024);
   char line[128];static const char hex[]="0123456789abcdef";U32 m=0;
-  coop_text(line,&m,"[KPCFix Co-op] build=coop-session-v1 proto=kpc-coop/1 sha256=",sizeof line);
+  coop_text(line,&m,"[KPCFix Co-op] build=coop-session-v2 proto=kpc-coop/1 sha256=",sizeof line);
   if(n&&n<1024&&file_hash(own_path,own))for(k=0;k<32&&m+3<sizeof line;k++){line[m++]=hex[own[k]>>4];line[m++]=hex[own[k]&15];}
   else coop_text(line,&m,"unavailable",sizeof line);
   line[m]=0;log_file(line);

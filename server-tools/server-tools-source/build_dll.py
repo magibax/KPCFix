@@ -110,6 +110,9 @@ previous_proxies=[
     '7ea0dfa44dc7870579de6b4e6ffea9018903b7525c3aa7d1b8c9d91013d3fc0d',
     # coop-session-v1 first CI artifact (d8e3420, PR #10); same protocol.
     '3048d6f3dcab6959628edc77fd5a5f5b164a455e346965b11ee0c61ba7eb4257',
+    # coop-session-v1 262b6ead: native Windows server smoke and live one-client
+    # lobby/!start/!next test on 2026-11-11 (C:\KPCTest\smoke1).
+    '262b6ead146e2ca33639d5ecf6435e67b9e42033de7fa1aae57bc06891bc0f5d',
 ]
 if new_hash in previous_proxies:
  raise SystemExit('Current proxy SHA-256 unexpectedly appears in the previous allowlist')

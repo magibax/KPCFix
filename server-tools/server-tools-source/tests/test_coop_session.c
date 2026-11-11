@@ -39,6 +39,9 @@ static void test_normalize(void){
  {char big[200];memset(big,'a',199);big[199]=0;assert(!coop_world_normalize(big,out));}
  assert(coop_route_index("worlds\\realm1\\R1M2B")==0);
  assert(coop_route_index("worlds\\realm1\\R1M2C")==1);
+ /* NextWorld exactly as the R1M2C mirror exit object reported it on Windows. */
+ assert(coop_route_index("worlds/realm1/r1m3a")==2);
+ assert(coop_route_index("worlds\\realm1\\R1M3B")==-1);
  assert(coop_route_index("worlds\\deathmatch\\PM01")==-1);
  assert(coop_route_index(0)==-1);
 }
@@ -104,8 +107,21 @@ static void test_transition_debounce_and_route(void){
  /* Stale exit from the previous world during loading is a duplicate, not a new change. */
  coop_session_exit(&s,"worlds\\realm1\\R1M2C",1100,&r);assert(r.action==COOP_ACT_NONE);
  spawn(&s,A,"Alice",1200);assert(s.phase==COOP_PHASE_GAMEPLAY);
- /* End of route: no further world change. */
+ /* Off-route destination: refused; the chat reply is sent once per epoch only. */
  coop_session_exit(&s,"worlds\\realm1\\R1M2D",1300,&r);assert(r.action==COOP_ACT_REPLY);
+ {unsigned int i,before=s.rejected_exits;
+  for(i=0;i<20;i++){coop_session_exit(&s,"worlds\\realm1\\R1M2D",1301+i,&r);assert(r.action==COOP_ACT_NONE);}
+  assert(s.rejected_exits==before+20&&s.phase==COOP_PHASE_GAMEPLAY);}
+ /* Natural exit R1M2C -> R1M3A (golden-mirror exit object's NextWorld). */
+ coop_session_exit(&s,"worlds/realm1/r1m3a",1400,&r);
+ assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==2&&strstr(r.msg,"Exit reached -> R1M3A"));
+ coop_session_exit(&s,"worlds/realm1/r1m3a",1401,&r);assert(r.action==COOP_ACT_NONE);
+ native_change(&s,"worlds\\realm1\\R1M3A",2000);
+ assert(s.epoch==3&&s.route_pos==2&&s.phase==COOP_PHASE_INTRO_PENDING);
+ spawn(&s,A,"Alice",2100);assert(s.phase==COOP_PHASE_GAMEPLAY);
+ /* Off-route reply is available again in the new epoch. */
+ coop_session_exit(&s,"worlds\\realm1\\R1M3B",2200,&r);assert(r.action==COOP_ACT_REPLY);
+ /* End of route: no further world change, by exit or by host override. */
  cmd(&s,A,"!next");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"End of the MVP route"));
 }
 

@@ -20,7 +20,7 @@
 
  Modes:
   Coop        co-op MVP start on R1M2B, then console nextlevel twice
-              (R1M2C, then wrap to R1M2B), then quit.
+              (R1M2C, then R1M3A), then quit.
   Normal      PM01 deathmatch without the co-op box: CoopSession must be 0.
   PassThrough [ServerTools] Enabled=0: the proxy must forward to the original.
 
@@ -135,7 +135,7 @@ if($Mode -eq 'Coop'){
  foreach($pair in @(@('maxclients','3'),@('fraglimit','0'),@('timelimit','0'),@('keepitems','1'))){
   $template=[regex]::Replace($template,'(?m)^"'+$pair[0]+'".*$',('"'+$pair[0]+'" "'+$pair[1]+'"'))
  }
- $maps=@('worlds\realm1\R1M2B','worlds\realm1\R1M2C')
+ $maps=@('worlds\realm1\R1M2B','worlds\realm1\R1M2C','worlds\realm1\R1M3A')
 }else{
  $map='worlds\deathmatch\PM01'
  $maps=@($map)
@@ -174,7 +174,7 @@ try{
   Check 'object hooks installed on stock object.lto' (Wait-Log 'Runtime object hooks installed; file unchanged' $TimeoutSeconds)
  }
  if($Mode -eq 'Coop'){
-  Check 'session armed' (Wait-Log 'armed session armed kpc-coop/1 route=R1M2B>R1M2C' 10)
+  Check 'session armed' (Wait-Log 'armed session armed kpc-coop/1 route=R1M2B>R1M2C>R1M3A' 10)
   Start-Sleep -Seconds 8   # let the first world finish loading before nextlevel
  }
  if($Mode -eq 'Coop' -and $CommandFile){
@@ -194,8 +194,8 @@ try{
   }
  }elseif($Mode -eq 'Coop'){
   # Native "start <map>" prepends that map to the maplist file, so the list is
-  # R1M2B, R1M2B, R1M2C: the first nextlevel reloads R1M2B.
-  $expect=@('R1M2B','R1M2C','R1M2B')
+  # R1M2B, R1M2B, R1M2C, R1M3A: the first nextlevel reloads R1M2B.
+  $expect=@('R1M2B','R1M2C','R1M3A')
   for($i=0;$i -lt $expect.Count;$i++){
    $epoch=$i+1
    [KPCSmokeConsole]::Submit("nextlevel`r"); $events.Add("typed nextlevel (expect $($expect[$i]))")
@@ -220,7 +220,7 @@ try{
 }
 
 $lines=@(Read-NewLog)
-$buildLine=@($lines | Where-Object { $_ -match 'build=coop-session-v1' }) | Select-Object -First 1
+$buildLine=@($lines | Where-Object { $_ -match 'build=coop-session-v[0-9]+ ' }) | Select-Object -First 1
 if($Mode -eq 'PassThrough'){
  Check 'no co-op or hook lines in pass-through' (-not @($lines | Where-Object { $_ -match 'Co-op\]|hooks installed' }).Count)
 }else{
