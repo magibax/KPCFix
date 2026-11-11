@@ -15,13 +15,16 @@ foreach ($Required in @('kpc-gui-server.cfg','kpc-gui-maps.txt','KPCServerTools.
 }
 # Initial policy is configuration only; game binaries are never rewritten at launch.
 $iniPath=Join-Path $PSScriptRoot 'KPCServerTools.ini'
-# Keep existing INI encoding and newline layout. Older installs can lack
+# Keep the existing INI text and newline layout. Older installs can lack
 # AllowCheats; insert the missing key under [ServerTools] rather than failing.
 $reader=[IO.StreamReader]::new($iniPath,([Text.UTF8Encoding]::new($false)),$true)
 try {
  $ini=$reader.ReadToEnd()
  $iniEncoding=$reader.CurrentEncoding
 }finally {$reader.Dispose()}
+# The DLL reads this file with GetPrivateProfileIntW, which does not skip a
+# UTF-8 BOM: a BOM hides a first-line [ServerTools] section. Write UTF-8 without one.
+if($iniEncoding -is [Text.UTF8Encoding]){$iniEncoding=[Text.UTF8Encoding]::new($false)}
 $value=if($Cheats -eq 'Enabled'){'1'}else{'0'}
 $nl=if($ini.Contains("`r`n")){"`r`n"}elseif($ini.Contains("`r")){"`r"}else{"`n"}
 if($ini -notmatch '(?im)^[ \t]*AllowCheats[ \t]*=') {
