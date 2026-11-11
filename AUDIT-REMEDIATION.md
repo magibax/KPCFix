@@ -10,20 +10,21 @@ snapshot of the pre-remediation repository.
 
 | Audit topic | Remediation | Evidence |
 | --- | --- | --- |
-| H1: stable/experimental co-op mixing | Restored the **exact R3 Server Tools source/DLL/build manifest** to `main`, removed co-op source, tests and co-op workflow there; preserved `feature/coop-campaign` | [isolation commit](https://github.com/magibax/KPCFix/commit/c71159461131b7a3835cc07623b57a6d3d8c714b) |
+| H1: stable/experimental co-op mixing | Restored the **exact R3 Server Tools source/DLL/build manifest** to `main`, removed co-op source, tests and co-op workflow there; preserved the co-op work on its own branch (now `coop/mvp-lobby`) | [isolation commit](https://github.com/magibax/KPCFix/commit/c71159461131b7a3835cc07623b57a6d3d8c714b) |
 | H1: accidental stable tags | Stable client/server tags must follow `main` history; CI checks stable server source/DLL for co-op markers on both branch workflow copies | [release workflow](.github/workflows/release-integrity.yml) |
-| H3: non-reproduced experimental binaries | Co-op workflow uses the stable server's version-checked GCC 14.2/binutils 2.44 container, compares rebuilt DLL and JSON to **tracked** bytes, uploads only tracked outputs | [experimental workflow](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/.github/workflows/coop-spawn-trace-build.yml) |
+| H3: non-reproduced experimental binaries | Co-op workflow uses the stable server's version-checked GCC 14.2/binutils 2.44 container, compares rebuilt DLL and JSON to **tracked** bytes, uploads only tracked outputs | [experimental workflow](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/.github/workflows/coop-spawn-trace-build.yml) |
 | M1: Windows checkout hash drift | `.gitattributes` fixes LF for source and preserves exceptional checked-in CRLF blobs, `.gitignore` excludes build results. CI verifies `git add --renormalize .` is a no-op | [stable passing CI](https://github.com/magibax/KPCFix/actions/runs/42943941974) |
 | M2: weak test gates | Stable branch now tests client/server reproducibility, server CPU harness, package manifests, shared C copies and Windows PowerShell INI migration; experimental branch runs asset-free Python/C regression tests and package verification | [stable CI](https://github.com/magibax/KPCFix/actions/runs/42944784869), [co-op CI](https://github.com/magibax/KPCFix/actions/runs/42944947551) |
-| M3/L1: stale docs | Corrected R1M2B third slot and old rebuild statement, recorded evidence types, created canonical eight-key `[Coop]` config and moved graphics proposals out of install README | [co-op status](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/README.md), [graphics research](GRAPHICS-RESEARCH.md) |
-| M4: `AllowCheats` missing | Launcher inserts missing key under existing `[ServerTools]`, preserves newline style and encoding; Windows CI tests LF, CRLF, UTF-8 BOM, Unicode and missing-section rejection | [test source](tools/Test-KPCServerIni.ps1) |
+| M3/L1: stale docs | Corrected R1M2B third slot and old rebuild statement, recorded evidence types, created canonical eight-key `[Coop]` config and moved graphics proposals out of install README | [co-op status](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/README.md), [graphics research](GRAPHICS-RESEARCH.md) |
+| M4: `AllowCheats` missing | Launcher inserts missing key under existing `[ServerTools]`, preserves newline style and drops a UTF-8 BOM, which hides `[ServerTools]` from `GetPrivateProfileIntW`; Windows CI parses every script in full and tests LF, CRLF, BOM removal read back through that API, Unicode and missing-section rejection | [test source](tools/Test-KPCServerIni.ps1) |
 | S6: old proxy checker errors | Checker points to safe setup/backup recovery if official original `server.original.dll` is valid and active proxy is mismatched | [version checker](server-tools/Check-KPCServerVersion.ps1) |
-| Upgrade hash accumulation | Co-op builder uses a fixed reviewed allowlist rather than silently importing arbitrary previous-manifest entries; tracked DLL and JSON still reproduce | [co-op builder](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/server-tools/server-tools-source/build_dll.py) |
+| Upgrade hash accumulation | Co-op builder uses a fixed reviewed allowlist rather than silently importing arbitrary previous-manifest entries; tracked DLL and JSON still reproduce | [co-op builder](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/server-tools/server-tools-source/build_dll.py) |
 | Product overlap and checksums | Separate product manifests refreshed **only for changed packaged files**. Stable CI still builds both products and packages independently. Published R4/R3 tags unchanged | [releasing guide](RELEASING.md) |
 
-Backup branches created before remediation:
-`backup/main-before-audit-remediation-20261111` and
-`backup/coop-before-audit-remediation-20261111`.
+The backup branches created before remediation
+(`backup/main-before-audit-remediation-20261111` and
+`backup/coop-before-audit-remediation-20261111`) have since been removed
+from the remote.
 
 ## Explicitly incomplete — runtime, emulator or manual gates
 
@@ -33,7 +34,7 @@ fixed, live-validated or ready to ship:
 - **H2 — provenance and v8 runtime tests.** Earlier v8 DLLs share a
   `spawn-list-control-v8` banner despite different SHA-256 hashes.
   Experimental CI now produces deterministic tracked binaries, and
-  the [co-op evidence ledger](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/README.md)
+  the [co-op evidence ledger](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/README.md)
   requires a full DLL SHA-256 in every Windows observation. The current
   v8 spawn-list and `TraceCampaign` hooks still lack matching Windows
   runtime tests. A new embedded build-ID scheme requires a separately
@@ -79,6 +80,6 @@ Unicorn matrix and real Windows/Wine playtests. Never replace R4 or R3
 assets or move their existing immutable tags.
 
 For co-op, maintain independent builds from
-`feature/coop-campaign`; do not merge the stable Server Tools source
+`coop/mvp-lobby`; do not merge the stable Server Tools source
 restoration into the feature branch wholesale. General automatic
 spawning, lifecycle and campaign sync remain outside stable releases.
