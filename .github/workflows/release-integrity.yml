@@ -28,6 +28,13 @@ jobs:
           ld --version | head -1
           test "$(gcc -dumpfullversion)" = "13.3.0"
           ld --version | head -1 | grep -F '2.42'
+      - name: Reject client release tags outside stable mainline
+        if: startsWith(github.ref, 'refs/tags/kpcfix-1.13-r')
+        shell: bash
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
+            { echo 'ERROR: client release tag is not on stable main history'; exit 1; }
       - name: Rebuild client from the exact commit
         run: python3 source/build.py --build-dir "${RUNNER_TEMP}/client-build" --output "${RUNNER_TEMP}/client-build/dinput.dll"
       - name: Verify tracked DLL, symbol map and build report
@@ -75,7 +82,7 @@ jobs:
           print('PASS: stable server has no experimental co-op markers')
           PY
           if [[ "$GITHUB_REF" == refs/tags/server-tools-v* ]]; then
-            git fetch origin main --depth=1
+            git fetch origin main
             git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
               { echo 'ERROR: stable server tag does not point to main history'; exit 1; }
           fi

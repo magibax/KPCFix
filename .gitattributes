@@ -9,3 +9,6 @@
 *.png -text
 *.jpg -text
 *.ico -text
+
+# The externally supplied Claude audit uses its original BOM/CRLF formatting.
+KPCFix-audit-report.md -text
