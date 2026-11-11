@@ -1,4 +1,4 @@
-c6cac5373ca183751b261bb2991df65e1f091763c6b64d25ca02c3cd021d4052  ./Check-KPCServerVersion.ps1
+06f847a723699feec90e8a9949c0a468c4f61b38658ebd8ecca70ebef102dfaa  ./Check-KPCServerVersion.ps1
 879b2f91b70ae000fe3857c1b98371b5c94ca08d0c2a762f5657e8e041a64f22  ./KPC-Server-Launcher.cmd
 f7463759e9e739c98f0bbf7bb415c5b07bad49487c6f5b261cbdc4975c93b0cd  ./KPC-Server-Launcher.ps1
 66ab0cb6873e1f9209deda2933633d9e599165db889d5ee4339d46d24eac2295  ./KPCServerTools-default.ini

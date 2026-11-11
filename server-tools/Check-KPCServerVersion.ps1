@@ -24,9 +24,11 @@ function Assert-KPCServerVersion([string]$Exe,$GameProfile) {
     $objectHash = Read-KPCSignature 'object.lto'
     # The DLL proxy preserves the official engine under a separate filename.
     $metaPath = Join-Path $PSScriptRoot 'SERVER_TOOLS_BUILD.json'
+    $proxyRecognized = $false
     if (Test-Path -LiteralPath $metaPath) {
         $meta = Get-Content -Raw -LiteralPath $metaPath | ConvertFrom-Json
         if ($dllHash -eq $meta.proxy_sha256) {
+            $proxyRecognized = $true
             $dllHash = Read-KPCSignature 'server.original.dll'
             Write-Host '[KPCFix Server Tools] Runtime proxy recognized; checking the preserved original engine.'
         }
@@ -73,6 +75,11 @@ function Assert-KPCServerVersion([string]$Exe,$GameProfile) {
             if ($server.'dedicated.exe'.sha256 -eq $exeHash -and
                 $server.'server.dll'.sha256 -eq $savedHash -and
                 @($GameProfile.regions | Where-Object { $server.regions -contains $_ }).Count -gt 0) {
+                # With the selected proxy active, the remaining mismatch is the
+                # object module; rerunning setup cannot repair an unknown file.
+                if ($proxyRecognized -and $server.'object.lto'.sha256 -ne $objectHash) {
+                    throw 'object.lto is not the official 1.13 file. Setup only restores object.lto files changed by earlier KPCFix versions. Copy the official 1.13 object.lto back into the game folder, then rerun Setup-KPCServerTools.cmd.'
+                }
                 throw 'Original server.original.dll is valid, but the active server.dll is not the selected Server Tools build. Close the server and rerun Setup-KPCServerTools.cmd. If setup refuses an unrecognized DLL, back that active DLL up separately; never overwrite server.original.dll.'
             }
         }

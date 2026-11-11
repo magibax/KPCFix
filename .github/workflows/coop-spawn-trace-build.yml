@@ -183,6 +183,7 @@ jobs:
           cp server-tools/SERVER_TOOLS_BUILD.json dist/
           sha256sum server-tools/KPCServerTools.dll | tee dist/KPCServerTools.dll.sha256
           cp coop/COOP-MVP.md dist/TEST-INSTRUCTIONS.md
+          cp coop/tools/Invoke-CoopServerSmoke.ps1 dist/
           cat > dist/README-FIRST.txt <<'TXT'
           EXPERIMENTAL KPCFIX CO-OP MVP (kpc-coop/1). NOT A STABLE RELEASE.
           Feature-branch build of KPCFix Server Tools with a chat lobby and the
@@ -223,6 +224,17 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+      - name: Parse every tracked PowerShell script (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $failed = 0
+          foreach ($file in @(git ls-files '*.ps1')) {
+            $tokens = $null; $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors)
+            foreach ($e in $errors) { Write-Host "${file}:$($e.Extent.StartLineNumber): $($e.Message)"; $failed++ }
+          }
+          if ($failed) { throw "$failed PowerShell parse error(s)" }
+          Write-Host 'PASS: all tracked PowerShell scripts parse'
       - name: Validate launcher INI compatibility without game files
         shell: pwsh
         run: ./tools/Test-KPCServerIni.ps1
