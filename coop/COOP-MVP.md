@@ -482,7 +482,7 @@ intensity 3` at 47.7 s, triggers `spawn6`, briefly disables AI, and releases at 
 | --- | --- |
 | Session policy (barrier, settle, timeouts, start once, refusals, completion) | Unit tests (64/32-bit) |
 | Compiled DLL against stock `object.lto`: lookup snapshot inside NextLevel, arm, barrier, single `c5340` call, `!next` refused, completion via `c55b0`, overrun release `c5a10(1)`/`c59a0(0)`, invalid test start | **Emulated** (script player and helpers are recording stubs) |
-| Native server: DLL loads, intro and test-start settings effective, lookup hook active, R1M2B/R1M3A load, server keeps running | **Windows, no client** (3 runs in a disposable copy). One earlier run exited silently during a world start; it left no crash record and did not reproduce |
+| Native server: DLL loads, intro and test-start settings effective, lookup hook active, R1M2B/R1M3A load, server keeps running | **Windows, no client** (3 runs in a disposable copy, then the standard Coop/Normal/PassThrough smoke in `smoke1`). One earlier run in the second copy exited silently during a world start. That copy's port had been reset to 42972 while another test server already used it, so a port collision is the probable cause: no crash record, and it did not recur on a free port |
 | Camera pan, letterbox, input lock and subtitles on clients; two-client presentation | **NOT TESTED** |
 
 ### Client-side evidence (no code change)
