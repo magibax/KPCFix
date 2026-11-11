@@ -17,7 +17,7 @@ foreach ($Required in @('kpc-gui-server.cfg','kpc-gui-maps.txt','KPCServerTools.
 $iniPath=Join-Path $PSScriptRoot 'KPCServerTools.ini'
 # Keep existing INI encoding and newline layout. Older installs can lack
 # AllowCheats; insert the missing key under [ServerTools] rather than failing.
-$reader=New-Object System.IO.StreamReader($iniPath,(New-Object System.Text.UTF8Encoding($false)),$true)
+$reader=[IO.StreamReader]::new($iniPath,([Text.UTF8Encoding]::new($false)),$true)
 try {
  $ini=$reader.ReadToEnd()
  $iniEncoding=$reader.CurrentEncoding
