@@ -27,3 +27,8 @@ Launch-KPCFix.cmd runs setup with -OnLaunch. A marker limits the display preset 
 Server setup seeds KPCServerTools.ini from KPCServerTools-default.ini only when the active file is missing. Under [ServerTools], Enabled=1 enables dedicated hooks and AllowCheats=0 starts with permission disabled. Use 0 or 1. The host can change permission live with kpc_cheats. Before starting a server from the GUI, its worker writes the checkbox value to AllowCheats. The checkbox starts unchecked. A direct dedicated-server start reads the saved INI. The launcher writes map and rule choices to kpc-gui-server.cfg.
 
 The graphical launcher requires an `AllowCheats` entry under `[ServerTools]`. If it reports a missing key after an upgrade, add `AllowCheats=0` to that section of the active `KPCServerTools.ini`. Setup preserves existing configurations.
+
+Experimental co-op options are not included in stable Server Tools. On
+`feature/coop-campaign`, see the canonical
+[experimental co-op configuration reference](coop/CONFIGURATION.md)
+for the eight `[Coop]` switches and their fail-closed constraints.

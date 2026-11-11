@@ -38,13 +38,13 @@ The checker verifies the complete original object hash and 11 instruction/data s
 The feature branch adds a conditional server-side tracing redirect at RVA 0x0f13c4 in server-tools-source/src/proxy.c.
 
 - Disabled by default.
-- Activated only in an approved dedicated-server host with [ServerTools] Enabled=1 and [Coop] TraceSpawns=1 in KPCServerTools.ini; restart required.
+- Activated by [Coop] TraceSpawns=1 or implicitly by the other enabled spawn/clearance diagnostics in an approved host with [ServerTools] Enabled=1. The effective state is logged at startup; restart is required.
 - The official object SHA-256, PE image layout and original six-byte instruction are checked before the additional redirect is installed **in memory only**.
 - The wrapper preserves the original (HOBJECT, LTVector*) arguments, invokes the engine's original +0x1e0 function, then logs the requested position vector (float32 bit patterns) and object handle to KPCServerTools.log. The first 64 events are logged.
 - No coordinates are modified in this phase; ordinary gameplay is expected to remain unchanged. This still requires in-game verification.
 - object.lto remains unchanged on disk. No map or artwork is redistributed.
 
-The existing committed server-tools/KPCServerTools.dll in this experimental branch is **not rebuilt** from the new source. To test the new hook, build the server DLL from this branch using the documented 32-bit GCC/binutils toolchain, then run Setup-KPCServerTools.cmd to deploy it. Do not create a release until the rebuilt DLL, manifests, and runtime tests have been validated.
+The experimental branch tracks its generated DLL and matching build manifest. Its CI now reproduces both byte-for-byte using the same pinned GCC 14.2/binutils 2.44 environment as stable Server Tools and packages only the tracked binary. A passing build is not evidence of a live Windows test. Record the actual DLL SHA-256 with each result and do not publish a stable release from this branch.
 
 Example KPCServerTools.ini:
 

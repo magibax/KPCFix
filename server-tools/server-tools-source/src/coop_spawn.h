@@ -24,7 +24,7 @@ static int coop_is_r1m2b_anchor(const U32 *xyz){
 }
 /* Slot 0: entry anchor       (1600,-256,-2944) — user verified.
  * Slot 1: 96 units +Z       (1600,-256,-2848) — user verified.
- * Slot 2: 96 units -Z       (1600,-256,-3040) — UNTESTED.
+ * Slot 2: 96 units -Z       (1600,-256,-3040) — user verified.
  * All slots use stock engine placement/telefrag handling afterward.
  * Set maxclients=3: fourth players are NOT accommodated by this trial. */
 static void coop_assign_trial_position(U32 *xyz,int slot){

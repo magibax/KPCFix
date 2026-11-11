@@ -1,6 +1,37 @@
 # Co-op campaign — research and roadmap
 
-Status: three-player R1M2B separation **live-tested successfully**; general fail-closed spawn allocator implemented and tested as a standalone policy (**not yet connected to game physics**). The map-specific prototype stays off by default. Continue experimental co-op development on `feature/coop-campaign`. The current `main` history also contains these changes following the earlier branch merge; this does not make the tagged stable Server Tools release co-op-ready.
+Status: three-player R1M2B separation **live-tested successfully**; general fail-closed spawn allocator implemented and tested as a standalone policy (**not yet connected to game physics**). The map-specific prototype stays off by default. Continue experimental co-op development on `feature/coop-campaign`. Since the 2026-11-11 release-isolation remediation, `main` has the stable Server Tools R3 implementation only; experimental sources, tests and diagnostics remain on this feature branch.
+
+
+## Current evidence ledger — 2026-11-11
+
+The labels distinguish **static analysis**, **synthetic tests**, **Windows
+observations**, and **proposals**. A test that lacks a recorded DLL
+SHA-256 is not automatically evidence for a later build sharing its banner.
+
+| Scope | Evidence classification | Result / remaining restriction |
+| --- | --- | --- |
+| All 59 campaign/deathmatch maps | Static map analysis | World data parsed; launcher availability is not co-op compatibility |
+| Spawn fallback and both original spawn paths | Original-binary static analysis + Windows trace | Repeated campaign entry anchor and telefrag behaviour demonstrated |
+| Fixed three-player R1M2B separation | Windows-tested prototype | Three known positions work for one session; slot recycling and other maps unverified |
+| Segment query, floor detection | Static ABI + Windows differential | Ground and known wall controls agree; clear rays cannot prove full volume |
+| Primary BSP whole-AABB classifier | Synthetic C tests + Windows differential | Three interior-only and one wall-overlap class-zero on R1M2B |
+| Model resource registry/back-references | Windows-tested read-only diagnostics | 115 resources; 109 matching reciprocal object links; not a live-solid roster |
+| Model type/flag/vector sampling | Windows-tested read-only diagnostics | 57 type-2, 52 other; two differing model/source positions; no verified transform |
+| Native AABB broadphase | Static ABI + synthetic tests | Isolated overlap policy; not a world-polygon collision probe |
+| General automatic spawn allocator | Synthetic tests only | Not connected to live runtime; UNKNOWN/UNSUPPORTED must fail closed |
+| Experimental v8 spawn-list and campaign traces | Implemented, **not yet Windows-tested** | Same banner may identify differing DLL bytes; require SHA-256 per test |
+| Scripts, intro and level-transition synchronisation | Design proposal only | No general co-op campaign sync shipped |
+
+**All experimental feature switches remain off by default.** For a
+new Windows observation, save the exact `KPCServerTools.dll` SHA-256
+from `Get-FileHash`, the corresponding `SERVER_TOOLS_BUILD.json`
+`proxy_sha256`, console build marker, test configuration, map, server
+profile and player count. Keep these with the captured logs.
+
+The canonical experimental settings table is
+[co-op configuration](CONFIGURATION.md). Product release rules
+are in [RELEASING.md](../RELEASING.md) on the stable branch.
 
 ## Question
 
