@@ -110,3 +110,5 @@ co-op implementation. Cherry-pick narrowly reviewed fixes instead.
 An existing stable tag remains immutable, even if a later stable main
 commit updates launcher scripts or checksum manifests; such fixes
 require a **new** release revision after Windows acceptance.
+
+See [2026-11-11 audit remediation and unverified runtime gates](AUDIT-REMEDIATION.md) before starting another release revision.
