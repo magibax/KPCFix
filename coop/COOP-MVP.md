@@ -363,7 +363,7 @@ Confirmed by static analysis of the stock 1.13 `object.lto` (`3a03f879…`) and 
 | Client OnEnterWorld | vtable slot 8, `0xc7d20` | Closes the screen only if state ≠ 5, so not after a level change |
 | Client `0x1a` MID_PLAYER_ADDED | `0xcb26f` | In multiplayer: state 5 → 1. Then, if the screen is none or 2 **and** client interface `vtbl+0x230` returns non-NULL (inferred: `GetClientObject`), it closes the screen (`0xad3c0`) and calls `0xc6f30(0,0,0)`. The server sends it from its client-enter code (`0xfbe20`, callers `0xfeb86`/`0xfebf0`/`0xfec35`). This likely arrives before the client object exists, which would explain the second appearance (inference) |
 
-**Fix (code-complete, NOT yet built or tested):** with the new default
+**Fix (build `565dec76…`, commit `c5ce65a`; emulator-tested and native server smoke-tested; NOT yet tested with a client):** with the new default
 `[Coop] CoopIntermission=0`, the session no longer calls `0x100760`. It sets the shell's native
 pending-NextLevel flag `+0x1ae9`, which the server update consumes on the next frame through
 the hooked NextLevel. This is the native post-intermission path without the scoreboard
@@ -395,11 +395,22 @@ native intermission is already active. `CoopIntermission=1` restores the stock b
 * No music change is made. Restoring music in co-op needs a per-client, correctly sequenced
   load/ready request, and the trigger that makes the client start playback is not
   identified yet.
-* **Diagnostics (code-complete, NOT yet built):** `[Coop] TraceMusic=1` hooks the single call
-  site `0x10494b` (original bytes `e8 00 64 fb ff` verified) and logs
+* **Diagnostics (build `565dec76…`):** `[Coop] TraceMusic=1` hooks the single call site
+  `0x10494b` (original bytes `e8 00 64 fb ff` verified) and logs
   `music-world argc=… <tokens> event=created|none` when a world issues its music load.
   `[Coop] TraceTiming=1` adds `t=<ms since session armed>` to every co-op line. Both are off
   by default; set them to 0 or delete them to turn them off.
+* **Native Windows evidence (server only, no client):** each world creates its music event
+  **while loading, before `world-loaded`**:
+  ```text
+  t=8563  g=1 e=1 seq=1 LOADING music-world argc=5 song5 intensity 1 transition measure event=created
+  t=10079 g=1 e=1 seq=1 LOBBY world-loaded worlds\realm1\R1M2B
+  t=15610 g=1 e=2 seq=2 LOADING music-world argc=5 song5 intensity 1 transition measure event=created
+  t=21110 g=1 e=3 seq=3 LOADING music-world argc=5 song1 intensity 1 transition measure event=created
+  ```
+  The music load therefore goes out while connected clients are themselves still loading, and
+  a client that joins later never receives it (hypothesis for the missing music; whether the
+  client keeps or plays it needs the `c_DebugMessages 1` trace and a listener).
 
 ### Client-side evidence (no code change)
 * In the client console, `c_DebugMessages 1` makes the stock client print
