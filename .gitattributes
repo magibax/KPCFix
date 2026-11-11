@@ -1,0 +1,11 @@
+# Preserve the LF bytes used by published SHA256SUMS manifests on all OSes.
+# Never use global core.autocrlf conversion for repository source files.
+* text=auto eol=lf
+*.dll -text
+*.exe -text
+*.lto -text
+*.bin -text
+*.zip -text
+*.png -text
+*.jpg -text
+*.ico -text

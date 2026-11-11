@@ -1,0 +1,9 @@
+# Generated build products, caches, and local test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+dist/
+**/build/
+*.log
+*.tmp
