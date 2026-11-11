@@ -198,3 +198,14 @@ rather than replaying scripts per client.
   * spawn-based rather than acknowledged client readiness.
 * The investigation order and the resume steps are in
   [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md).
+
+## Status update: full campaign (2026-11-11)
+
+* The world/transition research above is answered for all 48 shipped worlds in
+  [CAMPAIGN-MAP-INVENTORY.md](CAMPAIGN-MAP-INVENTORY.md).
+* The campaign graph with host selection is implemented behind `CoopCampaign=1`.
+* The readiness handshake, loading screens and pre-start hold now have evidence-based designs
+  in [CAMPAIGN-ARCHITECTURE.md](CAMPAIGN-ARCHITECTURE.md) (§4–6):
+  * the engine connect stages and the `0x17` reply prove client loading;
+  * an echoed `0x17` can prove the `0x69` hand-over;
+  * the server pause flag freezes gameplay while messages keep flowing.
