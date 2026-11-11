@@ -3,7 +3,15 @@
 **Status (2026-11-11):**
 * **Live Windows client tested (DLL `262b6ead…`, one client):** join, lobby, `!ready`, `!start`, and a host `!next` change R1M2B → R1M2C.
 * **Natural exits WINDOWS-TESTED (build `coop-session-v2`, `0018a3f8…`, one client):** R1M2B → R1M2C through the hallway exit, and R1M2C → R1M3A through the golden mirror, both **without `!next`**. The R1M3A → R1M3B exit was detected and refused as off-route.
-* **Not yet tested:** a second client.
+* **Later on 2026-11-11, desktop + laptop (user-tested):**
+  * scoreboard-free transitions (`CoopIntermission=0`);
+  * original per-client music (`CoopMusic=1`), including a second laptop joining a running
+    game; not beat-synchronised;
+  * the original R1M3A opening cinematic (`CoopIntro=1`, DLL `13ca1d0a…`), with the two
+    machines matching each other.
+* **Open bug:** the narration trails the subtitles by about 2 s on both clients. Resume from
+  [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md).
+* **Not yet tested:** two-player combat, death, respawn and reconnect regression (deferred).
 
 Experimental: this code is only on `feature/coop-campaign` and its child branches. It is not
 part of the stable Server Tools R3 on `main`. Every switch defaults to off.
@@ -415,7 +423,7 @@ native intermission is already active. `CoopIntermission=1` restores the stock b
 | --- | --- |
 | Snapshot on the real engine (`TraceMusic=1`) | **Windows, no client:** `song=song5 play=0 intensity=1 transition=2` for R1M2B/R1M2C, `song1` for R1M3A |
 | Exact per-client message sequences | **Emulated** (compiled DLL, stock `object.lto`, recorded `StartMessage`/`Write*`/`EndMessage`): first join, second player, map change, world without music, R1M3A, no resend on respawn |
-| Audible, sustained playback | **NOT TESTED.** The emulator does not run `cshell.dll` or DirectMusic |
+| Audible, sustained playback | **WINDOWS-TESTED by the user (2026-11-11, DLL `e17c150f…`, then `13ca1d0a…`):** song5/song1 heard; a second laptop joining a running game also got music. Not beat-synchronised across clients. (Before that test this row read "NOT TESTED"; the emulator does not run `cshell.dll` or DirectMusic) |
 
 **Limits and open points:**
 * **Same track for every player, not the same beat.** All players get the same song,
@@ -475,15 +483,17 @@ intensity 3` at 47.7 s, triggers `spawn6`, briefly disables AI, and releases at 
   event). A disconnect during playback has no effect on the others.
 * **Invulnerability:** players are input-locked but not invulnerable. The original
   `player invulnerable` line is gated off in multiplayer.
-* **Voice-over:** `streamsound player … local` targets "player". Whether every client hears
-  the voice-over is not verified.
+* **Voice-over:** `streamsound player … local` targets "player". In the two-client test both
+  machines heard the narration, but it **trails the subtitles by about 2 s** and is cut off
+  by the window smash. Cause unknown; see [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md).
 
 | Evidence | Status |
 | --- | --- |
 | Session policy (barrier, settle, timeouts, start once, refusals, completion) | Unit tests (64/32-bit) |
 | Compiled DLL against stock `object.lto`: lookup snapshot inside NextLevel, arm, barrier, single `c5340` call, `!next` refused, completion via `c55b0`, overrun release `c5a10(1)`/`c59a0(0)`, invalid test start | **Emulated** (script player and helpers are recording stubs) |
 | Native server: DLL loads, intro and test-start settings effective, lookup hook active, R1M2B/R1M3A load, server keeps running | **Windows, no client** (3 runs in a disposable copy, then the standard Coop/Normal/PassThrough smoke in `smoke1`). One earlier run in the second copy exited silently during a world start. That copy's port had been reset to 42972 while another test server already used it, so a port collision is the probable cause: no crash record, and it did not recur on a free port |
-| Camera pan, letterbox, input lock and subtitles on clients; two-client presentation | **NOT TESTED** |
+| Camera pan, letterbox, input lock and subtitles on clients; two-client presentation | **WINDOWS-TESTED by the user (2026-11-11, desktop + laptop, DLL `13ca1d0a…`):** camera pans, letterbox, scripted events and coordination worked, and the two machines matched each other (by eye, not measured). Server log: `intro-start` t=356469 ms, `intro-finished` t=399016 ms. (This row read "NOT TESTED" before that run) |
+| Narration versus subtitles and script events | **OPEN BUG:** the voice-over trails the subtitles by about 2 s on both clients, and the window smash at 47.8 s cuts off narration. Root cause unknown. The server ran the 53 s script in 42.5 s of wall clock (start to "finished"); this is recorded as a lead only |
 
 ### Client-side evidence (no code change)
 * In the client console, `c_DebugMessages 1` makes the stock client print
