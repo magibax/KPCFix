@@ -14,10 +14,33 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Verify build-tool availability
-        run: gcc --version && as --version | head -1 && objcopy --version | head -1 && ld -V | head -8
-      - name: Build server proxy and refreshed manifest
-        run: python3 server-tools/server-tools-source/build_dll.py
+      - name: Rebuild co-op DLL in the release-pinned server toolchain
+        shell: bash
+        run: |
+          cp -a server-tools "${RUNNER_TEMP}/server-tools"
+          docker run --rm \
+            -v "${RUNNER_TEMP}/server-tools:/work/server-tools" \
+            -w /work/server-tools \
+            debian:trixie-slim sh -euc '
+              apt-get update -qq
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gcc binutils python3 ca-certificates
+              test "$(gcc -dumpfullversion)" = "14.2.0"
+              ld --version | head -1 | grep -F "2.44"
+              python3 server-tools-source/build_dll.py
+            '
+          cmp "${RUNNER_TEMP}/server-tools/KPCServerTools.dll" server-tools/KPCServerTools.dll
+          cmp "${RUNNER_TEMP}/server-tools/SERVER_TOOLS_BUILD.json" server-tools/SERVER_TOOLS_BUILD.json
+          echo "PASS: experimental DLL and manifest reproduce tracked bytes"
+      - name: Ensure separate experimental release channel
+        shell: bash
+        run: |
+          test "${GITHUB_REF}" != refs/tags/server-tools-v1.0.0-r3
+          python3 - <<'PY'
+          from pathlib import Path
+          binary=Path('server-tools/KPCServerTools.dll').read_bytes()
+          assert b'[KPCFix Co-op]' in binary, 'Not an experimental co-op build'
+          print('PASS: experimental binary kept on feature workflow')
+          PY
       - name: Run asset-free co-op tests
         run: python3 -m unittest discover -s coop/tools -p 'test_*.py' -v
       - name: Run native 3-player spawn slot unit tests
@@ -105,6 +128,18 @@ jobs:
           assert b'model registry=DISABLED' in dll
           assert 'TraceModelRegistry'.encode('utf-16le') in dll
           print('PASS: registry diagnostic build, effective INI state and fallback present')
+          PY
+      - name: Verify build metadata and source provenance
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          b=Path('server-tools/KPCServerTools.dll').read_bytes()
+          m=json.loads(Path('server-tools/SERVER_TOOLS_BUILD.json').read_text())
+          assert hashlib.sha256(b).hexdigest()==m['proxy_sha256']
+          assert len(b)==m['proxy_bytes']
+          print('PASS: tracked experimental artifact SHA256='+m['proxy_sha256'])
           PY
       - name: Stage experimental test-only package
         shell: bash
