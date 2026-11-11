@@ -97,8 +97,17 @@ def profile_int(a):
  if key=='CoopIntermission':return int('--intermission' in sys.argv)
  if key=='TraceMusic':return int('--trace-music' in sys.argv)
  if key=='CoopMusic':return 0 if '--no-music' in sys.argv else a[2]
+ if key=='CoopIntro':return int('--intro' in sys.argv)
  return int('--cheats' in sys.argv)
 functions['GetPrivateProfileIntW']=stub('GetPrivateProfileIntW',4,profile_int)
+def profile_str(a):
+ # Only CoopTestStartWorld is read as a string: --test-start=<value>.
+ value=''
+ if wstr(a[1])=='CoopTestStartWorld':
+  for x in sys.argv:
+   if x.startswith('--test-start='):value=x.split('=',1)[1]
+ data=(value[:a[4]-1]+'\0').encode('utf-16le');u.mem_write(a[3],data);return len(value[:a[4]-1])
+functions['GetPrivateProfileStringW']=stub('GetPrivateProfileStringW',6,profile_str)
 clock=[1000]
 functions['GetTickCount']=stub('GetTickCount',0,lambda a:clock[0])
 protect=[]
@@ -187,11 +196,12 @@ def coop_scenario():
         0xfeec4:(6,'81c6e8010000'),0xf167a:(5,'e841faffff'),0x100744:(5,'e877feffff'),0xfde97:(5,'e824270000'),
         0x10494b:(5,'e80064fbff'),0xffbbf:(5,'e85c0b0000')}
  music_flag='--no-music' not in sys.argv
- hooked_optional={0x10494b:music_flag or '--trace-music' in sys.argv,0xffbbf:music_flag}
+ intro_flag='--intro' in sys.argv
+ hooked_optional={0x10494b:music_flag or '--trace-music' in sys.argv,0xffbbf:music_flag or intro_flag,0x1045b1:intro_flag}
  target={}
  for rva,(size,orig) in sites.items():
   now=bytes(u.mem_read(obj+rva,size))
-  if rva in (0xf13c4,0x1045b1) or (rva in hooked_optional and not hooked_optional[rva]):
+  if rva==0xf13c4 or (rva in hooked_optional and not hooked_optional[rva]):
    assert now==bytes.fromhex(orig),hex(rva)
    continue
   assert now[0]==0xe8 and all(x==0x90 for x in now[5:]),hex(rva)
@@ -279,6 +289,63 @@ def coop_scenario():
  def frame(ms=1600):
   clock[0]+=ms;call_regs(target[0xffbbf],[],{UC_X86_REG_ECX:shell},0)
  def start_seq(client,song):return [[client,0x4a,song],[client,0x51,2],[client,0x4c,song],[client,0x50,1]]
+ if intro_flag:
+  # Synchronised original intro (CoopIntro). The stock WorldProperties lookup
+  # (call site 1045b1 -> c50c0) runs inside the native NextLevel, so a small
+  # trampoline at 1005c0 performs it there, then continues into the NextLevel
+  # stub. The original script player (c5340/c55b0) and cinematic release
+  # helpers (c5a10/c59a0) are recording stubs: camera presentation itself is
+  # client-side and NOT emulated.
+  name='mapdata\\realm1\\r1m3\\r1m3a\\cathedral1start.scr';path=strings+0xb00
+  u.mem_write(path,name.encode()+b'\0')
+  def cstub(n,fn):
+   def run():
+    sp=u.reg_read(UC_X86_REG_ESP);r=fn([read(sp+4+4*k) for k in range(n)])
+    u.reg_write(UC_X86_REG_EAX,0 if r is None else r);u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+   return run
+  scripts=[];playing=[0];cine=[]
+  def play(a):scripts.append(cstr(a[0]));playing[0]=1
+  stubs[obj+0xc50c0]=cstub(1,lambda a:0x4321)
+  stubs[obj+0xc5340]=cstub(1,play)
+  stubs[obj+0xc55b0]=cstub(1,lambda a:playing[0])
+  stubs[obj+0xc5a10]=cstub(1,lambda a:cine.append(('input',a[0]&0xff)))
+  stubs[obj+0xc59a0]=cstub(1,lambda a:cine.append(('letterbox',a[0]&0xff)))
+  nl=code+0x400;stubs[nl]=thiscall_stub(nextlevels,0);del stubs[obj+0x1005c0]
+  tr=obj+0x1005c0;lk=target[0x1045b1]
+  u.mem_write(tr,b'\x68'+struct.pack('<I',path)+b'\xe8'+struct.pack('<i',lk-(tr+10))+b'\x83\xc4\x04\xe9'+struct.pack('<i',nl-(tr+18)))
+  test_start=[x.split('=',1)[1] for x in sys.argv if x.startswith('--test-start=')]
+  world='R1M3A' if test_start and test_start[0].lower()=='r1m3a' else 'R1M2B'
+  roster(0xa1);spawn(alice);roster(0xa1,0xb2);spawn(bob)
+  chat(alice,'!ready');chat(bob,'!ready');out=chat(alice,'!start')
+  assert any('Starting -> '+world in m for m in out),out
+  assert changes()==1
+  next_level()
+  text=b''.join(log).decode('latin1')
+  if world!='R1M3A':
+   if test_start:assert 'CoopTestStartWorld ignored: not a route world' in text
+   assert 'intro-armed' not in text
+   spawn(alice);assert any('Intro skipped' in m for m in said),said
+   print('PASS co-op intro: invalid/absent test start ignored; no intro outside R1M3A');return
+  assert 'effective CoopTestStartWorld=R1M3A (test start)' in text and 'effective CoopIntro=1' in text
+  assert 'intro-armed '+name in text and read(obj+0x16da88)==2
+  n=len(said);spawn(alice);frame(5000)
+  assert not scripts and any('Intro starts when all players are in (1/2)' in m for m in said[n:]),said[n:]
+  spawn(bob);frame(1000);assert not scripts,'settle delay after the last player'
+  frame(2100);assert scripts==[name] and any('R1M3A intro starting (epoch 1, 2/2 players)' in m for m in said),said[-3:]
+  frame();frame();assert scripts==[name],'the intro starts exactly once'
+  assert any('Not in play' in m for m in chat(alice,'!next')),'no world change during the intro'
+  overrun='--intro-overrun' in sys.argv
+  if overrun:
+   frame(120000);assert cine==[('input',1),('letterbox',0)] and any('Intro overran' in m for m in said),(cine,said[-3:])
+  else:
+   playing[0]=0;frame();assert any('Intro finished' in m for m in said) and not cine,(cine,said[-3:])
+  frame();assert scripts==[name]
+  text=b''.join(log).decode('latin1')
+  for marker in ('intro-start '+name,'intro-playing','intro-abort' if overrun else 'intro-finished '+name):
+   assert marker in text,marker
+  print('PASS co-op intro: test start R1M3A, barrier 2/2 + settle, start once, no !next during intro,',
+        'overrun release' if overrun else 'completion')
+  return
  if music_on:music_world('song5')                          # preloaded world, before anyone joins
  roster(0xa1);assert spawn(alice)==0xc5380000
  roster(0xa1,0xb2);assert spawn(bob)==0xc5320000          # slot 1: +96 Z
@@ -337,6 +404,7 @@ def coop_scenario():
   assert marker in text,marker
  assert text.count('exit-seen')<=3*8,'exit logging must stay bounded per epoch'
  assert intermission or not ends,'default co-op mode must not call the native end-level (MID_MULTI_INTERMISSION)'
+ assert 'intro-' not in text and 'CoopIntro' not in text and 'CoopTestStartWorld' not in text,'intro is opt-in'
  if music_on:
   assert 'effective CoopMusic=1' in text
   assert 'music-send client=273 name=Alice song=song5 intensity=1 transition=2 sent' in text

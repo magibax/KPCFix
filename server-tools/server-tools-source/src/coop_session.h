@@ -34,14 +34,17 @@ typedef enum {
  COOP_PHASE_WORLD_LOADING=2,  /* native NextLevel in progress */
  COOP_PHASE_INTRO_PENDING=3,  /* world loaded, waiting for first participant */
  COOP_PHASE_GAMEPLAY=4,
- COOP_PHASE_TRANSITION=5      /* server-requested world change pending */
+ COOP_PHASE_TRANSITION=5,     /* server-requested world change pending */
+ COOP_PHASE_INTRO_RUNNING=6   /* original starting_cinematic playing for the session */
 } CoopPhase;
 
 typedef enum {
  COOP_ACT_NONE=0,
  COOP_ACT_ANNOUNCE=1,     /* broadcast msg */
  COOP_ACT_CHANGE_WORLD=2, /* broadcast msg, then load route[target] natively */
- COOP_ACT_REPLY=3         /* informational reply (broadcast; chat has no unicast here) */
+ COOP_ACT_REPLY=3,        /* informational reply (broadcast; chat has no unicast here) */
+ COOP_ACT_INTRO_START=4,  /* broadcast msg, then play the world's starting_cinematic once */
+ COOP_ACT_INTRO_ABORT=5   /* broadcast msg, then release camera/input (intro overran) */
 } CoopAction;
 
 typedef struct {
@@ -52,6 +55,7 @@ typedef struct {
  unsigned int music_epoch;    /* epoch+1 of the last delivered music start (0 = none) */
  unsigned int music_due_ms;   /* delivery time when music_pending */
  unsigned char music_pending;
+ unsigned int spawn_ms;       /* last spawn time (valid when spawned this epoch) */
 } CoopMember;
 
 typedef struct {
@@ -64,6 +68,9 @@ typedef struct {
  unsigned int transition_epoch;     /* debounce: one change per epoch */
  unsigned int transition_ms,epoch_ms;
  unsigned int duplicate_exits,rejected_exits,full_rejects;
+ unsigned int start_pos;            /* route index !start loads (test option; default 0) */
+ unsigned int intro_armed;          /* this epoch's world has a playable intro */
+ unsigned int intro_ms;             /* INTRO_RUNNING start time */
  unsigned int reject_reply_epoch;    /* epoch+1 of the last off-route reply (0 = none) */
  int host;                          /* member index or -1 */
  CoopMember m[COOP_SESSION_MAX_MEMBERS];
@@ -152,6 +159,7 @@ static const char *coop_phase_name(int phase){
   case COOP_PHASE_INTRO_PENDING:return "INTRO_PENDING";
   case COOP_PHASE_GAMEPLAY:return "PLAYING";
   case COOP_PHASE_TRANSITION:return "TRANSITION";
+  case COOP_PHASE_INTRO_RUNNING:return "INTRO";
  }
  return "?";
 }
@@ -263,7 +271,7 @@ static int coop_session_seen(CoopSession *s,unsigned int client,unsigned int pla
   s->m[i].used=1;s->m[i].client=client;s->m[i].join_seq=++s->join_counter;
   s->m[i].ready=0;s->m[i].away=0;
   coop_sanitize(s->m[i].name,name,COOP_NAME_MAX);
-  s->m[i].player=player;s->m[i].object=object;s->m[i].seen_epoch=s->epoch;s->m[i].spawned=1;
+  s->m[i].player=player;s->m[i].object=object;s->m[i].seen_epoch=s->epoch;s->m[i].spawned=1;s->m[i].spawn_ms=now;
   coop_elect_host(s);
   if(r){
    unsigned int n=0;r->action=COOP_ACT_ANNOUNCE;r->msg[0]=0;
@@ -273,11 +281,25 @@ static int coop_session_seen(CoopSession *s,unsigned int client,unsigned int pla
   }
  }else{
   if(name)coop_sanitize(s->m[i].name,name,COOP_NAME_MAX);
-  s->m[i].player=player;s->m[i].object=object;s->m[i].seen_epoch=s->epoch;s->m[i].spawned=1;
+  s->m[i].player=player;s->m[i].object=object;s->m[i].seen_epoch=s->epoch;s->m[i].spawned=1;s->m[i].spawn_ms=now;
  }
  /* First participant in a freshly loaded started world releases the barrier.
   * Intros are NOT synchronised in this MVP: the native multiplayer path does
   * not start the authored starting_cinematic, and we do not force it. */
+ /* With an armed intro the barrier holds until coop_session_intro_tick
+  * decides; announce once that the world is waiting for the players. */
+ if(s->phase==COOP_PHASE_INTRO_PENDING&&s->started&&s->intro_armed){
+  if(r&&r->action==COOP_ACT_NONE&&coop_present_count(s)){
+   unsigned int n=0,k,ready=0;
+   for(k=0;k<COOP_SESSION_MAX_MEMBERS;k++)if(s->m[k].used&&!s->m[k].away&&s->m[k].spawned&&s->m[k].seen_epoch==s->epoch)ready++;
+   r->action=COOP_ACT_ANNOUNCE;r->msg[0]=0;
+   coop_append(r->msg,&n,"[Co-op] ");coop_append(r->msg,&n,coop_route_label(s->route_pos));
+   coop_append(r->msg,&n," loaded. Intro starts when all players are in (");
+   coop_append_uint(r->msg,&n,ready);coop_append(r->msg,&n,"/");coop_append_uint(r->msg,&n,coop_present_count(s));
+   coop_append(r->msg,&n,")");
+  }
+  return i;
+ }
  if(s->phase==COOP_PHASE_INTRO_PENDING&&s->started){
   s->phase=COOP_PHASE_GAMEPLAY;s->seq++;
   if(r){
@@ -387,7 +409,7 @@ static void coop_session_command(CoopSession *s,unsigned int client,const char *
    r->action=COOP_ACT_REPLY;coop_status(s,r->msg);return;
   }
   s->started=1;s->start_pending=1;
-  coop_begin_change(s,0,now,r,"All ready. Starting");
+  coop_begin_change(s,s->start_pos<COOP_ROUTE_LEN?s->start_pos:0u,now,r,"All ready. Starting");
   return;
  }
  if(COOP_IS("next")){
@@ -466,7 +488,7 @@ static int coop_session_music_take(CoopSession *s,unsigned int now,int music_epo
 /* Called after the native NextLevel returned with the loaded world name. */
 static void coop_session_world_loaded(CoopSession *s,const char *world){
  int idx=coop_route_index(world);
- s->start_pending=0;
+ s->start_pending=0;s->intro_armed=0;
  if(idx>=0)s->route_pos=(unsigned int)idx;
  if(s->started&&idx>=0)s->phase=COOP_PHASE_INTRO_PENDING;
  else{
@@ -475,6 +497,56 @@ static void coop_session_world_loaded(CoopSession *s,const char *world){
   s->phase=COOP_PHASE_LOBBY;
   for(idx=0;idx<(int)COOP_SESSION_MAX_MEMBERS;idx++)s->m[idx].ready=0;
  }
+}
+
+/* ---------- synchronised original intro (CoopIntro) ----------
+ * The original WorldProperties plays its starting_cinematic only in single
+ * player. The session instead plays it once, server-side, when every present
+ * member has entered the new world; the script's camera, letterbox, subtitle
+ * and input events are broadcast to all clients by the original code. */
+#define COOP_INTRO_SETTLE_MS 3000u    /* after the last participant spawned */
+#define COOP_INTRO_BARRIER_MS 30000u  /* start anyway once one player is in */
+#define COOP_INTRO_MAX_MS 120000u     /* release clients if the script overruns */
+/* Proxy: this epoch's world has a playable intro (call after world_loaded). */
+static void coop_session_intro_arm(CoopSession *s,int playable){
+ s->intro_armed=s->phase==COOP_PHASE_INTRO_PENDING&&s->started&&playable;
+}
+/* Barrier/overrun decision, called every server frame. Returns
+ * COOP_ACT_INTRO_START (play now) or COOP_ACT_INTRO_ABORT (release now). */
+static int coop_session_intro_tick(CoopSession *s,unsigned int now,CoopResult *r){
+ unsigned int i,present=0,ready=0,last=0;
+ coop_result(r,COOP_ACT_NONE,"");
+ if(s->phase==COOP_PHASE_INTRO_RUNNING){
+  if((unsigned int)(now-s->intro_ms)<COOP_INTRO_MAX_MS)return 0;
+  s->phase=COOP_PHASE_GAMEPLAY;s->intro_armed=0;s->seq++;
+  coop_result(r,COOP_ACT_INTRO_ABORT,"[Co-op] Intro overran; controls released. Reach the exit together.");
+  return COOP_ACT_INTRO_ABORT;
+ }
+ if(s->phase!=COOP_PHASE_INTRO_PENDING||!s->intro_armed)return 0;
+ for(i=0;i<COOP_SESSION_MAX_MEMBERS;i++){
+  const CoopMember *m=&s->m[i];
+  if(!m->used||m->away)continue;
+  present++;
+  if(m->spawned&&m->seen_epoch==s->epoch){ready++;if(!last||(int)(m->spawn_ms-last)>0)last=m->spawn_ms;}
+ }
+ if(!ready)return 0;   /* a zero-player world never consumes the intro */
+ if(!(ready==present&&(unsigned int)(now-last)>=COOP_INTRO_SETTLE_MS)&&
+    (unsigned int)(now-s->epoch_ms)<COOP_INTRO_BARRIER_MS)return 0;
+ s->phase=COOP_PHASE_INTRO_RUNNING;s->intro_ms=now;s->seq++;
+ {unsigned int n=0;r->action=COOP_ACT_INTRO_START;r->msg[0]=0;
+  coop_append(r->msg,&n,"[Co-op] ");coop_append(r->msg,&n,coop_route_label(s->route_pos));
+  coop_append(r->msg,&n," intro starting (epoch ");coop_append_uint(r->msg,&n,s->epoch);
+  coop_append(r->msg,&n,", ");coop_append_uint(r->msg,&n,ready);coop_append(r->msg,&n,"/");
+  coop_append_uint(r->msg,&n,present);coop_append(r->msg,&n," players)");}
+ return COOP_ACT_INTRO_START;
+}
+/* The script finished (finished=1) or could not be started (0). */
+static void coop_session_intro_done(CoopSession *s,int finished,CoopResult *r){
+ coop_result(r,COOP_ACT_NONE,"");
+ if(s->phase!=COOP_PHASE_INTRO_RUNNING)return;
+ s->phase=COOP_PHASE_GAMEPLAY;s->intro_armed=0;s->seq++;
+ coop_result(r,COOP_ACT_ANNOUNCE,finished?"[Co-op] Intro finished. Reach the exit together.":
+                                         "[Co-op] Intro could not start; playing without it.");
 }
 /* Native world change did not happen in time: return to play, allow retry. */
 static int coop_session_tick(CoopSession *s,unsigned int now,CoopResult *r){
