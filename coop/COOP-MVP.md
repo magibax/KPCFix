@@ -77,7 +77,7 @@ automatically on disconnect. The server operator keeps the native console (`kick
   takes its multiplayer branch. Game type is never falsified.
 * **World change** sets the native maplist cursor so that the next entry is the route world.
   It fails closed if the maplist lacks that world. It then calls the native multiplayer
-  end-of-level routine (3 s intermission, scoreboard message), the same path as frag and time
+  end-of-level routine (scoreboard message; continues after ≥ 3 s when a player presses fire/use), the same path as frag and time
   limits. If no NextLevel follows within 30 s, the next event reports a timeout and allows
   a retry.
 * **Late join / slow load:** a joiner during play is admitted (`joined in progress`) and spawns
@@ -151,7 +151,7 @@ Static disassembly is recorded here. These are runtime targets, not redistribute
 | `0xfb0d7` | Developer `ExitLevel` command finds `CExitTrigger` and prints `trigger+0x54` as "Exiting to level %s". This confirms `+0x54` is `NextWorld` |
 | `0xfde00` | Dedicated server app message handler: `GAMEINIT`, `NEXTLEVEL` → `0x1005c0`, `SERVHOST`, `SAY:` |
 | `0x1005c0` | NextLevel: maplist `0xfc640` (cursor `[0x16da78+0x10]`, names `shell+0x210+i*0x7f`, count `shell+0x1ae0`), message `0x46`, LoadWorld |
-| `0x100760` | Multiplayer end-of-level: message `0x48`, flag `+0x1ae8`. After 3.0 s (`0x117370`) `0x1007c0` sets `+0x1ae9`, and `0x100720` then calls NextLevel. The time-limit check calls it at `0xfc626` |
+| `0x100760` | Multiplayer end-of-level: message `0x48`, flag `+0x1ae8`. Once ≥ 3.0 s (`0x117370`) have passed **and a player presses fire/use**, `0x1007c0` (called only from the player method `0xef960` when input flags `+0x134 & 0x2800` are set) sets `+0x1ae9`, and the server update calls `0x100720` → NextLevel. The time-limit check calls it at `0xfc626` |
 | `0xf10c0` | Telefrag: iterates player list (`[0x157724]+4`) and sends 1000 damage to overlapping boxes. No other effect |
 | `0xfee9a` | Chat relay in the server's message handler: player = client user data, text = message string, name = `player+0x1e8` |
 
@@ -339,50 +339,72 @@ stable exit identity.
 
 ## Transition intermission and music (investigation)
 
-**User observation (natural transitions):**
-1. A multiplayer scoreboard/intermission appears.
-2. A mouse click dismisses it, and it can return while the new map is presented.
-3. The next map's DirectMusic is heard starting, then it stops.
+These are two **independent** problems.
 
-The user's hypothesis is that the click skips an intro cinematic. That is **not supported**
-by static evidence, see below.
+**User observations** (build `0018a3f8`, one client, natural transitions):
+1. **Scoreboard:** at each transition the multiplayer scoreboard stays up until a click. Enemy
+   sounds continue behind it. The click reveals the next map, and the scoreboard sometimes
+   reappears.
+2. **Music:** no music plays while the scoreboard shows. After the click, about one bar plays
+   and then stops. **Control:** ordinary stock multiplayer never plays background music either.
 
-**Confirmed by static analysis of the stock 1.13 binaries** (`object.lto` `3a03f879…`,
-`cshell.dll` `703813a4…`; message names come from the `MID_*` table at cshell `0x2011ca6c`):
+### A. Scoreboard: CONFIRMED stock "click to continue" intermission
+
+Confirmed by static analysis of the stock 1.13 `object.lto` (`3a03f879…`) and `cshell.dll`
+(`703813a4…`). Message names come from cshell's `MID_*` table at `0x2011ca6c`.
 
 | Step | Code | Finding |
 | --- | --- | --- |
-| Session change | `0x100760` | Stores the server time at `+0x1ae4` and broadcasts an empty message: `0x47` MID_SINGLE_INTERMISSION in single player, **`0x48` MID_MULTI_INTERMISSION** in multiplayer. Sets `+0x1ae8`. This is the same routine the frag and time limits use |
-| Deferred change | `0x1007c0`, `0x100720` | After 3.0 s, native NextLevel runs from the server update, outside object handlers |
-| NextLevel | `0x1005c0` | Sends `0x46` MID_CHANGING_LEVELS, then loads the world |
-| Client `0x48` | cshell `0xcb4f7` → `0xcdd50` | Sets client game state `[shell+0x1398]=7` and switches the screen manager to screen 2 (the scoreboard) |
-| Intro | `WorldProperties` `0x104830` | Calls `0xc5340(starting_cinematic)` **only when game type = 0**. In multiplayer the native code never starts the opening cinematic. The co-op line `Intro skipped` is accurate |
-| World music | `WorldProperties` `0x10494b` → `0xbad50` | Parses the world's music property and broadcasts MID_MUSIC_LOAD / MID_MUSIC_LOAD_STRING to all clients. Not gated on game type |
-| Client music | cshell OnMessage (`0xcad30`) | MUSIC_LOAD → `0xd9550`, MUSIC_PLAY → `0xd9880`, MUSIC_READY → `0xd9960`, CHANGING_LEVELS → `0xcdc80` |
-| Client menu music | cshell `0x2bff0` / `0x2c090` | Entering the menu/intermission UI saves the current music state and plays `menu`. Leaving it unloads `menu`, then **resumes playback only if the saved state can be restored** (`0xd9bd0`) |
-| Mouse input | cshell `OnCommandOn` (`0xc9d80`) | Mouse buttons are bound to Fire (31) and Use (32) |
+| Session change (current build) | `0x100760` | Stores the server time at `+0x1ae4`, broadcasts **`0x48` MID_MULTI_INTERMISSION** (`0x47` in single player) and sets `+0x1ae8` |
+| Continue condition | `0x1007c0` | Its **only** caller is the player method `0xef960`, and only while the player's input flags `+0x134 & 0x2800` are set (fire/use). It needs ≥ 3.0 s (`0x10117370`; 0.5 s in single player), then sets `+0x1ae9`. **The world does not change until a player clicks.** The old world keeps running in the meantime |
+| Pending change | `0xffb70` (server shell Update) → `0x100720` → `0x1005c0` | NextLevel sends `0x46` MID_CHANGING_LEVELS and loads the world |
+| Client `0x48` | `0xcb4f7` → `0xcdd50` | Game state `[shell+0x1398]=7`; screen manager shows screen 2 (scoreboard) |
+| Client `0x46` | `0xcb47a` → `0xcdc80(0)` | State 5. With argument 0 the screen is **not** closed |
+| Client OnEnterWorld | vtable slot 8, `0xc7d20` | Closes the screen only if state ≠ 5, so not after a level change |
+| Client `0x1a` MID_PLAYER_ADDED | `0xcb26f` | In multiplayer: state 5 → 1. Then, if the screen is none or 2 **and** client interface `vtbl+0x230` returns non-NULL (inferred: `GetClientObject`), it closes the screen (`0xad3c0`) and calls `0xc6f30(0,0,0)`. The server sends it from its client-enter code (`0xfbe20`, callers `0xfeb86`/`0xfebf0`/`0xfec35`). This likely arrives before the client object exists, which would explain the second appearance (inference) |
 
-**Not established yet:**
-* whether the scoreboard path enters the menu-music swap;
-* which client handler runs on the dismissing click;
-* whether the music that stops is the new world's music, or the `menu` track that was
-  restored without a valid saved state.
+**Fix (code-complete, NOT yet built or tested):** with the new default
+`[Coop] CoopIntermission=0`, the session no longer calls `0x100760`. It sets the shell's native
+pending-NextLevel flag `+0x1ae9`, which the server update consumes on the next frame through
+the hooked NextLevel. This is the native post-intermission path without the scoreboard
+broadcast or the click wait. The client sees the same message flow as after a server-console
+`nextlevel`, which never shows the scoreboard. The change is refused (`change-failed`) if a
+native intermission is already active. `CoopIntermission=1` restores the stock behaviour.
 
-The leading **hypothesis** is that the intermission UI saves the music state before the new
-world's music exists, so leaving the UI restores nothing and playback stops. This needs the
-client-side trace below.
+### B. Multiplayer music: absent in stock multiplayer (baseline)
 
-**Discriminating tests (no code change):**
-* In the client console, set `c_DebugMessages 1`. The stock client then prints
-  `Client OnMessage: <id> <MID name>` for every server message, so the order of
-  MID_MULTI_INTERMISSION, MID_CHANGING_LEVELS and MID_MUSIC_* is visible.
-* A server-console `nextlevel` changes world through the same hooked NextLevel but **never
-  sends `0x48`**. If music survives that and not a natural exit, the intermission path is
-  implicated.
+* **Confirmed (disassembler scan of every `StartMessage` site):**
+  * `object.lto` **never sends `MID_MUSIC_PLAY` (`0x4e`) or `MID_MUSIC_PLAY_STRING` (`0x4b`)**.
+  * The music messages come from the music controller only:
+    * `0xbad50` sends LOAD/LOAD_STRING. It has a single caller, `WorldProperties` at
+      `0x10494b`, when the world initializes, and broadcasts to the clients connected at
+      that moment.
+    * the music-event method `0xbaa90` sends READY/INTENSITY/TRANSITION/GROOVE/FADEOUT.
+  * An earlier byte-pattern result that listed a `MUSIC_PLAY` sender at `0xce5d2` was a
+    false positive inside a call instruction.
+* **Confirmed (client):**
+  * Every scoreboard close via the `MID_PLAYER_ADDED` auto-close or `OnEnterWorld` calls
+    `0xc6f30(0,…)`. That runs `0x2ad20` → `0x2c090`, which unloads the `menu` music and
+    restores the music state saved when the main menu was last opened (`0xd9bd0`).
+  * With `enterMenu=1`, `0xc6f30` saves that state and plays `menu` (`0x2bff0`).
+* **Hypotheses (not proven):**
+  * clients that join a running world never receive its one-time music load, which would
+    explain the absence of music in ordinary multiplayer;
+  * the one bar after the click comes from the stale-state restore. Whether it is level
+    music or `menu` music is unknown and can only be judged by a listener.
+* No music change is made. Restoring music in co-op needs a per-client, correctly sequenced
+  load/ready request, and the trigger that makes the client start playback is not
+  identified yet.
+* **Diagnostics (code-complete, NOT yet built):** `[Coop] TraceMusic=1` hooks the single call
+  site `0x10494b` (original bytes `e8 00 64 fb ff` verified) and logs
+  `music-world argc=… <tokens> event=created|none` when a world issues its music load.
+  `[Coop] TraceTiming=1` adds `t=<ms since session armed>` to every co-op line. Both are off
+  by default; set them to 0 or delete them to turn them off.
 
-**Pending instrumentation (not yet built):** opt-in `[Coop] TraceTiming=1` adds `t=<ms since
-session armed>` to each co-op log line. It stays uncommitted until it can be rebuilt and
-reproduced in the pinned toolchain.
+### Client-side evidence (no code change)
+* In the client console, `c_DebugMessages 1` makes the stock client print
+  `Client OnMessage: <id> <MID name>` for every message from the server.
+* A server-console `nextlevel` changes world without `0x48`.
 
 ## Natural transition test (build `coop-session-v2`, cheats on the disposable server only)
 
