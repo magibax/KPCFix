@@ -660,6 +660,13 @@ static U32 coop_t0;
 static int coop_intermission;
 /* [Coop] TraceMusic=1: log the world's music event creation (call site 10494b). */
 static int coop_trace_music;
+/* [Coop] CoopMusic (default 1 in a session): per-player world music delivery. */
+static int coop_music=1;
+/* Snapshot of the world's music event (object.lto event class, vtable 11d240):
+ * +0x108 song name, +0x188 song present, +0x189 intensity, +0x18a groove,
+ * +0x18b transition (0xff = unset), +0x18c fadeout. Taken when WorldProperties
+ * creates it; epoch tags which world it belongs to. */
+static struct {int valid;U32 epoch;char song[0x80];U8 has_song,intensity,groove,transition,fadeout;} coop_music_snap;
 /* Bounded, sequenced log: "[KPCFix Co-op] g=1 e=2 seq=7 PLAYING event detail" */
 static void coop_log(const char *event,const char *detail){
  char line[240];U32 n=0;
@@ -760,6 +767,53 @@ static void coop_execute(CoopResult *r){
  }
 }
 static void coop_tick(U32 now){CoopResult r;if(coop_session_tick(&coop_state,now,&r))coop_execute(&r);}
+/* Engine message API on g_pServerDE (object.lto global 16de80), as used by the
+ * original music code bad50/baa90: thiscall vtable slots StartMessage +0xac
+ * (hClient, id) -> HMESSAGEWRITE, WriteToMessageByte +0x8 (msg, byte),
+ * WriteToMessageString +0x14 (msg, str), EndMessage +0xb4 (msg). */
+typedef U32 (__attribute__((thiscall)) *MsgStartFn)(void *,U32,U32);
+typedef void (__attribute__((thiscall)) *MsgByteFn)(void *,U32,U32);
+typedef void (__attribute__((thiscall)) *MsgStrFn)(void *,U32,const char *);
+typedef void (__attribute__((thiscall)) *MsgEndFn)(void *,U32);
+static int coop_msg_api(void **de,U32 **vt){
+ U32 p,v;
+ if(!coop_rd((U32)coop_image+0x16de80u,&p)||!p||!coop_rd(p,&v)||!v||!bsp_mem_readable(v,0xb8))return 0;
+ *de=(void *)p;*vt=(U32 *)v;return 1;
+}
+/* Send one client exactly the sequence the original event method baa90 would
+ * broadcast, preceded by the load from bad50, using the string forms the
+ * client resolves through the same routines: LOAD_STRING 0x4a, [GROOVE 0x52],
+ * [TRANSITION 0x51], PLAY_STRING 0x4b (no intensity) or READY_STRING 0x4c,
+ * [INTENSITY 0x50], [FADEOUT 0x53]. */
+static int coop_music_send(U32 client){
+ void *de;U32 *vt,msg;
+ if(!client||!coop_music_snap.valid||!coop_music_snap.has_song||!coop_msg_api(&de,&vt))return 0;
+#define COOP_MSG_BEGIN(id) msg=((MsgStartFn)vt[0xac/4])(de,client,(id));if(!msg)return 0
+#define COOP_MSG_END() ((MsgEndFn)vt[0xb4/4])(de,msg)
+ COOP_MSG_BEGIN(0x4au);((MsgStrFn)vt[0x14/4])(de,msg,coop_music_snap.song);COOP_MSG_END();
+ if(coop_music_snap.groove!=0xffu){COOP_MSG_BEGIN(0x52u);((MsgByteFn)vt[0x8/4])(de,msg,coop_music_snap.groove);COOP_MSG_END();}
+ if(coop_music_snap.transition!=0xffu){COOP_MSG_BEGIN(0x51u);((MsgByteFn)vt[0x8/4])(de,msg,coop_music_snap.transition);COOP_MSG_END();}
+ COOP_MSG_BEGIN(coop_music_snap.intensity!=0xffu?0x4cu:0x4bu);((MsgStrFn)vt[0x14/4])(de,msg,coop_music_snap.song);COOP_MSG_END();
+ if(coop_music_snap.intensity!=0xffu){COOP_MSG_BEGIN(0x50u);((MsgByteFn)vt[0x8/4])(de,msg,coop_music_snap.intensity);COOP_MSG_END();}
+ if(coop_music_snap.fadeout){COOP_MSG_BEGIN(0x53u);COOP_MSG_END();}
+#undef COOP_MSG_BEGIN
+#undef COOP_MSG_END
+ return 1;
+}
+/* Deliver due per-player music starts (called once per server frame). */
+static void coop_music_frame(U32 now){
+ int i,n=0;
+ while(n++<4&&(i=coop_session_music_take(&coop_state,now,coop_music_snap.valid&&coop_music_snap.epoch==coop_state.epoch))>=0){
+  char line[200];U32 k=0;CoopMember *m=&coop_state.m[i];int ok=coop_music_send(m->client);
+  coop_text(line,&k,"client=",sizeof line);coop_dec(line,&k,m->client,sizeof line);
+  coop_text(line,&k," name=",sizeof line);coop_text(line,&k,m->name,sizeof line);
+  coop_text(line,&k," song=",sizeof line);coop_text(line,&k,coop_music_snap.song,sizeof line);
+  coop_text(line,&k," intensity=",sizeof line);coop_dec(line,&k,coop_music_snap.intensity,sizeof line);
+  coop_text(line,&k," transition=",sizeof line);coop_dec(line,&k,coop_music_snap.transition,sizeof line);
+  coop_text(line,&k,ok?" sent":" failed",sizeof line);
+  coop_log("music-send",line);
+ }
+}
 static int coop_identify(U32 player,U32 *client,U32 *object,char name[COOP_NAME_MAX]){
  name[0]=0;
  if(!player||!coop_rd(player+0x120u,client)||!coop_rd(player+8u,object))return 0;
@@ -775,6 +829,7 @@ static void coop_spawn_hook(U32 player,U32 *pos,int first_path){
  if(coop_identify(player,&client,&object,name)){
   slot=coop_session_seen(&coop_state,client,player,object,name,now,&r);
   coop_execute(&r);
+  if(coop_music)coop_session_music_schedule(&coop_state,slot,now);
  }
  if(first_path&&slot>=0&&slot<(int)COOP_TRIAL_SLOTS&&coop_is_r1m2b_anchor(pos))
   coop_assign_trial_position(pos,slot);
@@ -928,23 +983,55 @@ static void *CDECL campaign_lookup(const char *path){
 }
 
 /* WorldProperties (object.lto 104940-104950) splits the world's music property
- * into tokens and calls the music controller bad50(label, argc, argv) (cdecl,
- * caller pops 12 bytes; returns the music event object). bad50 broadcasts
- * MID_MUSIC_LOAD/_STRING (0x4d/0x4a) to the clients connected at that moment.
- * No code in object.lto sends MID_MUSIC_PLAY (0x4e). Observation only. */
+ * into tokens and calls the music parser bad50(label, argc, argv) (cdecl,
+ * caller pops 12 bytes). bad50 builds the music event (vtable 11d240) and
+ * broadcasts MID_MUSIC_LOAD 0x4d / LOAD_STRING 0x4a. WorldProperties then runs
+ * the event's vtbl+8 = baa90, which broadcasts [GROOVE 0x52] [TRANSITION 0x51]
+ * PLAY 0x4e or READY 0x4f (0x4e + intensity set; string forms 0x4b/0x4c)
+ * [INTENSITY 0x50] [FADEOUT 0x53]. All with hClient NULL, once, at world
+ * initialisation. The hook forwards unchanged, snapshots the event's fields
+ * for per-player delivery (CoopMusic) and optionally logs (TraceMusic). */
 typedef void *(CDECL *MusicEventFn)(const char *,U32,U32);
 static void *CDECL coop_music_event(const char *label,U32 argc,U32 argv){
  void *result=((MusicEventFn)(coop_image+0xbad50u))(label,argc,argv);
- char line[220],token[40];U32 n=0,i,p;
- coop_text(line,&n,"argc=",sizeof line);coop_dec(line,&n,argc,sizeof line);
- for(i=0;i<argc&&i<6;i++){
-  if(!coop_rd(argv+i*4u,&p)||!p)break;
-  coop_copy_str(token,p,sizeof token);
-  coop_text(line,&n," ",sizeof line);coop_text(line,&n,token,sizeof line);
+ U32 ev=(U32)result;
+ coop_music_snap.valid=0;
+ if(ev&&bsp_mem_readable(ev+0x108u,0x85u)){
+  U32 i;const char *src=(const char *)(ev+0x108u);
+  for(i=0;i+1<sizeof coop_music_snap.song&&src[i];i++){char c=src[i];coop_music_snap.song[i]=c=='\\'?'/':c;}
+  coop_music_snap.song[i]=0;
+  coop_music_snap.has_song=*(const U8 *)(ev+0x188u)&&coop_music_snap.song[0];
+  coop_music_snap.intensity=*(const U8 *)(ev+0x189u);
+  coop_music_snap.groove=*(const U8 *)(ev+0x18au);
+  coop_music_snap.transition=*(const U8 *)(ev+0x18bu);
+  coop_music_snap.fadeout=*(const U8 *)(ev+0x18cu);
+  coop_music_snap.epoch=coop_state.epoch;
+  coop_music_snap.valid=coop_music_snap.has_song;
  }
- coop_text(line,&n,result?" event=created":" event=none",sizeof line);
- coop_log("music-world",line);
+ if(coop_trace_music){
+  char line[220],token[40];U32 n=0,i,p;
+  coop_text(line,&n,"argc=",sizeof line);coop_dec(line,&n,argc,sizeof line);
+  for(i=0;i<argc&&i<6;i++){
+   if(!coop_rd(argv+i*4u,&p)||!p)break;
+   coop_copy_str(token,p,sizeof token);
+   coop_text(line,&n," ",sizeof line);coop_text(line,&n,token,sizeof line);
+  }
+  coop_text(line,&n,result?" event=created":" event=none",sizeof line);
+  if(coop_music_snap.valid){
+   coop_text(line,&n," song=",sizeof line);coop_text(line,&n,coop_music_snap.song,sizeof line);
+   coop_text(line,&n," intensity=",sizeof line);coop_dec(line,&n,coop_music_snap.intensity,sizeof line);
+   coop_text(line,&n," transition=",sizeof line);coop_dec(line,&n,coop_music_snap.transition,sizeof line);
+  }
+  coop_log("music-world",line);
+ }
  return result;
+}
+/* Per-frame tick: the server shell Update (ffb70) calls 100720 (pending
+ * NextLevel check) every frame at ffbbf with ECX = shell. Forward unchanged,
+ * then deliver due per-player music starts. Installed only with CoopMusic. */
+static void __attribute__((thiscall)) coop_frame(void *shell){
+ ((ShellFn)(coop_image+0x100720u))(shell);
+ if(coop_session_enabled&&coop_music)coop_music_frame(GetTickCount());
 }
 /* Optional in-memory call/load redirects inside the original object image.
  * Each site's original bytes are verified; disabled sites must stay original. */
@@ -954,7 +1041,7 @@ static void make_call(OptionalSite *s,U8 *b,const void *target){
  s->hooked[0]=0xe8;copy(s->hooked+1,(const U8 *)&rel,4);
  for(i=5;i<s->size;i++)s->hooked[i]=0x90;
 }
-#define OPTIONAL_SITES 9u
+#define OPTIONAL_SITES 10u
 static void optional_sites(OptionalSite *s,U8 *b){
  static const struct {U32 rva,size;U8 original[6];} table[OPTIONAL_SITES]={
   {SPAWN_POS_CALL_RVA,6,{0xff,0x91,0xe0,0x01,0x00,0x00}},
@@ -966,6 +1053,7 @@ static void optional_sites(OptionalSite *s,U8 *b){
   {0x100744,5,{0xe8,0x77,0xfe,0xff,0xff}},       /* pending change -> NextLevel */
   {0xfde97,5,{0xe8,0x24,0x27,0x00,0x00}},        /* console nextlevel -> NextLevel */
   {0x10494b,5,{0xe8,0x00,0x64,0xfb,0xff}},       /* WorldProperties -> music event bad50 */
+  {0xffbbf,5,{0xe8,0x5c,0x0b,0x00,0x00}},        /* shell Update -> 100720 (per frame) */
  };
  U32 i;
  for(i=0;i<OPTIONAL_SITES;i++){s[i].rva=table[i].rva;s[i].size=table[i].size;copy(s[i].original,table[i].original,6);}
@@ -978,12 +1066,14 @@ static void optional_sites(OptionalSite *s,U8 *b){
  make_call(&s[6],b,(const void *)coop_next_level);
  make_call(&s[7],b,(const void *)coop_next_level);
  make_call(&s[8],b,(const void *)coop_music_event);
+ make_call(&s[9],b,(const void *)coop_frame);
  s[0].enabled=spawn_trace_enabled;
  s[1].enabled=spawn_separation_enabled||coop_session_enabled;
  s[2].enabled=campaign_trace||coop_session_enabled;
  s[3].enabled=campaign_trace;
  for(i=4;i<8;i++)s[i].enabled=coop_session_enabled;
- s[8].enabled=coop_session_enabled&&coop_trace_music;
+ s[8].enabled=coop_session_enabled&&(coop_trace_music||coop_music);
+ s[9].enabled=coop_session_enabled&&coop_music;
 }
 static int apply_object(HMODULE module){
  U8 *b=(U8 *)module;U8 hash[32],expected[8];U32 i,j,old,restore,already=1;
@@ -1128,6 +1218,7 @@ static void initialize(void){
  coop_trace_timing=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceTiming",0,ini_path)!=0;
  coop_intermission=GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopIntermission",0,ini_path)!=0;
  coop_trace_music=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceMusic",0,ini_path)!=0;
+ coop_music=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopMusic",1,ini_path)!=0;
  if(active&&(spawn_trace_enabled||coop_session_enabled||campaign_trace)){
   /* Diagnostic identity tied to the exact bytes of this DLL file. */
   U8 own[32];WCHAR own_path[1024];U32 k,n=GetModuleFileNameW(self,own_path,1024);
@@ -1142,6 +1233,9 @@ static void initialize(void){
     "[KPCFix Co-op] effective CoopIntermission=1 (native scoreboard; continues on a player's fire/use)":
     "[KPCFix Co-op] effective CoopIntermission=0 (world change without intermission scoreboard)");
   if(coop_trace_music)log_file("[KPCFix Co-op] effective TraceMusic=1");
+  if(coop_session_enabled)log_file(coop_music?
+    "[KPCFix Co-op] effective CoopMusic=1 (per-player world music start after spawn)":
+    "[KPCFix Co-op] effective CoopMusic=0");
   log_file(model_registry_enabled?
     "[KPCFix Co-op] effective TraceModelRegistry=1":
     "[KPCFix Co-op] effective TraceModelRegistry=0 (set [Coop] TraceModelRegistry=1; restart)");

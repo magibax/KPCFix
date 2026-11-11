@@ -48,6 +48,10 @@ typedef struct {
  unsigned int client,player,object,join_seq,seen_epoch;
  unsigned char used,ready,away,spawned;
  char name[COOP_NAME_MAX];
+ /* Per-player world music delivery (see coop_session_music_*). */
+ unsigned int music_epoch;    /* epoch+1 of the last delivered music start (0 = none) */
+ unsigned int music_due_ms;   /* delivery time when music_pending */
+ unsigned char music_pending;
 } CoopMember;
 
 typedef struct {
@@ -426,7 +430,38 @@ static void coop_session_exit(CoopSession *s,const char *next_world,unsigned int
 static void coop_session_world_loading(CoopSession *s,unsigned int now){
  unsigned int i;
  s->epoch++;s->epoch_ms=now;s->phase=COOP_PHASE_WORLD_LOADING;s->seq++;
- for(i=0;i<COOP_SESSION_MAX_MEMBERS;i++){s->m[i].spawned=0;s->m[i].object=0;s->m[i].player=0;}
+ for(i=0;i<COOP_SESSION_MAX_MEMBERS;i++){s->m[i].spawned=0;s->m[i].object=0;s->m[i].player=0;s->m[i].music_pending=0;}
+}
+
+/* ---------- per-player world music delivery ----------
+ * The original WorldProperties broadcasts the world's music start once, at
+ * world initialisation, to the clients connected at that instant. Players who
+ * join later never receive it, and players reloading the world lose it in their
+ * own world switch. The session therefore delivers the same start to each
+ * member once per epoch, a short delay after that member spawned. */
+#define COOP_MUSIC_DELAY_MS 1500u
+/* Member i spawned: schedule delivery unless already delivered this epoch. */
+static void coop_session_music_schedule(CoopSession *s,int i,unsigned int now){
+ CoopMember *m;
+ if(i<0||(unsigned int)i>=COOP_SESSION_MAX_MEMBERS)return;
+ m=&s->m[i];
+ if(!m->used||m->music_pending||m->music_epoch==s->epoch+1u)return;
+ m->music_pending=1;m->music_due_ms=now+COOP_MUSIC_DELAY_MS;
+}
+/* Returns a member whose delivery is due now (and marks it delivered for this
+ * epoch), or -1. music_epoch_valid: a music snapshot exists for this epoch;
+ * without one nothing is sent and the request is dropped (no stale track). */
+static int coop_session_music_take(CoopSession *s,unsigned int now,int music_epoch_valid){
+ unsigned int i;
+ for(i=0;i<COOP_SESSION_MAX_MEMBERS;i++){
+  CoopMember *m=&s->m[i];
+  if(!m->used||!m->music_pending||(int)(now-m->music_due_ms)<0)continue;
+  m->music_pending=0;
+  if(!music_epoch_valid)continue;
+  m->music_epoch=s->epoch+1u;
+  return (int)i;
+ }
+ return -1;
 }
 /* Called after the native NextLevel returned with the loaded world name. */
 static void coop_session_world_loaded(CoopSession *s,const char *world){
