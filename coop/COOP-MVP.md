@@ -154,6 +154,13 @@ reverses this. Original game files are never rewritten.
    and start. The log must show `build=coop-session-v1 … sha256=<same hash>`,
    `effective CoopSession=1`, `session armed`, and `Runtime object hooks installed`.
    No player-facing event should occur while nobody is connected.
+   * Optional: run `Invoke-CoopServerSmoke.ps1` from the test bundle first (see
+     [server smoke evidence](#native-windows-server-smoke-evidence-no-clients)).
+     Its JSON report records hashes and the log.
+   * The console prints `Server started on <address>, port 42972`. On the developer
+     host this address was a Hyper-V virtual adapter (`172.28.144.1`), not the LAN
+     interface. Clients should join the server PC's LAN address on port 42972. If
+     joining fails, note both addresses in your report.
 3. **Lobby.**
    * Client A joins and spawns on R1M2B. Chat shows `A joined the lobby`.
    * Client B joins. B spawns +96 Z from A, and nobody dies.
