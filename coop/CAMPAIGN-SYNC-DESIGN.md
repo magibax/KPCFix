@@ -173,10 +173,28 @@ rather than replaying scripts per client.
     *engine frame time*, not wall-clock time (question 4 above). The stock dedicated server
     credits every frame at least 10 ms, which inflates script time whenever frames come faster
     than 100 Hz.
-  * `CoopScriptClock` holds the script clock to wall time; client validation is still
-    outstanding. See
+  * `CoopScriptClock` holds the script clock to wall time; user-confirmed on both
+    clients (2026-11-11). See
     [COOP-MVP.md](COOP-MVP.md#d-script-clock-cadence-narration-versus-subtitles).
-* **Still open:** the missing invulnerability (gated off in multiplayer), the join-during-
-  cinematic policy, and spawn-based rather than acknowledged client readiness.
+* **Update (2026-11-11, same desktop + laptop, DLL `e86bb352…`):** the user confirmed that the
+  script cadence is fixed. Three effects of the script's *gameplay* actions remained, each with
+  its own multiplayer cause, and one presentation request was added:
+  * the narration is cut off by the server's sound timer, which also runs on inflated engine
+    time (`CoopSoundClock`);
+  * the `spawn6` enemies never appear because stock multiplayer never creates any
+    `CMonsterSpawner`. The authoritative fix is at world load on the server (`CoopSpawners`),
+    not a per-client replay;
+  * enemy health bars are gated to single player on the server (`CoopHealthBars`);
+  * the stock scoreboard should cover `!start` until the cinematic (`CoopStartScoreboard`).
+
+  These are all fixed in DLL `1b8816cb…`, which awaits client validation. See
+  [COOP-MVP.md](COOP-MVP.md#e-narrator-cut-off-after-will-be-a-useful-ally-for-you-sound-timer)
+  sections E–H.
+* This confirms the classification above: `trigger_generic` (gameplay-authoritative) ran once
+  on the server as intended. Its target simply did not exist in multiplayer.
+* **Still open:**
+  * the missing invulnerability and `disable_ai` (both gated off in multiplayer);
+  * the join-during-cinematic policy;
+  * spawn-based rather than acknowledged client readiness.
 * The investigation order and the resume steps are in
   [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md).

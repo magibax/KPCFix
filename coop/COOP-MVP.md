@@ -9,12 +9,20 @@
     game; not beat-synchronised;
   * the original R1M3A opening cinematic (`CoopIntro=1`, DLL `13ca1d0a…`), with the two
     machines matching each other.
-* **Narration cadence:** on both clients the narration trailed the subtitles and was cut off by
-  the window smash.
-  * Root cause found: the server's script clock runs on inflated engine frame time
-    ([section D](#d-script-clock-cadence-narration-versus-subtitles)).
-  * Fix `CoopScriptClock` (DLL `e86bb352…`) is emulator- and server-tested. **Client
-    validation is outstanding.** Resume from [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md).
+* **Narration cadence: RESOLVED, user-confirmed** (DLL `e86bb352…`, desktop + laptop):
+  subtitles, camera and the window smash no longer run ahead of the narration
+  (`CoopScriptClock`, [section D](#d-script-clock-cadence-narration-versus-subtitles)).
+* **Open after that test, fixes built but NOT yet tested with clients** (DLL `1b8816cb…`, commit
+  `aa9949c`; emulator- and native-server-tested only):
+  * narrator cut off after "…will be a useful ally for you": a server sound timer on engine
+    time ([section E](#e-narrator-cut-off-after-will-be-a-useful-ally-for-you-sound-timer));
+  * no enemy health bars: the server never sends them in multiplayer
+    ([section F](#f-enemy-health-bars-in-co-op));
+  * no enemies after the smash (`spawn6`): monster spawners are never created in multiplayer
+    ([section G](#g-enemies-missing-after-the-r1m3a-window-smash-spawn6));
+  * new request, the stock scoreboard from `!start` until the cinematic
+    ([section H](#h-stock-scoreboard-from-start-until-the-cinematic-coopstartscoreboard)).
+  * Resume from [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md).
 * **Not yet tested:** two-player combat, death, respawn and reconnect regression (deferred).
 
 Experimental: this code is only on `feature/coop-campaign` and its child branches. It is not
@@ -39,6 +47,11 @@ part of the stable Server Tools R3 on `main`. Every switch defaults to off.
 | Launcher worker co-op validation (wrong start map, maplist without R1M2C/R1M3A) | WINDOWS-TESTED (scripts only; R1M3A check added in v2) | rejected after the real version checks, before any server start |
 | Native empty server for `0018a3f8`: load, hooks, session armed, NextLevel epochs through R1M2B, R1M2C, R1M3A; normal and pass-through regressions | WINDOWS-TESTED (no clients) | R1M3A loads under the dedicated server |
 | Two clients: separation, combat, natural exit, rejoin | **NOT TESTED** | follow the test protocol below and return the logs |
+| Script cadence (`CoopScriptClock`) | **USER-CONFIRMED** (desktop + laptop, `e86bb352`) | [section D](#d-script-clock-cadence-narration-versus-subtitles) |
+| Full narration (`CoopSoundClock`) | IMPLEMENTED, EMULATOR- and SERVER-TESTED; clients NOT TESTED | [section E](#e-narrator-cut-off-after-will-be-a-useful-ally-for-you-sound-timer) |
+| Enemy health bars (`CoopHealthBars`) | IMPLEMENTED, EMULATOR- and SERVER-TESTED; clients NOT TESTED | [section F](#f-enemy-health-bars-in-co-op) |
+| Monster spawners / R1M3A `spawn6` (`CoopSpawners`, `CoopSkill`) | IMPLEMENTED, EMULATOR- and SERVER-TESTED (spawner creation logged natively); spawning with players NOT TESTED | [section G](#g-enemies-missing-after-the-r1m3a-window-smash-spawn6) |
+| Stock scoreboard from `!start` to the cinematic (`CoopStartScoreboard`) | IMPLEMENTED, UNIT- and EMULATOR-TESTED; clients NOT TESTED; not visible during the world load itself (client limitation) | [section H](#h-stock-scoreboard-from-start-until-the-cinematic-coopstartscoreboard) |
 
 ## How it works
 
@@ -166,6 +179,9 @@ Static disassembly is recorded here. These are runtime targets, not redistribute
 | `0x100760` | Multiplayer end-of-level: message `0x48`, flag `+0x1ae8`. Once ≥ 3.0 s (`0x117370`) have passed **and a player presses fire/use**, `0x1007c0` (called only from the player method `0xef960` when input flags `+0x134 & 0x2800` are set) sets `+0x1ae9`, and the server update calls `0x100720` → NextLevel. The time-limit check calls it at `0xfc626` |
 | `0xf10c0` | Telefrag: iterates player list (`[0x157724]+4`) and sends 1000 damage to overlapping boxes. No other effect |
 | `0xfee9a` | Chat relay in the server's message handler: player = client user data, text = message string, name = `player+0x1e8` |
+| `0xf8fe0` | "Is single player" (`[shell+0x1d0] == 0`); only callers: the enemy health-bar manager (`0xea6d2`, `0xea7c3`, `0xeaa10`, `0xeab11`), [section F](#f-enemy-health-bars-in-co-op) |
+| `0x93c5d` | `CMonsterSpawner::ReadProp` forces MiscFlags `\|= 0x10` before `0xf9000(skill, flags)`: no monster spawner in multiplayer, [section G](#g-enemies-missing-after-the-r1m3a-window-smash-spawn6) |
+| `0xc5430` / `0xc569b` | Script abort (plays the `endingscript`) / normal completion (does not) |
 
 ## Windows test protocol (needed: two client PCs or one PC plus one other machine)
 
@@ -488,8 +504,10 @@ intensity 3` at 47.7 s, triggers `spawn6`, briefly disables AI, and releases at 
 * **Invulnerability:** players are input-locked but not invulnerable. The original
   `player invulnerable` line is gated off in multiplayer.
 * **Voice-over:** `streamsound player … local` targets "player". In the two-client test both
-  machines heard the narration, but it **trailed the subtitles** and was cut off by the
-  window smash. Root cause and fix: [section D](#d-script-clock-cadence-narration-versus-subtitles).
+  machines heard the narration. With `13ca1d0a` it **trailed the subtitles** (fixed by
+  `CoopScriptClock`, [section D](#d-script-clock-cadence-narration-versus-subtitles), user-
+  confirmed). It is still **cut off** after "…useful ally for you", by the server's sound timer
+  ([section E](#e-narrator-cut-off-after-will-be-a-useful-ally-for-you-sound-timer)).
 
 | Evidence | Status |
 | --- | --- |
@@ -566,13 +584,233 @@ also observes, forwarding dt unchanged when the governor is off. It logs:
 | Compiled DLL against stock `object.lto`, with a stand-in for `c5630` that steps the authored R1M3A times exactly as `c6260` does, under 40 ms frames credited 50 ms | **Emulated:** 53 s script = 53 040 ms wall governed, 42 440 ms observed (dt forwarded bit-identically). Narration → smash 46.8 s governed versus 37.4 s observed. Site left original when neither option is set |
 | Native server: DLL loads, `effective CoopScriptClock=1`, hooks installed; governed calibration `engine_ms=10213 script_ms=9993 wall_ms=10000`; Normal and PassThrough smoke PASS | **Windows, no client** |
 | Native Coop smoke (three console `nextlevel`s in quick succession on an empty server) | **Intermittent crash, PRE-EXISTING.** Access violation in `object.lto+0x87c41`, inside the AI "Building path table." routine (`0x87be0`, called from a path-network object's staged update `0x95259`). Crashed 3 of 4 runs with `e86bb352` and 1 of 3 with the previous user-tested `13ca1d0a`, same offset and same failing step (`nextlevel 2`). Not caused by the script clock: there is no code path from `0xc5630` into it. Not yet checked under pass-through |
-| Narration, subtitles and smash on real clients | **NOT TESTED.** Requires the two-PC test in [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md) |
+| Narration, subtitles and smash on real clients | **USER-CONFIRMED (2026-11-11, desktop + laptop, `e86bb352`):** subtitles and events no longer run ahead of the narration. Server log of that run: `intro-clock frames=6598 engine_ms=66015 script_ms=53005 wall_ms=53000`, and every `intro-event` within 7 ms of its authored time. The narration still stops early: a different cause, [section E](#e-narrator-cut-off-after-will-be-a-useful-ally-for-you-sound-timer) |
 
 **Hypotheses still open:**
 * client-side stream start latency (the clip may start a little after its broadcast);
 * whether stock single player shows the same inflation at high client frame rates.
 
 Neither is needed to explain the observed cut-off.
+
+### E. Narrator cut-off after "…will be a useful ally for you" (sound timer)
+
+**Live report (DLL `e86bb352…`, desktop + laptop, 2026-11-11):**
+* The subtitle/script cadence fix from section D works in real gameplay.
+* The narration still stops abruptly right after "…will be a useful ally for you". This is a
+  separate problem: the lifetime of the voice playback, not the script clock.
+
+**Not an authored end** (`PSYCHO.REZ`, read-only, `R1M3-INTRO.WAV` 44.19 s, envelope measured
+in 50 ms windows):
+
+| WAV time | Speech |
+| --- | --- |
+| 30.0–36.45 s | "By way of the Scourge, the earth element will be a useful ally for you" ("…will be a useful ally for you" ≈ 34.95–36.45 s) |
+| 36.55–37.2 s | "here," |
+| 37.55–43.7 s | "as the way in is not as straight as it first seems." (the 38.9 s subtitle) |
+| 43.7–44.19 s | silence |
+
+The clip itself contains the whole last sentence, so the voice is cut, not finished.
+
+**Root cause (static analysis; stock `server.dll` `83b7bce8…`, `object.lto` `3a03f879…`):**
+
+| Step | Code | Finding |
+| --- | --- | --- |
+| Script event | `streamsound` parser `0xbd010`, `local` → mode 2, execute `0xbcf2d` | Calls `0x52c80`, then `g_pServerDE->PlaySound` (vtbl `+0x174`) with flags `0x430`, and keeps the handle in a 4-slot stream table (`0x10159c74`). Nothing in `object.lto` kills it: `0xbcd30` only polls `IsSoundDone` (vtbl `+0x17c`) and clears the slot |
+| Track lifetime | `server.dll 0x2c6e6`–`0x2c70a` | time left `+0x20` = duration + min(0.5 s, duration/2) = **44.69 s** |
+| Countdown | updater `0x29f0b` (only caller `0x2a1fc`: ECX = server manager, one float = the clamped frame dt `[esi+0x1f0]`, `ret 4`) → `0x2c805` | time left −= frame dt |
+| Delivery | per-client set builder `0x1f920` (`0x1f94f`–`0x1f961`) | A track whose time left ≤ 0 is no longer put into the client's sound set, so the client stops it. `IsSoundDone` (`0x277e2`) reports it done at the same moment |
+
+The frame dt is the inflated engine dt from section D. The user's own run (`smoke1` log,
+`intro-clock frames=6598 engine_ms=66015 script_ms=53005 wall_ms=53000`) ran the engine at
+**1.2456×** wall time. 44.69 s / 1.2456 = **35.9 s** of real time after the stream started, which
+is "…ally for you" in the WAV, before any client start latency. The earlier report "the window
+smash cut it off" (DLL `13ca1d0a…`) is consistent with the same timer: at 1.25× it expired
+about 1.5 s before the smash.
+
+* **Same on both clients (prediction):** the track is removed from every client's set on the
+  same server frame, so the cut-off should be identical on both machines (each heard from its
+  own stream start). The `smoke1` server log of that run lists one member (`johnny`), so the
+  two-machine comparison is the user's observation, not a logged fact.
+* **Single player:** the client-hosted server runs one frame per rendered frame, so the 10 ms
+  minimum only inflates time above 100 FPS. Not measured.
+* **Ruled out:** the ending script `CATHEDRAL1ASTART.SCR` (`0 stopstream …r1m3-intro.wav`) runs
+  only when the intro is aborted (`0xc5499` → `0xc5340`), not on normal completion
+  (`0xc569b` → `0xc56a6`). The live log shows the normal timeline to 53 s and "finished".
+
+**Fix `[Coop] CoopSoundClock`** (default = `CoopScriptClock`, commit `aa9949c`):
+* the call `server.dll 0x2a1fc` (`e8 0a fd ff ff`) goes to the proxy;
+* the proxy forwards `min(engine dt, unpaid wall time)` to `0x29f0b`, with its own instance of
+  the script-clock governor (unit-tested arithmetic);
+* only server-side sound timers change. Scripts keep their own governor, and engine game time,
+  physics and AI are untouched.
+
+| Guard | Behaviour |
+| --- | --- |
+| `server.dll` hash `83b7bce8…` (Europe/Germany/Italy profile) and the original 5 bytes | Required. Otherwise the site stays original and the log says why (never fatal) |
+| USA `server.dll` (`93178237…`) | Not supported: no fixture to verify the site |
+| `CoopSoundClock=0`, no session, `Enabled=0` | Site left original |
+
+**Evidence:**
+
+| Evidence | Status |
+| --- | --- |
+| Emulator, compiled DLL on stock `server.dll`: 44.69 s timer, 40 ms frames credited 50 ms | Expires after **44 760 ms** of wall time governed (stock 35 750). Site original in every disabled mode |
+| Native server, `smoke3` (port 42990), DLL `1b8816cb…` | `sound clock hook installed (server.dll 2a1fc -> 29f0b)`; Coop, Hold, Normal and PassThrough smoke PASS. In Normal and PassThrough the hook is not installed |
+| Full narration on the desktop and laptop | **NOT TESTED.** Two-PC test in [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md) |
+
+With `TraceTiming=1` the intro also logs
+`sound-clock frames=… engine_ms=… sound_ms=… wall_ms=… governor=on`.
+
+### F. Enemy health bars in co-op
+
+**Live report:** enemy health bars never appear when enemies take damage in co-op.
+
+**Root cause: a missing show-event, not missing health data or a HUD problem** (confirmed by
+disassembly):
+
+| Step | Code | Finding |
+| --- | --- | --- |
+| Gate | `object.lto 0xf8fe0` | `return [shell+0x1d0] == 0` (single player). Its only four callers are the enemy bar manager |
+| Update (every frame from `0xffbab`) | `0xea6d0`, gate call `0xea6d2` | Ages and expires entries, then calls Send. In multiplayer it returns at the gate |
+| OnDamage (69 AI/monster call sites) | `0xea7c0`, gate `0xea7c3` | Records the monster key, style, name and health/max from the server's own values in the global 10-entry table (`0x101642d8`) |
+| Remove on death (28 call sites) | `0xeaa10`, gate at its first instruction | Clears the entry |
+| Send (only from Update `0xea783`) | `0xeab10`, gate `0xeab11` | Writes the table and calls vtbl `+0xc4` with ID `0x56`, client 0 (all clients) and flag `0x80` (guaranteed) |
+| Client | cshell `0xcb998` → `0xb8c80` (`MID_MONSTER_HEALTH_BAR_DATA 0x56`), reset `0x57` → `0xb8960` | No multiplayer test in the handler, the draw (`0xb8dc0` via `0xcdb48`) or the per-frame fade. The font is created in OnEnterWorld for both modes |
+
+So in multiplayer the server never fills or sends the table. The stock client already accepts
+and draws the message with its original geometry. KPCFix only rescales that same draw.
+
+**Fix `[Coop] CoopHealthBars`** (default 1 in a session):
+* the four gate calls go to session predicates that answer "proceed";
+* Send is limited to **10 Hz**. In single player it runs every frame; on a dedicated server
+  (up to 125 frames/s) that would be a guaranteed broadcast storm;
+* no client change. Player health uses other messages and is not touched;
+* everyone sees the bars of any monster anyone damages, because the table is global, not per
+  player;
+* a late joiner gets the full table within 100 ms;
+* bars clear through the original Remove on death, or by the original timeout.
+
+**Limits:**
+* The `DamageBars` console variable is the dedicated server's (missing, so 0 = all bars). A
+  client's own setting has no effect.
+* Stock quirk: the Remove loop skips the last of the 10 slots, which then expires by timeout.
+* Bar timeouts age with engine dt (≈1.25× fast: a 5 s bar lasts about 4 s).
+
+| Evidence | Status |
+| --- | --- |
+| Emulator: the four sites, gate results, Send at 0/50/49/1/100/250 ms gives 1,0,0,1,1,1, sites original when disabled or outside a session | PASS |
+| Native server: hooks installed with the stock `object.lto`, server runs and quits cleanly | PASS (no clients) |
+| Bars visible and consistent on both clients | **NOT TESTED** |
+
+### G. Enemies missing after the R1M3A window smash (`spawn6`)
+
+**Live report:** the window smash (47.8 s) happened, but the enemies from
+`47.9 trigger_generic spawn6` never appeared on either client.
+
+**Root cause (confirmed by disassembly and world data):**
+* `trigger_generic` (parser `0xbf390`, execute `0xbf520` → `0x300a0`) looks the name up in the
+  object group table (`[0x10164264]`). For each member it sends message `0x27` with the head
+  of player list 0 as activator. If the group does not exist, it silently does nothing.
+* In `R1M3A.DAT`, group `spawn6` is three `CMonsterSpawner` objects, all with
+  `AttackActivator=1` and `Retrigger=0`:
+
+  | Spawner | Spawns | MiscFlags |
+  | --- | --- | --- |
+  | `CMonsterSpawner7` | 10 × CHeadless | 6 (Normal + Hard) |
+  | `CMonsterSpawner41` | 5 × CHeadless | 1 (Easy) |
+  | `CMonsterSpawner35` | 3 × CGasbag | 6 (`SpawnOutOfView=1`) |
+
+* `CMonsterSpawner::ReadProp` (`0x93a80`) does `or al,0x10` (**forced "not in multiplayer"**,
+  `0x93c5d`) before the shared filter `0xf9000(skill, flags)` (call `0x93c65`).
+  * `0xf9000` returns 0 in multiplayer whenever bit `0x10` is set.
+  * The object is then marked not-to-create (`0x93c71`–`0x93c7b`).
+  * So **no `CMonsterSpawner` exists in multiplayer**, and group `spawn6` is empty.
+* Placed monsters and `CSpawner` use the authored flags (`0xd4b44`), which is why R1M2B still
+  has enemies. The trigger, spawn and AI code after creation has no game-type gate:
+  * `0x27` → `0xd4fe0` → Activate `0xd5490`;
+  * Update `0x93cb0` → `0xd4ce0` CreateObject;
+  * `AttackActivator` → `0x93e00`.
+
+**Fix `[Coop] CoopSpawners`** (default 1 in a session):
+* the two bytes `0c 10` at `0x93c5d` are NOPed, so the authored MiscFlags pass to `0xf9000`;
+* difficulty and a designer's own `0x10` are still honoured;
+* creation happens once, on the server, at world load. The monsters replicate like any placed
+  monster, and nothing runs per client;
+* this restores the single-player monster spawners on **every** route world (R1M2B/R1M2C get
+  them too), including `bosspawn`/`fatladyboss` groups. `0` restores stock multiplayer.
+
+**Difficulty:**
+* The native server reports `skill=2` (Sleepless, the Normal bit).
+* At that skill, spawn6 creates `CMonsterSpawner7` (10 CHeadless) and `CMonsterSpawner35`
+  (3 CGasbag); the Easy-only `CMonsterSpawner41` does not exist.
+* Optional `[Coop] CoopSkill=0…4` writes the original variable `0x1015b678` before every world
+  load. It uses the stock skill command's names: 0 Lullaby, 1 Daydream, 2 Sleepless,
+  3 Cold Sweat, 4 Nightmare.
+* Absent = unchanged.
+
+**Risks to observe:**
+* `disable_ai` (`0xc28a0`) and `player invulnerable` return early in multiplayer. Monsters
+  spawned at 47.9 s may therefore act in the last ~3.8 s of the letterbox while players have
+  no input and are not invulnerable.
+* `AttackActivator` targets the most recently joined player (the head of player list 0).
+* Reconnect does not re-trigger anything: the script runs once per epoch. `Retrigger=0` means
+  a second trigger would *deactivate* an active spawner, which the abort-only ending script
+  could do.
+
+| Evidence | Status |
+| --- | --- |
+| Emulator: NOP present only in sessions with `CoopSpawners=1`; `TraceSpawners` hook runs the real `0xf9000`: (skill 0, flags 1) → 1, (0,6) → 0, (2,6) → 1, (0,0x11) → 0, (4,4) → 1 | PASS |
+| Native server, `TraceSpawners=1`, skill 2 | filter calls per world: R1M2B 39 accepted / 12 rejected, R1M2C 41/7, R1M3A 42/15. In the 64 logged decisions every rejection is Easy-only (flags 1) or Hard-only (flags 4). The server keeps running and quits cleanly (exit 0) |
+| spawn6 enemies appear once, visible and fighting on both clients | **NOT TESTED** (needs players: the trigger needs an activator) |
+
+### H. Stock scoreboard from `!start` until the cinematic (`CoopStartScoreboard`)
+
+**Request:** show the original multiplayer scoreboard to every player from the host's
+`!start`, keep it up while the map loads and during the intro barrier, and close it
+automatically when the R1M3A cinematic begins. There must be no click gate, and no scoreboard
+on natural exits.
+
+**Client evidence** (cshell `703813a4…`, confirmed by disassembly):
+
+| Message / code | Behaviour |
+| --- | --- |
+| `0x48` MID_MULTI_INTERMISSION → `0xcdd50` | No payload. In multiplayer: state 7, screen 2 (scoreboard). No client timer and no click handling (key handler `0xabd00` returns 1; fire/use `0xcd3b0` is an empty `ret`). The 3 s + fire/use gate is purely the server's native end-level (`0x100760`/`0x1007c0`), which is **not used** |
+| `0x46` MID_CHANGING_LEVELS | State 5. The renderer (`0xcdb57`–`0xcdb6f`) does not draw screen 2 in state 5, so **the scoreboard cannot be seen while the client changes world** |
+| Re-entry: `0x1a` and `0x69` MID_CAN_RENDER (sent by the server's client-enter code) | Either closes screen 2 (`0xcb2d8`, `0xcbba6`) |
+| `0x69` → `0xcbb86` | No payload. Closes screen 2 and returns to state 1 (`0xc6f30`) |
+| Showing `0x48` twice without a close in between | Loses the saved HUD flag. The implementation pairs every show with one close |
+
+**Sequence** (pure policy `coop_scoreboard.h`, unit-tested):
+1. At `!start`, send `0x48` to each present member. Hold the world change for 1 s, then use the
+   usual pending-NextLevel flag (`+0x1ae9`), still without `0x100760`.
+2. NextLevel: each client's stock re-entry closes it (state 5 shows a blank/loading screen
+   meanwhile; client limitation).
+3. In a world whose intro is armed, send `0x48` again to each member 250 ms after it spawns,
+   including late joiners during the barrier. Members spawn in sequence, so each client may
+   show the new world for a moment between its re-entry and this show.
+4. When the barrier releases, send `0x69` to every shown member **before** the script player
+   (`0xc5340`) is called. The camera/letterbox sequence therefore starts with the screen
+   closed and the original input policy.
+5. Any other outcome closes it:
+   * a world without an intro (stock re-entry);
+   * change failed or timed out (`0x69`);
+   * barrier timeout (the intro still starts);
+   * intro failure;
+   * a 45 s failsafe.
+
+   A member that left is forgotten without sending to a stale handle. Natural exits never show
+   it.
+
+**Not solved server-side:** keeping it **visible during** the blocking world load. A client
+patch of cshell `0xcdb6f` (`32 c0` → `b0 01`, draw screen 2 also in state 5) is the
+identified candidate. It is not implemented: it is untested and edition-specific (three shell
+profiles).
+
+| Evidence | Status |
+| --- | --- |
+| `test_coop_scoreboard.c` (64/32-bit): intro flow, no-intro world, change failed/timeout, barrier timeout, failsafe, disconnect + late join into the same slot, no use on natural exits | PASS |
+| Emulator, compiled DLL: `!start` sends `0x48` to both clients, change held, shown again after each spawn, `0x69` to both before `c5340`; nothing on natural exits | PASS |
+| What the players see | **NOT TESTED** |
 
 ### Client-side evidence (no code change)
 * In the client console, `c_DebugMessages 1` makes the stock client print
@@ -600,6 +838,9 @@ Neither is needed to explain the observed cut-off.
 * Single-player level scripts (`CS2START.SCR`), cinematic events and AI scripting may not run
   in multiplayer. Enemies, doors and objectives may differ from single player. This is to be
   observed in step 4.
+* With `CoopSpawners=1` (default in a session) every route world also creates its authored
+  monster spawners. That is single-player content, so there are more enemies than in the
+  earlier co-op tests. `disable_ai` and `player invulnerable` remain gated off in multiplayer.
 * The respawn location after death is the native one, the level start, and is not separated.
 * Overlapping spawns can occur on R1M2C (no telefrag, possible temporary stuck).
 * Only one server profile was emulated (Europe-family `server.dll`). The object hooks depend
