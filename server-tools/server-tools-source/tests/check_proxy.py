@@ -270,10 +270,10 @@ def coop_scenario():
   write(vt+off,code+off);stubs[code+off]=tstub(pop,fn)
  stubs[obj+0x100720]=thiscall_stub(frames,0)
  event=base+0xa000
- def music_world(song,intensity=1,transition=2):
+ def music_world(song,intensity=1,transition=2,play=0):
   # Fake music event as built by bad50 (fields verified in baa90), then the
   # hooked WorldProperties call site 10494b.
-  u.mem_write(event+0x108,song.encode()+b'\0');u.mem_write(event+0x188,bytes([1,intensity,0xff,transition,0]))
+  u.mem_write(event+0x108,song.encode()+b'\0');u.mem_write(event+0x188,bytes([play,intensity,0xff,transition,0]))   # real worlds: no 'play' token, so +0x188=0
   stubs[obj+0xbad50]=tstub(0,lambda a:event)
   call_regs(target[0x10494b],[obj+0x14c06c,3,strings+0x900],{},0)
  def frame(ms=1600):
@@ -319,9 +319,9 @@ def coop_scenario():
  assert changes()==3 and read(obj+0x16da88)==1 and any('Exit reached -> R1M3A' in m for m in said[n:]),said[n:]
  exit_trigger('worlds/realm1/r1m3a',activator=0xa1);assert changes()==3
  next_level();assert read(obj+0x16da88)==2
- if music_on:n=len(msgs);music_world('song1')
+ if music_on:n=len(msgs);music_world('song1',intensity=0xff,play=1)   # play flag, no intensity: PLAY_STRING
  spawn(alice);assert any('R1M3A started (epoch 3)' in m for m in said),said
- if music_on:frame();assert msgs[n:]==start_seq(0x111,'song1'),'R1M3A song1 only to the remaining player'
+ if music_on:frame();assert msgs[n:]==[[0x111,0x4a,'song1'],[0x111,0x51,2],[0x111,0x4b,'song1']],'R1M3A song1 only to the remaining player'
  n=len(said)
  for i in range(4):exit_trigger('worlds/realm1/r1m3b',activator=0xa1)
  assert changes()==3 and sum('outside the MVP route' in m for m in said[n:])==1,said[n:]
@@ -340,7 +340,7 @@ def coop_scenario():
  if music_on:
   assert 'effective CoopMusic=1' in text
   assert 'music-send client=273 name=Alice song=song5 intensity=1 transition=2 sent' in text
-  assert 'music-send client=273 name=Alice song=song1 intensity=1 transition=2 sent' in text
+  assert 'music-send client=273 name=Alice song=song1 intensity=255 transition=2 sent' in text
  else:
   assert 'effective CoopMusic=0' in text and 'music-send' not in text and not msgs
  if '--trace-music' in sys.argv:
