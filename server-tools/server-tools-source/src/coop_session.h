@@ -26,6 +26,7 @@
  * R1M2C a golden-mirror exit object reported NextWorld realm1/r1m3a (refused
  * by the earlier build). A natural R1M2C -> R1M3A change is not yet observed. */
 #include "coop_campaign.h"
+#define COOP_INTRO_SETTLE_MS 3000u    /* default intro settle after the last participant spawned */
 #define COOP_TARGET_LOBBY 0xffffu   /* CoopResult.target_pos: return to the lobby world */
 #define COOP_TRANSITION_TIMEOUT_MS 30000u
 #define COOP_LOAD_GRACE_MS 90000u
@@ -85,6 +86,7 @@ typedef struct {
  unsigned int completed;            /* routes completed in this server run */
  char world_label[16];              /* loaded world, e.g. R1M2B */
  char lobby_world[COOP_WORLD_MAX];  /* normalised lobby world or empty = route start */
+ unsigned int intro_settle_ms;      /* barrier settle after the last spawn (default 3000) */
 } CoopSession;
 
 typedef struct {
@@ -233,6 +235,7 @@ static void coop_session_init(CoopSession *s,unsigned int min_players,unsigned i
  s->min_players=min_players;s->max_players=max_players;
  s->phase=COOP_PHASE_LOBBY;s->generation=1;s->host=-1;
  s->route=coop_mvp_worlds;s->route_len=COOP_MVP_LEN;s->sel_mode=COOP_SEL_MVP;
+ s->intro_settle_ms=COOP_INTRO_SETTLE_MS;
 }
 static int coop_find_client(const CoopSession *s,unsigned int client){
  unsigned int i;
@@ -639,7 +642,6 @@ static void coop_session_world_loaded(CoopSession *s,const char *world){
  * player. The session instead plays it once, server-side, when every present
  * member has entered the new world; the script's camera, letterbox, subtitle
  * and input events are broadcast to all clients by the original code. */
-#define COOP_INTRO_SETTLE_MS 3000u    /* after the last participant spawned */
 #define COOP_INTRO_BARRIER_MS 30000u  /* start anyway once one player is in */
 #define COOP_INTRO_MAX_MS 120000u     /* release clients if the script overruns */
 /* Proxy: this epoch's world has a playable intro (call after world_loaded). */
@@ -665,7 +667,7 @@ static int coop_session_intro_tick(CoopSession *s,unsigned int now,CoopResult *r
   if(m->spawned&&m->seen_epoch==s->epoch){ready++;if(!last||(int)(m->spawn_ms-last)>0)last=m->spawn_ms;}
  }
  if(!ready)return 0;   /* a zero-player world never consumes the intro */
- if(!(ready==present&&(unsigned int)(now-last)>=COOP_INTRO_SETTLE_MS)&&
+ if(!(ready==present&&(unsigned int)(now-last)>=s->intro_settle_ms)&&
     (unsigned int)(now-s->epoch_ms)<COOP_INTRO_BARRIER_MS)return 0;
  s->phase=COOP_PHASE_INTRO_RUNNING;s->intro_ms=now;s->seq++;
  {unsigned int n=0;r->action=COOP_ACT_INTRO_START;r->msg[0]=0;

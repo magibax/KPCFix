@@ -769,6 +769,7 @@ static int coop_start_state;   /* 0 unset, 1 accepted, 2 rejected */
  * selection (coop_campaign.h). [Coop] CoopLobbyWorld: world for the lobby
  * after completion or !abort (empty = first world of the selection). */
 static int coop_campaign;
+static U32 coop_intro_settle_ms=COOP_INTRO_SETTLE_MS;
 static char coop_lobby_world[COOP_WORLD_MAX];
 /* Bounded, sequenced log: "[KPCFix Co-op] g=1 e=2 seq=7 PLAYING event detail" */
 static void coop_log(const char *event,const char *detail){
@@ -1557,6 +1558,7 @@ static int apply_object(HMODULE module){
   if(coop_campaign)coop_session_enable_campaign(&coop_state);
   {U32 k;for(k=0;coop_lobby_world[k]&&k+1<COOP_WORLD_MAX;k++)coop_state.lobby_world[k]=coop_lobby_world[k];coop_state.lobby_world[k]=0;}
   coop_state.test_label=coop_start_label;coop_resolve_test_start(&coop_state);
+  coop_state.intro_settle_ms=coop_intro_settle_ms;
   coop_apply_skill();
  }
  for(i=0;i<OPTIONAL_SITES;i++)if(site[i].enabled)copy(b+site[i].rva,site[i].hooked,site[i].size);
@@ -1663,7 +1665,15 @@ static void initialize(void){
  coop_music=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopMusic",1,ini_path)!=0;
  coop_intro=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopIntro",0,ini_path)!=0;
  coop_script_clock=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopScriptClock",coop_intro,ini_path)!=0;
- coop_start_scoreboard=coop_session_enabled&&!coop_intermission&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopStartScoreboard",1,ini_path)!=0;
+ coop_campaign=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopCampaign",0,ini_path)!=0;
+ /* Campaign loads show the original loading picture on KPCFix clients
+  * (client [Multiplayer] CampaignLoadingArt), so the start scoreboard is off
+  * by default there; the MVP route keeps it on. */
+ coop_start_scoreboard=coop_session_enabled&&!coop_intermission&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopStartScoreboard",coop_campaign?0:1,ini_path)!=0;
+ /* Intro settle after the last spawn: the KPCFix client keeps the loading
+  * picture for at least 5 s, so campaign mode waits 6 s by default. */
+ coop_intro_settle_ms=GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopIntroSettleMs",coop_campaign?6000:COOP_INTRO_SETTLE_MS,ini_path);
+ if(coop_intro_settle_ms>30000u)coop_intro_settle_ms=30000u;
  coop_spawners=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSpawners",1,ini_path)!=0;
  coop_trace_spawners=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawners",0,ini_path)!=0;
  coop_skill=-1;
@@ -1673,7 +1683,6 @@ static void initialize(void){
  /* Test-only start world: accepted only if it names a route world exactly
   * (case-insensitive ASCII); anything else is ignored (start stays R1M2B). */
  coop_start_label=0;coop_start_state=0;
- coop_campaign=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopCampaign",0,ini_path)!=0;
  coop_intro_all=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopIntroAll",0,ini_path)!=0;
  coop_lobby_world[0]=0;
  if(coop_session_enabled){
@@ -1747,6 +1756,7 @@ static void initialize(void){
    coop_text(line,&m,coop_campaign?"[KPCFix Co-op] effective CoopCampaign=1 (WORLDORDER graph, 48 worlds; default selection full campaign from R1M0)":
                                    "[KPCFix Co-op] effective CoopCampaign=0 (MVP route R1M2B>R1M2C>R1M3A)",sizeof line);log_file(line);
    if(coop_lobby_world[0]){m=0;coop_text(line,&m,"[KPCFix Co-op] effective CoopLobbyWorld=",sizeof line);coop_text(line,&m,coop_lobby_world,sizeof line);log_file(line);}
+   if(coop_intro&&coop_intro_settle_ms!=COOP_INTRO_SETTLE_MS){m=0;coop_text(line,&m,"[KPCFix Co-op] effective CoopIntroSettleMs=",sizeof line);coop_dec(line,&m,coop_intro_settle_ms,sizeof line);log_file(line);}
    if(coop_intro_all)log_file("[KPCFix Co-op] effective CoopIntroAll=1 (TEST: every route world's starting_cinematic may play)");
   }
   log_file(model_registry_enabled?

@@ -20,6 +20,10 @@ def main():
     detours=[(rva(at),len(bytes.fromhex(before))) for at,before,_ in SITES]
     detours.extend((rva(at),size) for at,size in (
         (0xbcac2,7),(0xdb800,6),(0x2508b,5),(0x24065,6),(0x2456c,6),(0x240ad,6)))
+    from fixture_layout import REGION
+    if REGION in ('Europe','USA'):
+        # Campaign loading art call redirects (Europe/USA shell profile only).
+        detours.extend(((0xcbba6,5),(0xcdb92,5)))
     asm=subprocess.check_output(['objdump','-dw','-Mintel',str(path)],text=True)
     boundaries=set()
     transfers=[]
@@ -36,6 +40,23 @@ def main():
     for at,size in detours:
         assert at in boundaries and at+size in boundaries,(hex(at),size)
         assert not any(at<dest<at+size for _,dest in transfers),(hex(at),size)
+    # client.exe (shared by every edition): the 14-byte server-timeout window.
+    client=args.fixtures/'client.exe'
+    casm=subprocess.check_output(['objdump','-dw','-Mintel',str(client)],text=True)
+    cbound=set();ctransfers=[]
+    for line in casm.splitlines():
+        fields=line.split('\t')
+        if len(fields)<3:continue
+        address=re.fullmatch(r'\s*([a-f0-9]+):',fields[0])
+        if not address:continue
+        start=int(address[1],16)-0x1ca0000
+        cbound.add(start)
+        branch=re.match(r'\s*(?:j[a-z]+|loop[a-z]*|call)\s+(?:0x)?([a-f0-9]+)(?:\s|$)',fields[-1])
+        if branch:ctransfers.append((start,int(branch[1],16)-0x1ca0000))
+    for at,size in ((0x4b4fc,14),):
+        assert at in cbound and at+size in cbound,(hex(at),size)
+        assert not any(at<dest<at+size for _,dest in ctransfers),(hex(at),size)
+        detours.append((at,size))
     args.output.write_text(json.dumps({'status':'pass','region':args.fixtures.name,
         'cshell_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
         'detours':len(detours),'direct_transfers_examined':len(transfers),
