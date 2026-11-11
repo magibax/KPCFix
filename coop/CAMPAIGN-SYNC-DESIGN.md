@@ -167,8 +167,15 @@ rather than replaying scripts per client.
 **Live result (2026-11-11, desktop + laptop, DLL `13ca1d0a…`):**
 * The original R1M3A camera presentation (pans, letterbox, scripted events) worked on both
   clients, and the two matched each other.
-* **Open:** the narration (`streamsound player … local`) trails the subtitles by about 2 s on
-  both clients, and the window smash cuts it off. Root cause unknown.
+* The narration (`streamsound player … local`) trailed the subtitles on both clients, and the
+  window smash cut it off.
+  * **Root cause, confirmed statically and measured natively:** scripted timers run on server
+    *engine frame time*, not wall-clock time (question 4 above). The stock dedicated server
+    credits every frame at least 10 ms, which inflates script time whenever frames come faster
+    than 100 Hz.
+  * `CoopScriptClock` holds the script clock to wall time; client validation is still
+    outstanding. See
+    [COOP-MVP.md](COOP-MVP.md#d-script-clock-cadence-narration-versus-subtitles).
 * **Still open:** the missing invulnerability (gated off in multiplayer), the join-during-
   cinematic policy, and spawn-based rather than acknowledged client readiness.
 * The investigation order and the resume steps are in

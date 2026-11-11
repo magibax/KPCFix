@@ -9,8 +9,12 @@
     game; not beat-synchronised;
   * the original R1M3A opening cinematic (`CoopIntro=1`, DLL `13ca1d0a…`), with the two
     machines matching each other.
-* **Open bug:** the narration trails the subtitles by about 2 s on both clients. Resume from
-  [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md).
+* **Narration cadence:** on both clients the narration trailed the subtitles and was cut off by
+  the window smash.
+  * Root cause found: the server's script clock runs on inflated engine frame time
+    ([section D](#d-script-clock-cadence-narration-versus-subtitles)).
+  * Fix `CoopScriptClock` (DLL `e86bb352…`) is emulator- and server-tested. **Client
+    validation is outstanding.** Resume from [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md).
 * **Not yet tested:** two-player combat, death, respawn and reconnect regression (deferred).
 
 Experimental: this code is only on `feature/coop-campaign` and its child branches. It is not
@@ -19,7 +23,7 @@ part of the stable Server Tools R3 on `main`. Every switch defaults to off.
 | Feature | State | Evidence |
 | --- | --- | --- |
 | Lobby/session state machine (ready, host, capacity, presence, epochs, debounce, route, timeouts) | IMPLEMENTED, CI-TESTED | `server-tools-source/tests/test_coop_session.c` (64- and 32-bit, `-Werror`) |
-| Proxy hooks installed only on the hash-verified original object image, original bytes checked at all 8 sites | IMPLEMENTED, EMULATOR-TESTED (private), WINDOWS-TESTED (server) | `check_proxy.py <EU fixtures> --coop-session`; [server smoke evidence](#native-windows-server-smoke-evidence-no-clients) |
+| Proxy hooks installed only on the hash-verified original object image, original bytes checked at every optional site (11 in `e86bb352`) | IMPLEMENTED, EMULATOR-TESTED (private), WINDOWS-TESTED (server) | `check_proxy.py <EU fixtures> --coop-session`; [server smoke evidence](#native-windows-server-smoke-evidence-no-clients) |
 | Chat lobby: join announce, `!coop`, `!ready`, host `!start` | **WINDOWS-TESTED, 1 client** (`262b6ead`) | [live client evidence](#live-windows-client-evidence) |
 | No telefrag between session players (both spawn paths) | IMPLEMENTED, EMULATOR-TESTED; live: `telefrag=skipped` logged for 1 client | a second player is needed to observe the protection itself |
 | R1M2B separated placements (3 fixed positions) with slot reclamation | IMPLEMENTED; placements WINDOWS-TESTED earlier (trial build); slot 0 reused after a live rejoin | `SPAWN-ENGINE-TRACE.md` |
@@ -29,7 +33,7 @@ part of the stable Server Tools R3 on `main`. Every switch defaults to off.
 | Natural exits → next route world: R1M2B hallway → R1M2C; R1M2C golden mirror → R1M3A | **WINDOWS-TESTED, 1 client** (`0018a3f8`), no `!next` | one change per epoch; the off-route R1M3B exit was refused with a single chat reply |
 | Intermission scoreboard and next-map music during transitions | **UNDER INVESTIGATION** | [transition intermission and music](#transition-intermission-and-music-investigation) |
 | Map changes at the end of a scripted sequence | **UNVERIFIED** | no direct level-change call from script code in `object.lto`; see [transition mechanisms](#three-transition-mechanisms) |
-| Intro cinematics | **NOT SUPPORTED** (skipped) | native multiplayer did not start the authored intro; it is not forced |
+| Intro cinematics | **EXPERIMENTAL, R1M3A only** (`CoopIntro=1`; default: skipped) | stock multiplayer never plays the authored intro. With `CoopIntro=1` the R1M3A intro was user-tested on two clients ([section C](#c-synchronised-original-intro-r1m3a-proof-of-concept)); the narration cadence fix awaits client validation ([section D](#d-script-clock-cadence-narration-versus-subtitles)) |
 | Generic safe spawning on other maps (allocator) | **DISABLED** | full-body clearance is not proven; see `GENERAL-ALLOCATOR.md` |
 | Install / idempotent re-run / in-place upgrade (`7112b5ed` → `262b6ead` → `0018a3f8`) / uninstall | WINDOWS-TESTED (scripts, disposable copy) | original `server.dll` `83b7bce8…` preserved; `object.lto` `3a03f879…` unchanged throughout |
 | Launcher worker co-op validation (wrong start map, maplist without R1M2C/R1M3A) | WINDOWS-TESTED (scripts only; R1M3A check added in v2) | rejected after the real version checks, before any server start |
@@ -484,8 +488,8 @@ intensity 3` at 47.7 s, triggers `spawn6`, briefly disables AI, and releases at 
 * **Invulnerability:** players are input-locked but not invulnerable. The original
   `player invulnerable` line is gated off in multiplayer.
 * **Voice-over:** `streamsound player … local` targets "player". In the two-client test both
-  machines heard the narration, but it **trails the subtitles by about 2 s** and is cut off
-  by the window smash. Cause unknown; see [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md).
+  machines heard the narration, but it **trailed the subtitles** and was cut off by the
+  window smash. Root cause and fix: [section D](#d-script-clock-cadence-narration-versus-subtitles).
 
 | Evidence | Status |
 | --- | --- |
@@ -493,7 +497,82 @@ intensity 3` at 47.7 s, triggers `spawn6`, briefly disables AI, and releases at 
 | Compiled DLL against stock `object.lto`: lookup snapshot inside NextLevel, arm, barrier, single `c5340` call, `!next` refused, completion via `c55b0`, overrun release `c5a10(1)`/`c59a0(0)`, invalid test start | **Emulated** (script player and helpers are recording stubs) |
 | Native server: DLL loads, intro and test-start settings effective, lookup hook active, R1M2B/R1M3A load, server keeps running | **Windows, no client** (3 runs in a disposable copy, then the standard Coop/Normal/PassThrough smoke in `smoke1`). One earlier run in the second copy exited silently during a world start. That copy's port had been reset to 42972 while another test server already used it, so a port collision is the probable cause: no crash record, and it did not recur on a free port |
 | Camera pan, letterbox, input lock and subtitles on clients; two-client presentation | **WINDOWS-TESTED by the user (2026-11-11, desktop + laptop, DLL `13ca1d0a…`):** camera pans, letterbox, scripted events and coordination worked, and the two machines matched each other (by eye, not measured). Server log: `intro-start` t=356469 ms, `intro-finished` t=399016 ms. (This row read "NOT TESTED" before that run) |
-| Narration versus subtitles and script events | **OPEN BUG:** the voice-over trails the subtitles by about 2 s on both clients, and the window smash at 47.8 s cuts off narration. Root cause unknown. The server ran the 53 s script in 42.5 s of wall clock (start to "finished"); this is recorded as a lead only |
+| Narration versus subtitles and script events (DLL `13ca1d0a…`) | **BUG, user-observed:** the voice-over trailed the subtitles on both clients, and the window smash at 47.8 s cut off narration. The server ran the ≥ 53 s script in 42.547 s of wall clock (start to "finished"). Root cause in [section D](#d-script-clock-cadence-narration-versus-subtitles) |
+
+### D. Script clock cadence (narration versus subtitles)
+
+**Symptom (user-observed, DLL `13ca1d0a…`, desktop + laptop):** the narration trailed the
+subtitles on both machines by about the same amount, and the scripted window smash cut it off.
+
+**Authored data** (`PSYCHO.REZ`, read-only): `r1m3-intro.wav` is PCM mono 22 050 Hz, **44.19 s**.
+The script starts it at 1.0 s (`streamsound player … local`). At real-time rate the voice ends
+at script time 45.19 s, which is 2.6 s *before* `47.8 window_break`. In the authored timing the
+smash therefore never interrupts the narration.
+
+**Root cause (confirmed by static analysis; stock `dedicated.exe` `b940fd6d…`, `server.dll` `83b7bce8…`, `object.lto` `3a03f879…`):**
+
+| Step | Code | Finding |
+| --- | --- | --- |
+| Host loop | `dedicated.exe` `0x401c7b`–`0x401c94` | Busy loop; runs a server frame (`0x403ad0` → `IServerMgr` vtable `+0x50` = `server.dll 0x2358c`) only after `timeGetTime` advanced **≥ 8 ms** |
+| Server time | `server.dll 0x2ed76` | `time = (timeGetTime() − base) × 0.001` |
+| Frame time | `server.dll 0x2a05f`, `0x2a19c`–`0x2a1d0` | `elapsed = time − last`, then **clamped to [0.01, 0.2] s**. That dt drives one game frame and the game time `+0x20c` |
+| Game update | `object.lto 0xffb70` | Caps dt at 0.2 s; passes it to the script updater `0xc5630` (call at `0xffba5`) and to `0xea6d0` |
+| Script clock | `0xc6260` | `script_time += dt`; dispatches every event whose authored time ≤ script time |
+| Completion | `0xc6380` | Finished only when every event has been dispatched **and** no running event is left. `intro-finished` cannot happen before script time 53.0 |
+| Running events | `camera_path` update `0xb3230`, fog fade `0xc2b60` | Advanced by the same dt, so camera paths, fades and event cues all share the script clock |
+
+Every frame is credited at least 10 ms. When the host's timer resolution allows frames faster
+than 100 Hz (8 ms frames: up to 10/8 = **1.25×**), game and script time outrun the wall clock.
+Narration is streamed by each client in real time, so subtitles, camera cuts and the smash run
+ahead of it. At 1.25× the smash comes 37.4 s into the 44.2 s clip, cutting about 6.8 s. The
+subtitle lead grows by 0.2 s per script second (about 1.5 s at the 8.5 s subtitle and 7.6 s at
+the 38.9 s subtitle). That growth is a **prediction**: the user reported "about 2 s", and no
+per-subtitle client timing has been recorded.
+
+**Native measurements** (empty server, `smoke1`, DLL `e86bb352…`, read-only observer
+`TraceTiming=1`, `CoopScriptClock=0`; `clock-calibration` = first 10 s of frames):
+
+| Host timer state (`NtQueryTimerResolution`) | Frames / 10 s | Engine ms per 10 000 ms wall |
+| --- | --- | --- |
+| 15.625 ms (nothing raising it) | 703 | 10 215 (1.02×) |
+| 1 ms held by a helper process (as a game client on the same PC would) | 1052 | 11 531 (1.15×) |
+| User's live intro run, client on the server PC (`13ca1d0a`): ≥ 53 s of script in 42.547 s | — | ≥ 1.246× |
+
+The inflation therefore depends on the host's timer state. A repeat under the 1 ms request ran
+698 frames per 10 s (1.02×), so the same request does not always give the same cadence. It is a
+property of the stock dedicated server, not of the co-op code. **Not measured:** stock single
+player (the client hosts its own server; its frame pacing differs), and 60 versus 165 FPS clients.
+
+**Fix (`e86bb352…`): `[Coop] CoopScriptClock`** (default = `CoopIntro`). It adds one guarded
+call site, `0xffba5` (`e8 86 5a fc ff`, original bytes verified). For every frame the scripts
+receive `min(engine dt, wall time not yet given)` (`coop_script_clock.h`, `GetTickCount`):
+* script time never runs ahead of wall time, and never moves in a larger step than the
+  original engine dt;
+* after a hitch, scripts catch up at no more than the original rate (unpaid time is capped at
+  250 ms);
+* only the `0xc5630` argument changes. Engine game time, `0xea6d0`, physics, AI, the intro
+  barrier, run-once execution and all broadcasts are unchanged.
+
+`CoopScriptClock=0` restores the engine dt (for A/B tests). With `TraceTiming=1` the site
+also observes, forwarding dt unchanged when the governor is off. It logs:
+* `clock-calibration` once;
+* during an intro, one `intro-event i=<n> at_ms=<authored> script_ms=<clock> wall_ms=<since start>`
+  line per dispatched script event (at most 128 per intro);
+* `intro-clock frames=… engine_ms=… script_ms=… wall_ms=…` at the end.
+
+| Evidence | Status |
+| --- | --- |
+| Governor arithmetic: 1.25× host gives 8 s per 8 s; slow engine not accelerated; bounded catch-up; coarse ticks; 32-bit wrap | Unit test `test_coop_script_clock.c` (64/32-bit, `-Werror`) |
+| Compiled DLL against stock `object.lto`, with a stand-in for `c5630` that steps the authored R1M3A times exactly as `c6260` does, under 40 ms frames credited 50 ms | **Emulated:** 53 s script = 53 040 ms wall governed, 42 440 ms observed (dt forwarded bit-identically). Narration → smash 46.8 s governed versus 37.4 s observed. Site left original when neither option is set |
+| Native server: DLL loads, `effective CoopScriptClock=1`, hooks installed; governed calibration `engine_ms=10213 script_ms=9993 wall_ms=10000`; Normal and PassThrough smoke PASS | **Windows, no client** |
+| Native Coop smoke (three console `nextlevel`s in quick succession on an empty server) | **Intermittent crash, PRE-EXISTING.** Access violation in `object.lto+0x87c41`, inside the AI "Building path table." routine (`0x87be0`, called from a path-network object's staged update `0x95259`). Crashed 3 of 4 runs with `e86bb352` and 1 of 3 with the previous user-tested `13ca1d0a`, same offset and same failing step (`nextlevel 2`). Not caused by the script clock: there is no code path from `0xc5630` into it. Not yet checked under pass-through |
+| Narration, subtitles and smash on real clients | **NOT TESTED.** Requires the two-PC test in [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md) |
+
+**Hypotheses still open:**
+* client-side stream start latency (the clip may start a little after its broadcast);
+* whether stock single player shows the same inflation at high client frame rates.
+
+Neither is needed to explain the observed cut-off.
 
 ### Client-side evidence (no code change)
 * In the client console, `c_DebugMessages 1` makes the stock client print
