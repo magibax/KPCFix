@@ -371,46 +371,62 @@ broadcast or the click wait. The client sees the same message flow as after a se
 `nextlevel`, which never shows the scoreboard. The change is refused (`change-failed`) if a
 native intermission is already active. `CoopIntermission=1` restores the stock behaviour.
 
-### B. Multiplayer music: absent in stock multiplayer (baseline)
+### B. Multiplayer music: one-time broadcast at world initialisation
 
-* **Confirmed (disassembler scan of every `StartMessage` site):**
-  * `object.lto` **never sends `MID_MUSIC_PLAY` (`0x4e`) or `MID_MUSIC_PLAY_STRING` (`0x4b`)**.
-  * The music messages come from the music controller only:
-    * `0xbad50` sends LOAD/LOAD_STRING. It has a single caller, `WorldProperties` at
-      `0x10494b`, when the world initializes, and broadcasts to the clients connected at
-      that moment.
-    * the music-event method `0xbaa90` sends READY/INTENSITY/TRANSITION/GROOVE/FADEOUT.
-  * An earlier byte-pattern result that listed a `MUSIC_PLAY` sender at `0xce5d2` was a
-    false positive inside a call instruction.
-* **Confirmed (client):**
-  * Every scoreboard close via the `MID_PLAYER_ADDED` auto-close or `OnEnterWorld` calls
-    `0xc6f30(0,…)`. That runs `0x2ad20` → `0x2c090`, which unloads the `menu` music and
-    restores the music state saved when the main menu was last opened (`0xd9bd0`).
-  * With `enterMenu=1`, `0xc6f30` saves that state and plays `menu` (`0x2bff0`).
-* **Hypotheses (not proven):**
-  * clients that join a running world never receive its one-time music load, which would
-    explain the absence of music in ordinary multiplayer;
-  * the one bar after the click comes from the stale-state restore. Whether it is level
-    music or `menu` music is unknown and can only be judged by a listener.
-* No music change is made. Restoring music in co-op needs a per-client, correctly sequenced
-  load/ready request, and the trigger that makes the client start playback is not
-  identified yet.
-* **Diagnostics (build `565dec76…`):** `[Coop] TraceMusic=1` hooks the single call site
-  `0x10494b` (original bytes `e8 00 64 fb ff` verified) and logs
-  `music-world argc=… <tokens> event=created|none` when a world issues its music load.
-  `[Coop] TraceTiming=1` adds `t=<ms since session armed>` to every co-op line. Both are off
-  by default; set them to 0 or delete them to turn them off.
-* **Native Windows evidence (server only, no client):** each world creates its music event
-  **while loading, before `world-loaded`**:
-  ```text
-  t=8563  g=1 e=1 seq=1 LOADING music-world argc=5 song5 intensity 1 transition measure event=created
-  t=10079 g=1 e=1 seq=1 LOBBY world-loaded worlds\realm1\R1M2B
-  t=15610 g=1 e=2 seq=2 LOADING music-world argc=5 song5 intensity 1 transition measure event=created
-  t=21110 g=1 e=3 seq=3 LOADING music-world argc=5 song1 intensity 1 transition measure event=created
-  ```
-  The music load therefore goes out while connected clients are themselves still loading, and
-  a client that joins later never receives it (hypothesis for the missing music; whether the
-  client keeps or plays it needs the `c_DebugMessages 1` trace and a listener).
+**Confirmed by static analysis** (`object.lto` `3a03f879…`):
+* `WorldProperties` passes the world's music property to the parser `0xbad50` (call site
+  `0x10494b`).
+* The parser builds a music event (vtable `0x1011d240`, 0x190 bytes) and broadcasts
+  `MID_MUSIC_LOAD` `0x4d` (song index) or `MID_MUSIC_LOAD_STRING` `0x4a`.
+* `WorldProperties` immediately runs the event's `vtbl+8` = `0xbaa90`, which broadcasts:
+  * `[GROOVE 0x52]`, then `[TRANSITION 0x51]`;
+  * the song (when the name at `+0x108` is set):
+    * with the `play` flag `+0x188`: PLAY `0x4e`/READY `0x4f` by intensity
+      (`0x4e + (intensity set)`), string forms `0x4b`/`0x4c`;
+    * otherwise always READY `0x4f`/`0x4c`;
+  * then `[INTENSITY 0x50]` and `[FADEOUT 0x53]`.
+* Every one of these uses `hClient = NULL` and is sent **once, at world initialisation**.
+* An earlier byte scan found no PLAY sender because its ID is computed. No other code
+  creates these events.
+
+**Live evidence it explains:**
+* A player who joins an already-running server receives none of it: no music.
+* After `!start`, the reloading client receives it while still loading and hears about one
+  bar. That the client's own world switch then stops it is still an inference.
+
+**Fix: `[Coop] CoopMusic=1` (default in sessions; commits `db7649c`, `872de1e`, DLL
+`e17c150f…`):**
+* When `WorldProperties` creates the event, the session snapshots its fields: `+0x108` song,
+  `+0x188` play, `+0x189` intensity, `+0x18a` groove, `+0x18b` transition, `+0x18c` fadeout.
+* Each member is scheduled once per epoch when it spawns.
+* 1.5 s later, a per-frame hook (server shell Update → `0x100720`, call site `0xffbbf`,
+  original `e8 5c 0b 00 00`) sends **that client only** the original sequence in string
+  form: LOAD_STRING, [GROOVE], [TRANSITION], READY/PLAY_STRING, [INTENSITY], [FADEOUT].
+  The engine calls are the same `g_pServerDE` vtable slots the original code uses.
+* What this gives:
+  * a first join into a preloaded world gets music;
+  * a late joiner gets it without restarting anyone else;
+  * respawns don't resend;
+  * a world without a music event sends nothing, so a previous map's track is never resent;
+  * a reconnect is delivered again.
+* `CoopMusic=0` restores the stock behaviour. Nothing changes outside a session.
+
+| Evidence | Status |
+| --- | --- |
+| Snapshot on the real engine (`TraceMusic=1`) | **Windows, no client:** `song=song5 play=0 intensity=1 transition=2` for R1M2B/R1M2C, `song1` for R1M3A |
+| Exact per-client message sequences | **Emulated** (compiled DLL, stock `object.lto`, recorded `StartMessage`/`Write*`/`EndMessage`): first join, second player, map change, world without music, R1M3A, no resend on respawn |
+| Audible, sustained playback | **NOT TESTED.** The emulator does not run `cshell.dll` or DirectMusic |
+
+**Limits and open points:**
+* **Same track for every player, not the same beat.** All players get the same song,
+  transition mode and intensity, but each starts playback when its own delivery arrives
+  (1.5 s after its spawn). Players who change map together start within network delay;
+  a late joiner starts from the beginning of the song.
+* **No adaptive changes in multiplayer.** In single player, level scripts may issue further
+  music events (for example intensity changes). Those scripts do not run in multiplayer,
+  and only the world's default music is delivered.
+* **Possible extra bar.** The stock broadcast still reaches clients that are reloading a
+  world, so the short phrase after `!start` may still be heard before the per-player start.
 
 ### Client-side evidence (no code change)
 * In the client console, `c_DebugMessages 1` makes the stock client print
