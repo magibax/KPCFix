@@ -16,8 +16,11 @@ after changing a switch.
 | `TraceModelRegistry` | 0 | Read-only named WorldModel resource and reciprocal object reference survey; implies clearance sampling |
 | `TraceModelState` | 0 | Read-only raw model type/flags/vector statistics; requires `TraceModelRegistry=1` |
 | `TraceCampaign` | 0 | Opt-in research trace of authored intro and campaign exit paths; not campaign synchronization |
+| `CoopSession` | 0 | Co-op MVP session (kpc-coop/1): chat lobby, host start, no telefrag between players, R1M2B placements, R1M2B → R1M2C change. Written by the launcher co-op checkbox. See [COOP-MVP.md](COOP-MVP.md) |
+| `CoopMinPlayers` | 2 | 1–3 players required before the host can `!start` |
+| `CoopMaxPlayers` | 3 | 1–3 session capacity; keep server `maxclients` at or below |
 
-These are eight `[Coop]` keys, not nine. The ninth INI-related setting
+These are eleven `[Coop]` keys (eight diagnostics plus three session keys). The ninth INI-related setting
 often counted in audits is `[ServerTools] AllowCheats`, a stable
 hosting permission independent of co-op. `[ServerTools] Enabled=1`
 is additionally required for experimental hooks.

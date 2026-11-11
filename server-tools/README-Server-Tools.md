@@ -58,6 +58,10 @@ Source and build/test instructions are in `server-tools-source/README.md`. The s
 
 Server Tools uses its own README, license, checksums, compatibility checker, build list and source directory. Extracting either release over the other does not overwrite those files. Run `Check-KPCVersion.cmd` for the client; the server launcher automatically runs its separate `Check-KPCServerVersion.ps1` checks.
 
+## Unreleased co-op MVP session (experimental)
+
+Development builds include an opt-in chat lobby and a fixed two-map route (R1M2B → R1M2C). Tick **EXPERIMENTAL co-op session** in the launcher; players type `!ready` and the host types `!start`. Nothing in it is Windows-tested yet. See [coop/COOP-MVP.md](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/COOP-MVP.md) for the test protocol and limitations.
+
 ## Unreleased co-op diagnostics and spawn-point instrumentation
 
 This section describes **unreleased development functionality**, not the tagged stable Server Tools R3 release. Development source includes a conditional spawn-position trace and an **opt-in, R1M2B-only three-client spawn trial**. Both hooks are off by default. The trial is not collision-validated and must not be used on public servers.
