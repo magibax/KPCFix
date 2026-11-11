@@ -16,8 +16,8 @@
 - **Only skimmed:** `timing.S`, `ui_hooks.S`, `logging.S`, the region offset table in `profiles.h`, the test harness internals, the spawn analysis tools, and the long co-op research documents. This is not a complete audit of those.
 
 ## 1. Repository health
-- **Client:** the published R4 `dinput.dll`, HEAD and your installed copy are the same file (`3d702051ÔÇª`). The INI defaults in the code match `CONFIGURATION.md`. Every patch checks file hashes and the original bytes first and rolls back on failure.
-- **Server Tools R3:** the published DLL (`8de76e10ÔÇª`) is intact, and setup on HEAD still recognises it for upgrades.
+- **Client:** the published R4 `dinput.dll`, HEAD and your installed copy are the same file (`3d702051…`). The INI defaults in the code match `CONFIGURATION.md`. Every patch checks file hashes and the original bytes first and rolls back on failure.
+- **Server Tools R3:** the published DLL (`8de76e10…`) is intact, and setup on HEAD still recognises it for upgrades.
 - **Co-op:** the engineering is careful (hash gates, guarded memory reads, bounded searches, all off by default). The gaps are in isolation from releases and in evidence, not in unsafe code.
 
 ## 2. Confirmed defects and discrepancies
@@ -96,38 +96,38 @@ L1 drift details:
 | Model registry / type surveys | Diagnostic only | Windows (v6/v7) |
 | v8 spawn-list check; campaign trace | Written | **Not run on Windows** |
 | General spawn allocator | Policy and unit tests only | **Not connected to the game** |
-| Disconnect, reconnect, slot release, world reset | **Not implemented** (slots are keyed by player pointer and never released) | ÔÇö |
-| Second spawn path (`0xf15d0`) | **Not hooked**; respawns there could stack on the anchor | ÔÇö |
-| Campaign scripts, cinematics, level transitions, sync | **Design proposal only** | ÔÇö |
+| Disconnect, reconnect, slot release, world reset | **Not implemented** (slots are keyed by player pointer and never released) | — |
+| Second spawn path (`0xf15d0`) | **Not hooked**; respawns there could stack on the anchor | — |
+| Campaign scripts, cinematics, level transitions, sync | **Design proposal only** | — |
 
 All co-op paths are off by default and gated on exact game hashes. With them off, normal multiplayer only gets extra original-byte checks at the spawn sites, which are harmless. The real risk is H1 (shipping it by accident), not runtime behaviour.
 
 ## 8. Plan for the next session
-- **Phase 0 ÔÇö your decision:** see the question at the end.
-- **Phase 1 ÔÇö no binary changes:**
+- **Phase 0 — your decision:** see the question at the end.
+- **Phase 1 — no binary changes:**
   - Add `.gitattributes` (renormalising must show no changes) and `.gitignore`.
   - Make the documentation fixes.
   - Fix the co-op workflow (pinned container, compare against tracked files).
   - Add the asset-free test jobs to the release workflow.
   - Add a guard so a stable server tag can't contain co-op code, plus a check that duplicated files stay identical.
   - Refresh checksums only for files that actually changed, with the reason in the commit.
-- **Phase 2 ÔÇö restore the stable server (if you choose Option A):**
-  - Rebuild in the pinned container; the DLL should match R3 (`8de76e10ÔÇª`) or have a documented new hash.
+- **Phase 2 — restore the stable server (if you choose Option A):**
+  - Rebuild in the pinned container; the DLL should match R3 (`8de76e10…`) or have a documented new hash.
   - Keep `7112b5ed`, `23dd5de7` and `7ea0dfa4` in the upgrade list so testers can switch back.
   - Run the synthetic checks for both regions and the four private proxy checks.
   - Test a Windows upgrade from v7 to stable, and an uninstall.
-- **Phase 3 ÔÇö behaviour changes (each needs a rebuild, emulator run and Windows test before tagging):**
+- **Phase 3 — behaviour changes (each needs a rebuild, emulator run and Windows test before tagging):**
   - Fix S1 with a new double-load test.
   - Have the launcher add `AllowCheats`, then drop the workaround CI checks.
   - Clean up the stale temp file (S5).
   - Cap the campaign trace log (feature branch).
   - Make the `ui.c` address base-relative.
   - Ship the client fixes together as `kpcfix-1.13-r5` after the four-region emulator run and Windows playtests.
-- **Phase 4 ÔÇö tidy-up:**
+- **Phase 4 — tidy-up:**
   - Replace the accumulated upgrade-hash history with a fixed list.
   - Split the co-op diagnostics out of `proxy.c` on the feature branch.
   - Decide on the unused client helper.
-- **Phase 5 ÔÇö co-op baseline (feature branch):**
+- **Phase 5 — co-op baseline (feature branch):**
   - Rebuild with unique build markers.
   - Run the v8 checks and the campaign trace on Windows, recording the DLL hash each time.
   - Fill in the status table.
