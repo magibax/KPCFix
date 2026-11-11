@@ -94,7 +94,7 @@ New stable changes may be committed to `main` only after pinned-toolchain
 reproduction, package checksum validation and the manual tests above.
 
 All ongoing co-op code, diagnostics, experimental Windows ZIPs and
-co-op research remain on `feature/coop-campaign`. The experimental
+co-op research remain on `coop/mvp-lobby`. The experimental
 workflow uses the same GCC 14.2/binutils 2.44 environment as stable CI,
 and it must compare the rebuilt DLL and manifest with the **tracked**
 version before uploading those tracked files. A synthetic pass never
