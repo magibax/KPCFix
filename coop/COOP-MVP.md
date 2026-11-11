@@ -23,6 +23,11 @@
   * new request, the stock scoreboard from `!start` until the cinematic
     ([section H](#h-stock-scoreboard-from-start-until-the-cinematic-coopstartscoreboard)).
   * Resume from [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md).
+* **Campaign (2026-11-11, later):** the opt-in `CoopCampaign=1` (commit `1524fb6`, DLL
+  `009eacd6…`) replaces the fixed route with the 48-world WORLDORDER graph and host realm
+  selection. It is emulator- and native-server-tested only. See
+  [CAMPAIGN-ARCHITECTURE.md](CAMPAIGN-ARCHITECTURE.md) and
+  [CAMPAIGN-MAP-INVENTORY.md](CAMPAIGN-MAP-INVENTORY.md).
 * **Not yet tested:** two-player combat, death, respawn and reconnect regression (deferred).
 
 Experimental: this code is only on `feature/coop-campaign` and its child branches. It is not

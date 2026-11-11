@@ -1,186 +1,145 @@
-# Co-op next-session handoff (2026-11-11, pass 2: narration, health bars, spawn6, scoreboard)
+# Co-op next-session handoff (2026-11-11, campaign session: M0 inventory + M1 campaign graph)
 
-This is a self-contained resume point for the experimental co-op work. The details and
-evidence are in [COOP-MVP.md](COOP-MVP.md) (sections C–H) and
-[CAMPAIGN-SYNC-DESIGN.md](CAMPAIGN-SYNC-DESIGN.md).
+A self-contained resume point. The design and evidence live in:
+* [CAMPAIGN-ARCHITECTURE.md](CAMPAIGN-ARCHITECTURE.md): milestones, protocol and UI designs;
+* [CAMPAIGN-MAP-INVENTORY.md](CAMPAIGN-MAP-INVENTORY.md): all worlds and transitions;
+* [COOP-MVP.md](COOP-MVP.md): sections C–H, the earlier verified features and pass 2.
 
 ## Where things stand
 
 * **Branch:** `coop/mvp-lobby`, the head of PR #10 into `feature/coop-campaign`. The stable
   `main` is untouched. The local worktree branch is `coop/mvp-slice2`, tracking
   `origin/coop/mvp-lobby`.
-* **Commits this pass:**
-  * `64dbe5d` records the user's feedback;
-  * `aa9949c` adds the code;
-  * `4cc806f` makes the smoke script safe;
-  * this docs commit follows.
-* **New DLL:**
+* **This session:** commit `1524fb6` (M1 code) and the docs commit that follows it.
+* **Current DLL:**
   * `KPCServerTools.dll` = `server.dll`
-    `1b8816cbeafb48ca9e058bda48363847c807d47d1982bd17a4eb40615097f523`
-  * manifest `SERVER_TOOLS_BUILD.json`
-    `871695e56c490a2922cc0a6262aae18c8194275be7596728e9bb44674534fd7a`
-  * Built twice with byte-identical results in the pinned image (GCC 14.2.0, binutils 2.44).
-* **Installed:** only in the disposable copy `C:\KPCTest\smoke3\Psycho` (port **42990**). No
-  server is left running there.
-* **Not installed in `C:\KPCTest\smoke1\Psycho`:** the user's server (`dedicated.exe` from
-  `smoke1`, port 42972) was running during this pass and was **not touched**. `smoke1` still
-  has `e86bb352…`.
+    `009eacd65ebc03627389a0bcac901193e33393b3188d1445d70d3d130546ab71`
+  * manifest `d9b31fee880c1a447188cc68f3bcc35cb9a3e54958aaf4ab0517b37088fe6a82`
+  * Built twice with byte-identical results in the pinned image.
+  * It contains pass 2 unchanged, plus the opt-in campaign graph.
+  * With `CoopCampaign` absent or 0, it behaves like pass 2 (`1b8816cb…`).
+* **Installed:** in the disposable `C:\KPCTest\smoke3\Psycho` (port **42990**). Its INI has
+  `CoopCampaign=1` and `TraceSpawners=1`. No server is left running.
+* **Not touched:** `C:\KPCTest\smoke1\Psycho`. The user's `dedicated.exe` (PID 30564, port
+  42972, DLL `e86bb352…`) was running all session and was neither stopped nor modified.
 * **Backups** (in `C:\KPCTest\backup`):
-  * `smoke1-e86bb352-before-pass2`: `server.dll`, `KPCServerTools.dll`, manifest, INI and log
-    of the user-tested build;
-  * `smoke3-13ca1d0a-before-pass2`: the previous `smoke3` state;
-  * earlier: `smoke1-13ca1d0a-before-scriptclock` and `smoke1-e17c150f-before-intro`.
-* **Server-only:** clients stay stock 1.13 plus the normal KPCFix client. No client patch was
-  needed for anything implemented here.
+  * `smoke3-1b8816cb-before-m1`;
+  * `smoke1-e86bb352-before-pass2`;
+  * `smoke3-13ca1d0a-before-pass2`;
+  * older copies.
 
-## Live results so far (desktop + laptop, user-tested)
+## Validation status
 
-| Feature | Result |
+| Item | State |
 | --- | --- |
-| Natural transitions R1M2B → R1M2C → R1M3A | Work, without a scoreboard (`CoopIntermission=0`) |
-| Original music (`CoopMusic=1`), including a late-joining laptop | Works; not beat-synchronised (accepted) |
-| Original R1M3A intro (`CoopIntro=1`) | Camera, letterbox, subtitles and events work, and the two machines match |
-| Subtitle/script cadence versus narration (`CoopScriptClock`, DLL `e86bb352`) | **FIXED** (confirmed). Server log: `script_ms=53005 wall_ms=53000`, engine 1.2456× |
-| Narrator audio | **Open with `e86bb352`:** stops after "…will be a useful ally for you" |
-| Enemy health bars | **Open with `e86bb352`:** never appear |
-| Enemies after the window smash (`spawn6`) | **Open with `e86bb352`:** none appear |
-| Scoreboard from `!start` until the cinematic | **Requested** |
+| Transitions R1M2B → R1M2C → R1M3A, music, R1M3A intro, script cadence (`CoopScriptClock`) | **User-confirmed** (desktop + laptop) |
+| Pass 2: `CoopSoundClock`, `CoopHealthBars`, `CoopSpawners`, `CoopStartScoreboard` | Implemented; unit/emulator/native-server tested; **two-PC test pending** |
+| M0 world inventory (48 worlds; exits = WORLDORDER chain; R?M0 intros; Nightmare; loading backgrounds) | Done (static data/RE). The table matches the installed REZ |
+| M1 campaign graph, `!campaign …`, `!abort`, completion → lobby, R?M0 intro exits | Implemented; 12 unit files × 64/32-bit, emulator 34/34, native Coop/Normal/PassThrough smoke. **No client has played it** |
+| M2 loading screens, ready ACK; M3 15 s hold and freeze | Researched and designed (CAMPAIGN-ARCHITECTURE §4–6); **not implemented** |
 
-## Pass 2: root causes and fixes (DLL `1b8816cb…`, NOT yet tested with clients)
+## Tests run this session
+* Unit tests (pinned image, `-Werror`, 64- and 32-bit): 24/24, including the new
+  `test_coop_campaign.c`.
+* `check_campaign_table.py` against `C:\Games\Psycho\PSYCHO.REZ`: PASS, 48 worlds.
+* Emulator `check_proxy.py`: 34/34 modes, including `--campaign`,
+  `--campaign --lobby=deathmatch/PM01`, `--campaign --no-start-scoreboard` and
+  `--campaign --intro --test-start=R1M3A`.
+* `package_release.py --component server`: PASS (55 files). The DLL and manifest were rebuilt
+  twice with identical results.
+* Native `smoke3` (port 42990, no clients):
+  * Coop with `CoopCampaign=1`: PASS, exit 0, `effective CoopCampaign=1 …`.
+  * Normal and PassThrough: PASS.
 
-| Issue | Root cause (evidence) | Fix (`[Coop]` key, default) |
-| --- | --- | --- |
-| Narrator cut-off | The stream is a **server-timed sound**: time left = 44.19 + 0.5 s, counted down by the **inflated engine dt**. When it reaches 0 the server drops it from every client's sound set: 44.69 / 1.2456 = 35.9 s of real time = "…ally for you". The WAV contains the full sentence to 43.7 s. Static analysis of `server.dll` `0x2c6e6`, `0x29f0b`/`0x2a1fc`, `0x1f94f` | `CoopSoundClock` (= `CoopScriptClock`): the sound timers get `min(engine dt, unpaid wall time)`. Hash-gated to the Europe-family `server.dll` |
-| No enemy health bars | `object.lto 0xf8fe0` "is single player" gates all four paths of the bar manager (update, damage, remove, send). The server never builds or broadcasts `MID 0x56`. The stock client has no multiplayer gate | `CoopHealthBars` (1): the four gate calls proceed; Send limited to 10 Hz |
-| No `spawn6` enemies | `CMonsterSpawner::ReadProp` forces "not in multiplayer" (`or al,0x10` at `0x93c5d`), so no monster spawner exists in multiplayer. `trigger_generic spawn6` then finds an empty group | `CoopSpawners` (1): NOP the forced bit; authored difficulty applies. Optional `CoopSkill` 0–4 (native server reports 2). Diagnostic `TraceSpawners` |
-| `!start` scoreboard | The stock client shows the scoreboard on `0x48` (no click logic of its own) and closes it on `0x69`/re-entry. It cannot draw it while changing world (state 5) | `CoopStartScoreboard` (1, with `CoopIntermission=0`): `0x48` at `!start` with a 1 s hold, `0x48` again 250 ms after each spawn while the intro barrier holds, and `0x69` to all right before the script starts. Every failure path closes it, plus a 45 s failsafe |
+## Two-PC tests for the user (in this order)
 
-## Tests run this pass
-
-| Test | Result |
-| --- | --- |
-| C unit tests, 11 files × 64/32-bit, `-Werror`, pinned image (new: `test_coop_scoreboard.c`) | 22/22 PASS |
-| Emulator `check_proxy.py`, compiled DLL on the stock Europe fixtures, 30 modes | 30/30 PASS. Covers pass-through, bad object, all session modes, `--no-sound-clock`, `--no-start-scoreboard`, `--no-health-bars`, `--no-spawners`, `--trace-spawners --skill=3`, `--skill=9`, intro overrun with both clocks off, `CoopIntermission=1` with an intro |
-| `run_checks.py` (logging harness), Europe and USA layouts, in the pinned image | PASS |
-| `tools/package_release.py --component server`, `tools/test_package_release.py` | PASS (53 files) |
-| Native `dedicated.exe`, `smoke3`, port 42990, no clients: Coop (three console nextlevels) | PASS (15 checks), exit 0 |
-| Native Hold with `TraceSpawners=1`, nextlevels 15 s apart | PASS, exit 0. Skill 2; R1M3A 42 spawner filter calls accepted, 15 rejected |
-| Native Normal (PM01) and PassThrough | PASS. Sound hook not installed |
-| Desktop + laptop | **NOT RUN** (needs the user) |
-
-The smoke script used to refuse to run while any server was running, and on a quit timeout it
-stopped *every* `dedicated.exe`. It now refuses only a server from its own folder or an occupied
-port, and stops only its own server (`4cc806f`).
-
-## Install the new DLL in `smoke1` (after the user's server is stopped)
-
+**Install** (only after the user's own server is stopped):
 ```powershell
 $d='C:\KPCTest\smoke1\Psycho'; $s='C:\Projects\KPCFix-audit\server-tools'
-Get-NetUDPEndpoint -LocalPort 42972 -ErrorAction SilentlyContinue   # must be empty
+Get-Process dedicated -ErrorAction SilentlyContinue | Format-Table Id,Path   # nothing from smoke1
+Get-NetUDPEndpoint -LocalPort 42972 -ErrorAction SilentlyContinue           # must be empty
 Copy-Item "$s\KPCServerTools.dll" "$d\KPCServerTools.dll" -Force
 Copy-Item "$s\KPCServerTools.dll" "$d\server.dll" -Force
 Copy-Item "$s\SERVER_TOOLS_BUILD.json" "$d\SERVER_TOOLS_BUILD.json" -Force
-(Get-FileHash "$d\server.dll").Hash      # 1B8816CB...
+(Get-FileHash "$d\server.dll").Hash      # 009EACD6...
 ```
-
-The existing `smoke1` INI already has `CoopSession=1`, `CoopMinPlayers=1`, `CoopIntro=1`,
-`CoopTestStartWorld=R1M3A` and the traces. The new keys default to on. For evidence, add:
-```ini
-TraceSpawners=1
-```
+Alternatively, use `smoke3` (already installed, port 42990): clients join port 42990.
 
 **Rollback:** copy the three files back from `C:\KPCTest\backup\smoke1-e86bb352-before-pass2`.
-To disable one fix only, set its key to 0, for example `CoopSoundClock=0`, `CoopSpawners=0`,
-`CoopHealthBars=0` or `CoopStartScoreboard=0`. Restart the server after any change.
 
-## Two-PC acceptance test (desktop + laptop)
+**Test 1: pass 2 (unchanged recipe), with `CoopCampaign` absent.**
+* INI: the existing `smoke1` keys, plus `TraceSpawners=1`.
+* Start: `Start-KPC-Selected-Server.ps1 -Map "worlds\realm1\R1M2B" -Cheats Enabled -Coop`.
+* Both machines `!ready`, the host `!start` (test start R1M3A), recording both screens with
+  sound. Check:
+  1. **Scoreboard:** up at `!start`; blank during the load (stock client); back after entry;
+     closes at the first cinematic frame; no click.
+  2. **Narration:** continues past "…useful ally for you here, as the way in is not as straight
+     as it first seems".
+  3. **spawn6 enemies:** appear after the smash, the same on both machines.
+  4. **Enemy health bars:** shown on both screens and they disappear correctly.
+  5. **Regression:** no scoreboard on natural exits; music and transitions as before.
 
-Start the server:
-* `powershell -File Start-KPC-Selected-Server.ps1 -Map "worlds\realm1\R1M2B" -Cheats Enabled -Coop`
-  in `smoke1`.
-* The log must show:
-  * `sha256=1b8816cb…`;
-  * `effective CoopScriptClock=1`, `CoopSoundClock=1`, `CoopStartScoreboard=1`,
-    `CoopHealthBars=1`, `CoopSpawners=1`;
-  * `sound clock hook installed (server.dll 2a1fc -> 29f0b)`.
-
-Both machines: `Psycho.exe` → Play, join, and type `!ready`; the host types `!start`. Record
-both screens with sound (a phone video per screen is enough). Then check:
-
-1. **Scoreboard.**
-   * The stock scoreboard appears on both machines immediately at `!start`, without clicking.
-   * During the world load the screen may be blank or show the loading screen: the stock client
-     cannot draw the scoreboard then (section H).
-   * After each machine is in R1M3A, the scoreboard comes back within about 0.25 s and stays up
-     during the 3 s settle.
-   * It closes on both at the first cinematic frame, and the letterbox and camera then run as
-     before.
-   * Note any flicker or a scoreboard that does not close. Pressing fire must not be needed.
-   * Log: `scoreboard show …`, then `close … msg=0x69 sent` just before `intro-start`.
-2. **Narration.**
-   * The voice must continue past "…will be a useful ally for you **here, as the way in is not
-     as straight as it first seems**" and finish about 2.6 s before the window smash.
-   * Note whether both machines behave the same.
-   * Log: `intro-clock …` and `sound-clock … sound_ms≈wall_ms`.
-3. **spawn6.**
-   * After the smash, Headless (10) and Gasbag (3) enemies arrive, the same on both machines,
-     once.
-   * Log: `world-content skill=2 monster-spawners=authored accepted=… rejected=…` for R1M3A.
-   * Note whether enemies attack during the last ~4 s of the letterbox (`disable_ai` and
-     invulnerability are gated off in multiplayer).
-4. **Health bars.**
-   * Damage an enemy from each machine. The original bar and name appear on **both** screens
-     for the damaged enemy, track its health, and disappear on death or after the timeout.
-   * Player health HUD unchanged. Log: `health-bar first monster damage in this epoch`.
-5. **Regression.**
-   * Natural exits R1M2B → R1M2C → R1M3A with `CoopTestStartWorld` removed: no scoreboard on
-     the exits, music as before.
-   * Optionally repeat with `CoopSoundClock=0` (the cut-off should return), and with
-     `CoopScriptClock=0`.
-6. **Reconnect / late join.**
-   * The laptop disconnects and rejoins during the 3 s barrier: it should get its own
-     scoreboard and see it close with everyone.
-   * After the intro: no new scoreboard, no second spawn6.
-
-Send back the full `KPCServerTools.log`, the effective INI, both recordings, and notes for steps
-1–6.
+**Test 2: M1 campaign.**
+* INI: add `CoopCampaign=1`, `CoopLobbyWorld=worlds\realm1\R1M0`, `CoopIntro=1`, and remove
+  `CoopTestStartWorld`.
+* The launcher still starts R1M2B as the lobby world.
+* Steps:
+  1. `!campaign` on both machines: "Selected: full campaign (R1M0..R5M1B, 48 worlds)".
+  2. The laptop types `!campaign realm fire`: refused (not host).
+  3. Host: `!campaign full`, then both `!ready`, then host `!start`.
+     * Expected: R1M0 loads via `maplist slot=… world=worlds\realm1\r1m0` (log).
+     * The Water-realm opening intro plays (Madam Raven, ~79 s, `CoopSoundClock` keeps the
+       narration whole).
+     * The intro's exit then takes everybody to R1M1A (log `exit … activator=…`).
+  4. Play R1M1A → R1M1B → R1M2A on natural exits.
+     * Note anything that differs from single player: enemies, pickups, doors, hints, music,
+       stuck spots.
+  5. Host `!abort` → everybody returns to R1M0 as the lobby (no intro there); `!coop` shows
+     `LOBBY R1M0`.
+  6. Optional:
+     * `!campaign from demon` + start: R4M0 intro (~72.5 s) → R4M1A;
+     * `!campaign realm nightmare`: R5M1A.
+* Send back the full `KPCServerTools.log`, the INI, recordings and notes.
 
 ## Open limitations
+* **No world after R1M3A has been played in co-op.** The other intros (except R?M0 and R1M3A)
+  are skipped unless `CoopIntroAll=1` (test only).
+* **Lobby:** the launcher forces R1M2B as the co-op start world. There is no scoreboard in the
+  lobby yet; the design is in §3.
+* **Loading screens and readiness:**
+  * the stock client shows black plus chat during loads;
+  * the PCX needs the KPCFix client hook (§4, not implemented);
+  * readiness is still spawn + 3 s settle. The spawn is client-originated, but the ACK of `0x69`
+    is still missing (§5);
+  * there is no 15 s hold and no freeze (§6).
+* **Gameplay:**
+  * no world-map screens between stages in multiplayer;
+  * Nightmare loadout (`cheatscript`) not reproduced;
+  * invulnerability and `disable_ai` still gated (setter `0x6bd20` usable; §7);
+  * persistence, deterministic enemy targeting and difficulty scaling not designed.
+* **Earlier limits still apply:** the pass-2 client-test items; the pre-existing
+  `object.lto+0x87c41` crash on rapid empty-server nextlevels (not seen in this session's
+  runs).
 
-* **Client-only gap:** the stock client cannot show the scoreboard while it changes world.
-  * Candidate client patch: cshell `0xcdb6f` `32 c0` → `b0 01` (untested, edition-specific).
-  * Each client also shows the new world briefly between its re-entry and the second
-    scoreboard.
-* **Monster spawners:** enabled on **all** route worlds. They are the single-player content,
-  so R1M2B/R1M2C get more enemies than in the earlier co-op tests.
-  * `AttackActivator` targets the most recently joined player.
-  * `disable_ai` and `player invulnerable` stay gated off in multiplayer.
-* **Health bars:** global (everyone sees every damaged monster). Bar timeouts age with engine
-  time.
-* **USA `server.dll`:** no sound clock (site not verified); logged as unsupported.
-* **Engine game time:** still the stock inflated time for objects, AI and physics.
-* **Earlier limits still apply:**
-  * join during the cinematic sees the rest only;
-  * readiness is spawn-based;
-  * R1M3A-only intro;
-  * two-player combat/death/respawn regression not yet run.
+## NEXT SESSION
+* **Resume:** `cd C:\Projects\KPCFix-audit; git fetch origin; git status -sb`, then read this
+  file.
+* **Next milestone: M3/M2 server side**, in this order:
+  1. the server.dll paused-tick hook `0x2a292`;
+  2. the pause flag via SetServerFlags;
+  3. the OnMessage hook `0xfe40b` (observe and swallow during the hold);
+  4. the echo-`0x17` ready ACK;
+  5. the 15 000 ms wall-clock hold with chat status and music delivery while paused.
 
-## Pre-existing crash found during the earlier smoke tests (not caused by these changes)
-
-* **Signature:** `dedicated.exe` access violation at `object.lto+0x87c41`, in the AI "Building
-  path table." routine (`0x87be0`, called from `0x95259`).
-* **When:** during the native Coop smoke with three rapid console `nextlevel`s.
-* **Rate:** 3/4 runs with `e86bb352` and 1/3 with `13ca1d0a`. It did not occur in the two
-  `1b8816cb` Coop runs of this pass, which is too few to conclude anything.
-* **Not yet checked under pass-through.**
-
-## Resume steps
-1. Run `git fetch origin` and check that `origin/coop/mvp-lobby` contains `aa9949c` and this
-   file.
-2. Check whether the user's test server is still running (`Get-Process dedicated` with its
-   `Path`). Never stop it. Use `smoke3` (port 42990) for native tests.
-   `Invoke-CoopServerSmoke.ps1` now coexists with it.
-3. Builds: `C:\KPCTest\pass2\build.sh <dir>` copies `server-tools` and runs the image
-   `kpc-gcc14:local`. Then use `matrix.sh <dir>` (emulator, 30 modes) and `unit.sh` (C tests).
-4. After installing in `smoke1`, run the two-PC test above and record the results in
-   COOP-MVP.md sections E–H.
+  Then the KPCFix client `PreLoadWorld` hook for the PCX loading screen, and the launcher's
+  R1M0 lobby start.
+* **First test to run:** the user's two-PC **Test 1** above (pass-2 validation), because every
+  later step builds on those fixes.
+* Tooling (outside the repo, in `C:\KPCTest\pass2`):
+  * `build.sh <dir>`: disposable pinned build;
+  * `matrix.sh <dir>`: emulator, 34 modes;
+  * `unit.sh`: all C tests;
+  * `sums.py`: regenerate `SHA256SUMS-Server-Tools` from the index.
+* RE helpers in `C:\KPCTest\tools`: `ru.py`, `rez.py`, `wavenv.py`. Research notes are in
+  `C:\KPCTest\scratch-*`. Never stop a user's server: check `Path` and port first.
