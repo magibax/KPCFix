@@ -77,25 +77,26 @@ for line in subprocess.check_output(['nm','-an',str(work/'server.unstripped.dll'
   try:a=int(v[0],16)
   except ValueError:continue
   if 0x69000000<=a<0x69100000:proxy_symbols[v[2]]=a-0x69000000
-# Preserve the hash of the *previously shipped* proxy so Setup-KPCServerTools
-# accepts an upgrade from the installed stable DLL to this newly built DLL.
+# Fixed, reviewed upgrade allowlist. Never inherit arbitrary hashes from a
+# previous JSON manifest: future candidates require explicit review and
+# supported Windows upgrade evidence before being added here.
 new_hash=hashlib.sha256(out.read_bytes()).hexdigest()
-previous_proxies=['6d6b76ab4b04842464fc11a4e18e6a6c81f3318271d31b9602cb4604e889d380',
-                  '67a6be68223efb0321d41f270ae10923f0d6073731de57a61b600794c3f0eeea',
-                  '9b6bd69e894925e6b31f1ed32b6ff82331af104e2c20fbb6aeb43dc4bef5be9a',
-                  '66653630a0b717a70c3dd51a3b97efd75bd9b20495bd0b4d089b914b60942a37',
-                  'c2486afa934b7216486891dc640929018ec02cdd4341734c9adc7889bff94c3b',
-                  '354a75a1d56968a69ab47539a715f805c210fdcddab02ec0aa0c2fa93ceacd2b']
-old_manifest=package/'SERVER_TOOLS_BUILD.json'
-if old_manifest.is_file():
- try:
-  previous=json.loads(old_manifest.read_text())
-  for candidate in [previous.get('proxy_sha256'),*(previous.get('previous_proxy_hashes') or [])]:
-   if isinstance(candidate,str) and len(candidate)==64 and all(c in '0123456789abcdefABCDEF' for c in candidate):
-    candidate=candidate.lower()
-    if candidate!=new_hash and candidate not in previous_proxies:previous_proxies.append(candidate)
- except (ValueError,TypeError,KeyError):
-  raise SystemExit('Existing SERVER_TOOLS_BUILD.json is invalid; do not overwrite its upgrade history.')
+previous_proxies=[
+    '6d6b76ab4b04842464fc11a4e18e6a6c81f3318271d31b9602cb4604e889d380',
+    '67a6be68223efb0321d41f270ae10923f0d6073731de57a61b600794c3f0eeea',
+    '9b6bd69e894925e6b31f1ed32b6ff82331af104e2c20fbb6aeb43dc4bef5be9a',
+    '66653630a0b717a70c3dd51a3b97efd75bd9b20495bd0b4d089b914b60942a37',
+    'c2486afa934b7216486891dc640929018ec02cdd4341734c9adc7889bff94c3b',
+    '354a75a1d56968a69ab47539a715f805c210fdcddab02ec0aa0c2fa93ceacd2b',
+    '23dd5de7f099c04706d2a59603bb88763d21bbde2cd9053cf6ebade935598b08',
+    '7112b5ed97f94f8b7cd84bc80f7fdc945f0fb02e1a1cc6ad8f574b9b70d6d373',
+    'a63d186bb4995e471651f7d9c42089eea784e07c6d5ef76355936fa71e3a7e6c',
+    'b0404468077d0aec012fa9268618d375b99361d16dc669178dc8df0c45f0fa38',
+    '8de76e10a81be3ceb1ca13b93fe2c9606dc5bf0f7a27784592b15bb7698f0807',
+    'bac7696bc79f10b637134b7bbffea1ead01e67c8207452f5c3f339a8b5a353d4',
+]
+if new_hash in previous_proxies:
+ raise SystemExit('Current proxy SHA-256 unexpectedly appears in the previous allowlist')
 report=dict(previous_proxy_hashes=previous_proxies,proxy_sha256=new_hash,proxy_bytes=out.stat().st_size,proxy_symbols=proxy_symbols,hook_symbols=symbols,patches=patches,hook_bytes=len(code),exports=['CreateServer','DeleteServer'])
 (package/'SERVER_TOOLS_BUILD.json').write_text(json.dumps(report,indent=2)+'\n')
 print(out,report['proxy_bytes'],report['proxy_sha256'])

@@ -1,4 +1,4 @@
-4a563645fdd9214ae0c9a34d3399d3fc59c3aa050e910992cbd9a8bac196304c  ./Check-KPCServerVersion.ps1
+c6cac5373ca183751b261bb2991df65e1f091763c6b64d25ca02c3cd021d4052  ./Check-KPCServerVersion.ps1
 879b2f91b70ae000fe3857c1b98371b5c94ca08d0c2a762f5657e8e041a64f22  ./KPC-Server-Launcher.cmd
 b0cd1ce19c8b4fc6d025259dc0c4e99b809e1863a68263e4d6056aa5e0b2aa6a  ./KPC-Server-Launcher.ps1
 9da3fa89898b475874e94708168c05f12ae56876a1012ab6fe497086d58b0baf  ./KPCServerTools-default.ini
@@ -16,7 +16,7 @@ d60bafa5b80ca09c052bb6117b9476ab5b7cad583dbfb5f77adfc41b78627344  ./Start-KPC-Se
 52e752d2c4efb4eabec10e92a0705d027fbe576df9d7a350d1e5d4602a23ce5c  ./maps.json
 36e778ff3008b123101f17f013ed242d0935c9d42cb35037098a917e93d3092b  ./server-template.cfg
 81d9191e4ced000a59ac919ebbcfe42be30dc906011990a7df363e1d13f9f4ad  ./server-tools-source/README.md
-981ecfaf0850faee2ef8c341041967aa4f9267627dccff788fd53018dbe1c30a  ./server-tools-source/build_dll.py
+faa82cab2c948eaa42ebbb37fdc914e6b124ebc824c2965d98fe35c7ddd88fd7  ./server-tools-source/build_dll.py
 d58fd6de38f962bceff9f8741f9e77a94f6a4491e26b87bf4ce61a0e0633adb3  ./server-tools-source/logging.S
 4f93e647e662452908fb01b65c3e86ef446c523bf0f374a7a2b98dd14e4c78af  ./server-tools-source/pe_build.py
 5cbdbcf48bbe74b52bc96dff391787b204c1399dffdd3ea10ed0a7e76ef990fe  ./server-tools-source/src/coop_aabb_overlap.h

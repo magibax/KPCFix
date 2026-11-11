@@ -63,6 +63,20 @@ function Assert-KPCServerVersion([string]$Exe,$GameProfile) {
     Write-Host ("[KPCFix Server Tools] Dedicated SHA256: {0}" -f $exeHash)
     Write-Host ("[KPCFix Server Tools] server.dll SHA256: {0}" -f $dllHash)
     Write-Host ("[KPCFix Server Tools] object.lto SHA256: {0}" -f $actualObjectHash)
+    # An earlier development proxy may still be active after files were
+    # extracted from a newer stable archive. A matching original backup is
+    # sufficient evidence to *recommend setup*, not to trust unknown code.
+    $savedEngine = Join-Path $PSScriptRoot 'server.original.dll'
+    if (Test-Path -LiteralPath $savedEngine) {
+        $savedHash = (Get-FileHash -LiteralPath $savedEngine -Algorithm SHA256).Hash
+        foreach ($server in $builds.servers) {
+            if ($server.'dedicated.exe'.sha256 -eq $exeHash -and
+                $server.'server.dll'.sha256 -eq $savedHash -and
+                @($GameProfile.regions | Where-Object { $server.regions -contains $_ }).Count -gt 0) {
+                throw 'Original server.original.dll is valid, but the active server.dll is not the selected Server Tools build. Close the server and rerun Setup-KPCServerTools.cmd. If setup refuses an unrecognized DLL, back that active DLL up separately; never overwrite server.original.dll.'
+            }
+        }
+    }
     throw 'Server files do not match a supported installation. Share the three hashes printed above.' 
 }
 
