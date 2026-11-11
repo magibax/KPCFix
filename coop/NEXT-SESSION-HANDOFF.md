@@ -31,6 +31,16 @@ evidence are in [COOP-MVP.md](COOP-MVP.md) (sections C and D) and
 | Original R1M3A intro (`CoopIntro=1`, DLL `13ca1d0a`), desktop + laptop | Camera, letterbox, subtitles and events work, and the two machines match |
 | Narration timing | **Bug:** voice trailed the subtitles on both machines; the 47.8 s window smash cut it off |
 
+## Live feedback on `CoopScriptClock` (DLL `e86bb352…`, desktop + laptop, 2026-11-11)
+
+| Item | User result |
+| --- | --- |
+| Subtitle/script cadence versus narration (the old ~1.25× lead) | **FIXED** in real gameplay. Keep the script clock governor |
+| Narrator audio | **NEW / OPEN:** stops abruptly right after "…will be a useful ally for you". This is a playback-lifetime problem, not the old cadence bug |
+| Enemy health bars | **OPEN:** never appear when enemies take damage in co-op |
+| `47.9 trigger_generic spawn6` after the window smash | **OPEN:** smash seen, the expected enemies never appeared |
+| Original scoreboard during the `!start` load and intro barrier | **REQUESTED:** show it from `!start` and close it automatically when the cinematic begins (no click) |
+
 ## Narration bug: root cause found, fix awaiting client validation
 
 **Root cause (static analysis, then measured on the native server):**
