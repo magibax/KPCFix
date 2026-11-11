@@ -1,27 +1,31 @@
-# Co-op MVP: chat lobby and the R1M2B → R1M2C route (kpc-coop/1)
+# Co-op MVP: chat lobby and the R1M2B → R1M2C → R1M3A route (kpc-coop/1)
 
-**Status (2026-11-11): IMPLEMENTED and CI/emulator-tested. Server side WINDOWS-TESTED without clients (DLL `262b6ead…`). NOT YET WINDOWS-TESTED with real clients.**
+**Status (2026-11-11):**
+* **Live Windows client tested (DLL `262b6ead…`, one client):** join, lobby, `!ready`, `!start`, and a host `!next` change R1M2B → R1M2C.
+* **Natural exits:** implemented in build `coop-session-v2` (`0018a3f8…`) and tested in emulation. **A natural (non-`!next`) transition has NOT been observed on Windows.**
+* **Not yet tested:** a second client.
+
 Experimental: this code is only on `feature/coop-campaign` and its child branches. It is not
 part of the stable Server Tools R3 on `main`. Every switch defaults to off.
 
 | Feature | State | Evidence |
 | --- | --- | --- |
 | Lobby/session state machine (ready, host, capacity, presence, epochs, debounce, route, timeouts) | IMPLEMENTED, CI-TESTED | `server-tools-source/tests/test_coop_session.c` (64- and 32-bit, `-Werror`) |
-| Proxy hooks installed only on the hash-verified original object image, original bytes checked at all 8 sites | IMPLEMENTED, EMULATOR-TESTED (private) | `check_proxy.py <EU fixtures> --coop-session` runs the shipped DLL against the original `object.lto` |
-| Chat-command lobby: names, ready/unready, away/join, host start, status | IMPLEMENTED, EMULATOR-TESTED | as above (synthetic players, native broadcast stubbed) |
-| No telefrag between session players (both spawn paths) | IMPLEMENTED, EMULATOR-TESTED | native `0xf10c0` is never entered in a session |
-| R1M2B separated placements (3 fixed positions) with slot reclamation | IMPLEMENTED; placements WINDOWS-TESTED earlier (trial build) | `SPAWN-ENGINE-TRACE.md`; reclamation is new and only emulator-tested |
-| Server-coordinated start (fresh R1M2B) and exit to R1M2C through the native multiplayer level change | IMPLEMENTED, EMULATOR-TESTED | native end-of-level `0x100760` and NextLevel `0x1005c0` were stubbed in emulation |
-| Exit trigger reached by players in multiplayer | **UNVERIFIED** | the hook exists; whether original multiplayer code calls the exit handler at all must be confirmed on Windows. The host `!next` fallback works independently |
-| Intro cinematics | **NOT SUPPORTED** (skipped) | native multiplayer did not start the authored intro in earlier trials; it is not forced |
-| Golden-mirror exits | **BLOCKED** | exit objects with flag `+0x152` take an unverified single-player branch; the session logs and ignores them |
+| Proxy hooks installed only on the hash-verified original object image, original bytes checked at all 8 sites | IMPLEMENTED, EMULATOR-TESTED (private), WINDOWS-TESTED (server) | `check_proxy.py <EU fixtures> --coop-session`; [server smoke evidence](#native-windows-server-smoke-evidence-no-clients) |
+| Chat lobby: join announce, `!coop`, `!ready`, host `!start` | **WINDOWS-TESTED, 1 client** (`262b6ead`) | [live client evidence](#live-windows-client-evidence) |
+| No telefrag between session players (both spawn paths) | IMPLEMENTED, EMULATOR-TESTED; live: `telefrag=skipped` logged for 1 client | a second player is needed to observe the protection itself |
+| R1M2B separated placements (3 fixed positions) with slot reclamation | IMPLEMENTED; placements WINDOWS-TESTED earlier (trial build); slot 0 reused after a live rejoin | `SPAWN-ENGINE-TRACE.md` |
+| Server-coordinated Start (fresh R1M2B, epoch 1) | **WINDOWS-TESTED, 1 client** | native intermission, world reload and respawn observed |
+| Host override `!next` R1M2B → R1M2C | **WINDOWS-TESTED, 1 client** | a **command-initiated** change, not evidence of a natural exit |
+| Exit handler reached in multiplayer | **WINDOWS-OBSERVED** on R1M2C: `exit-seen next=worlds/realm1/r1m3a flag152=1` | the log alone does not prove that the player's right-click caused it; `coop-session-v2` logs the activator for that |
+| Natural exits (golden mirror, walk-through exit volume) → next route world | IMPLEMENTED in `coop-session-v2`, EMULATOR-TESTED; **NOT WINDOWS-TESTED** | `262b6ead` refused every multiplayer exit because of a misread flag; see [exit evidence](#exit-objects-and-the-meaning-of-0x152) |
+| Map changes at the end of a scripted sequence | **UNVERIFIED** | no direct level-change call from script code in `object.lto`; see [transition mechanisms](#three-transition-mechanisms) |
+| Intro cinematics | **NOT SUPPORTED** (skipped) | native multiplayer did not start the authored intro; it is not forced |
 | Generic safe spawning on other maps (allocator) | **DISABLED** | full-body clearance is not proven; see `GENERAL-ALLOCATOR.md` |
-| Install / idempotent re-run / in-place upgrade from the live-tested v7 proxy (`7112b5ed`) / uninstall | WINDOWS-TESTED (scripts only, disposable copy, 2026-11-11) | original `server.dll` `83b7bce8…` restored; `object.lto` `3a03f879…` unchanged throughout |
-| Launcher worker co-op validation (wrong start map, maplist without R1M2C) | WINDOWS-TESTED (scripts only) | rejected after the real version checks, before any server start; INI untouched |
-| Native empty server: DLL load, hash gates, hooks on stock `object.lto`, session armed, build line names the loaded DLL's SHA-256 | WINDOWS-TESTED (no clients, 2026-11-11) | [server smoke evidence](#native-windows-server-smoke-evidence-no-clients) |
-| Hooked native NextLevel: epoch per level change, world name matches the engine's `Loaded world`, phase stays LOBBY before Start, object module loaded once per server run | WINDOWS-TESTED (console `nextlevel`, no clients) | as above |
-| Regressions: PM01 normal start writes `CoopSession=0`; `[ServerTools] Enabled=0` is pure pass-through; altered `object.lto` is rejected by the launcher checks and, if started directly, by the DLL (exit 1) | WINDOWS-TESTED (no clients) | as above |
-| Windows gameplay (2 clients: lobby chat, Start, spawns, combat, exit, transition, rejoin) | **NOT TESTED** | follow the test protocol below and return the logs |
+| Install / idempotent re-run / in-place upgrade (`7112b5ed` → `262b6ead` → `0018a3f8`) / uninstall | WINDOWS-TESTED (scripts, disposable copy) | original `server.dll` `83b7bce8…` preserved; `object.lto` `3a03f879…` unchanged throughout |
+| Launcher worker co-op validation (wrong start map, maplist without R1M2C/R1M3A) | WINDOWS-TESTED (scripts only; R1M3A check added in v2) | rejected after the real version checks, before any server start |
+| Native empty server for `0018a3f8`: load, hooks, session armed, NextLevel epochs through R1M2B, R1M2C, R1M3A; normal and pass-through regressions | WINDOWS-TESTED (no clients) | R1M3A loads under the dedicated server |
+| Two clients: separation, combat, natural exit, rejoin | **NOT TESTED** | follow the test protocol below and return the logs |
 
 ## How it works
 
@@ -59,9 +63,14 @@ automatically on disconnect. The server operator keeps the native console (`kick
   not "start" anything. Intros are not synchronised and are skipped. This is announced to players.
 * **Exit**: an exit object in multiplayer reaches its game-type gate at `0x2d455`. The session
   reads its `NextWorld` (`+0x54`). It requests a change only if all of these hold:
+  * `+0x152` equals 1, the value the original code sets for every exit in a multiplayer game
+    ([evidence](#exit-objects-and-the-meaning-of-0x152)); any other value fails closed;
   * the phase is GAMEPLAY;
   * this epoch has not already changed world;
-  * the destination is the next route world.
+  * the exit's own `NextWorld` normalises to exactly the next route world. An empty, unknown
+    or off-route destination is refused, and the refusal is announced at most once per epoch.
+
+  Destinations come only from the map's exit object, never from player input.
 
   Repeated touches from any number of players are counted as duplicates. Native code still
   takes its multiplayer branch. Game type is never falsified.
@@ -99,7 +108,7 @@ automatically on disconnect. The server operator keeps the native console (`kick
 | `CoopMaxPlayers` | 3 | 1–3; session capacity |
 
 `[ServerTools] Enabled=1` is required. The launcher's co-op mode also writes the following server settings:
-* maplist `R1M2B, R1M2C`;
+* maplist `R1M2B, R1M2C, R1M3A`;
 * `maxclients` ≤ 3;
 * `fraglimit 0`, `timelimit 0`;
 * `keepitems 1`.
@@ -114,8 +123,14 @@ At startup `KPCServerTools.log` records:
 
 Each session event is one bounded line:
 `[KPCFix Co-op] g=<generation> e=<epoch> seq=<n> <PHASE> <event> <detail>`.
-Events are `spawn` (path, slot, client, name, telefrag=skipped), `say`, `change`, `end-level`, `exit-seen` (first exit-gate arrival per epoch, whatever the lobby decides),
-`world-loading`, `world-loaded`, `presence`, `exit-unsupported-flag` and `change-failed`.
+Events are:
+* `spawn` (path, slot, client, name, `telefrag=skipped`);
+* `say`, `change`, `end-level`;
+* `exit-seen`: the first 8 exit-handler arrivals per epoch, whatever the session decides,
+  with `next=`, `flag152=`, `exit=<object address>`, `activator=member:<name>|player|object|none`
+  and `start=<StartPoint>`;
+* `exit` (an accepted natural exit) and `exit-refused` (with the reason);
+* `world-loading`, `world-loaded`, `presence` and `change-failed`.
 At most 3000 lines are written per server process.
 
 ## Verified engine evidence (original 1.13 object.lto, SHA-256 3a03f879…)
@@ -126,6 +141,12 @@ Static disassembly is recorded here. These are runtime targets, not redistribute
 | `0x2d400` | Exit object message handler: message `0x27` reads the activator HOBJECT and calls `vtbl+0x70` (`0x2d450`). Other messages go to base `0xd3b50` |
 | `0xc2785` | Generic target-message loop: sends `0x27` (sender NULL, activator written into the message) to listed targets. Whether trigger volumes run this loop in multiplayer is the open runtime question. The session logs one `exit-seen` line per epoch when the gate is reached |
 | `0x2d450` | Exit object handler (vtable `0x118aa4`). `[0x1016de60]+0x1d0` (game type) ≠ 0 returns; otherwise `0x2d510` → `0x2d530` sends message `0x19` to clients. Single-player level changes are client-driven, so they are not used |
+| `0x2d18f` | Exit constructor clears `+0x152` |
+| `0x2d250`, `0x2d266`, `0x2d2e4` | Exit property reader sets `+0x152 = 1` if `NextWorld` is missing or longer than 127 characters, or `StartPoint` is too long |
+| `0x2d33f`–`0x2d352` | The same reader sets `+0x152 = 1` whenever the shell's game type `+0x1d0` is non-zero, i.e. **for every exit in a multiplayer game** |
+| `0x2d380`, `0x2d3e0` | Exit initial update and update: when `+0x152 == 1`, schedule an update after 0.1 s, then call server interface `vtbl+0x20` with the exit's own HOBJECT (the call the single-player handler also makes). It is not object removal, since the R1M2C exit still received a trigger in multiplayer long after spawn. Its exact meaning is unidentified |
+| `0x2d490`, `0x2d4d0` | Save/load `+0x152` as a byte |
+| `0x2d530` callers | Only the exit handler (via `0x2d510`) and the developer `ExitLevel` command (`0xfb0e9`, `0xfb17e`, `0xfb5bd`). No script or cinematic code calls the single-player level change directly |
 | `0xfb0d7` | Developer `ExitLevel` command finds `CExitTrigger` and prints `trigger+0x54` as "Exiting to level %s". This confirms `+0x54` is `NextWorld` |
 | `0xfde00` | Dedicated server app message handler: `GAMEINIT`, `NEXTLEVEL` → `0x1005c0`, `SERVHOST`, `SAY:` |
 | `0x1005c0` | NextLevel: maplist `0xfc640` (cursor `[0x16da78+0x10]`, names `shell+0x210+i*0x7f`, count `shell+0x1ae0`), message `0x46`, LoadWorld |
@@ -151,16 +172,16 @@ reverses this. Original game files are never rewritten.
      (Get-FileHash .\object.lto -Algorithm SHA256).Hash   # 3A03F879... (unchanged)
      ```
 2. **Empty server.** Run `KPC-Server-Launcher.cmd`, tick **EXPERIMENTAL co-op session**
-   and start. The log must show `build=coop-session-v1 … sha256=<same hash>`,
+   and start. The log must show `build=coop-session-v2 … sha256=<same hash>`,
    `effective CoopSession=1`, `session armed`, and `Runtime object hooks installed`.
    No player-facing event should occur while nobody is connected.
    * Optional: run `Invoke-CoopServerSmoke.ps1` from the test bundle first (see
      [server smoke evidence](#native-windows-server-smoke-evidence-no-clients)).
      Its JSON report records hashes and the log.
    * The console prints `Server started on <address>, port 42972`. On the developer
-     host this address was a Hyper-V virtual adapter (`172.28.144.1`), not the LAN
-     interface. Clients should join the server PC's LAN address on port 42972. If
-     joining fails, note both addresses in your report.
+     host it showed a Hyper-V virtual adapter (`172.28.144.1`), but the socket listens
+     on `0.0.0.0:42972` (all interfaces; checked with `Get-NetUDPEndpoint`). Clients join
+     `127.0.0.1` on the same PC, or the server PC's LAN address.
 3. **Lobby.**
    * Client A joins and spawns on R1M2B. Chat shows `A joined the lobby`.
    * Client B joins. B spawns +96 Z from A, and nobody dies.
@@ -171,12 +192,13 @@ reverses this. Original game files are never rewritten.
    The chat should say `R1M2B started (epoch 1)`. Check that both spawn apart, nobody
    dies, and both can move, shoot and take damage from enemies. Record whether enemies and
    doors behave as in single player.
-5. **Objective and exit.** Play to the R1M2B hallway exit together.
-   * Expected: `Exit reached -> R1M2C`, intermission, and both load R1M2C (epoch 2).
-   * If nothing happens at the exit, check the log. An `exit-seen` line without an `exit` line
-     means the trigger arrives but was refused (see its `flag152` and phase). No `exit-seen`
-     line means multiplayer does not deliver the trigger at all. The host then types `!next` to confirm that the
-     server-coordinated change works.
+5. **Objective and exit (do NOT type `!next`).** Play to the R1M2B hallway exit together.
+   * Expected: `Exit reached -> R1M2C`, intermission, and both load R1M2C (epoch 2). The log
+     shows `exit-seen … activator=member:<name>` followed by `exit next=…`.
+   * On R1M2C, right-click the golden mirror. Expected: `Exit reached -> R1M3A` (epoch 3).
+   * If nothing happens, check the log. `exit-seen` followed by `exit-refused` gives the
+     reason. No `exit-seen` line means the exit handler was not called. Only then may the host
+     type `!next`, and the report must say that the change was command-initiated.
    * Walk back into the exit volume repeatedly. There must be exactly one change (duplicate case).
 6. **Slow join / disconnect / rejoin.** On R1M2C, B disconnects. Within a minute A types
    `!coop` and sees `B left`. B rejoins and should see `joined in progress`. Kill B
@@ -224,14 +246,16 @@ Findings from these runs:
   `object.lto` mismatch when the active proxy is recognised. The same check exists
   on `main`.
 
-**Local client automation was not possible.** In the disposable copy, `client.exe`
-and `Psycho.exe` exit with code 0 within about 1.5 s, before `dinput.dll` loads.
-This happened with `+connect`/`+name`/windowed arguments and with the
-`WINXPSP3 DWM8And16BitMitigation` compatibility layer applied per process. The
-original install additionally has `RUNASADMIN`, which needs an interactive UAC
-prompt. Client-side tests therefore still need a person at real client PCs.
-**Testers:** a copied game folder does not inherit the original folder's
-compatibility settings. Start clients from your normal installation.
+**Client launch: use `Psycho.exe` → Play.** Starting `client.exe` directly (or `Psycho.exe`
+with arguments) from a copied folder exits with code 0 after about 1.5 s. That is not a valid
+baseline. The working path, captured by a process monitor when the user clicked Play
+(2026-11-11 04:36:02), was:
+```text
+C:\Games\Psycho\CLIENT.EXE -windowtitle "The Nightmare Child" -exedir "C:\Games\Psycho" -rez "E:\Psycho" -rez "C:\Games\Psycho\psycho.rez" -rez "C:\Games\Psycho" -rez "C:\Games\Psycho\KPCPatch.rez"
+```
+Its parent was the elevated `Psycho.exe`. This install uses `RUNASADMIN` with silent admin
+elevation, so a non-elevated automation tool cannot click Play (`BM_CLICK` was refused with
+access denied). A person clicks Play.
 
 Reproduce (in a disposable copy with the CI package installed):
 ```powershell
@@ -241,9 +265,76 @@ Repeat with `-Mode Normal` and `-Mode PassThrough`. For a client session, add
 `-CommandFile C:\KPCTest\cmd.txt`, then append console commands (for example
 `say hello`, `list_ids`, `quit`) to that file. Send back the JSON reports.
 
+## Live Windows client evidence
+
+**DLL `262b6ead…`, 2026-11-11, one client** (`johnny`; original Europe/USA 1.13 client started
+with `Psycho.exe` → Play; server in the disposable copy `C:\KPCTest\smoke1`, `CoopMinPlayers=1`
+for this test only). Excerpt from `KPCServerTools.log`:
+```text
+g=1 e=0 seq=0 LOBBY say [Co-op] johnny joined the lobby. Type !ready (help: !coop)
+g=1 e=0 seq=0 LOBBY spawn path=f13a4 slot=0 client=67778240 name=johnny zbits=3308781568 telefrag=skipped
+g=1 e=0 seq=1 LOBBY say [Co-op] LOBBY R1M2B e0: *johnny(R) 1/1 ready, need 1
+g=1 e=0 seq=2 TRANSITION change [Co-op] All ready. Starting -> R1M2B
+g=1 e=1 seq=3 INTRO_PENDING world-loaded worlds\realm1\R1M2B
+g=1 e=1 seq=4 PLAYING say [Co-op] R1M2B started (epoch 1). Intro skipped. Reach the exit together.
+g=1 e=1 seq=5 TRANSITION change [Co-op] Host override exit -> R1M2C
+g=1 e=2 seq=6 INTRO_PENDING world-loaded worlds\realm1\R1M2C
+g=1 e=2 seq=7 PLAYING exit-seen next=worlds/realm1/r1m3a flag152=1
+g=1 e=2 seq=7 PLAYING exit-unsupported-flag next=worlds/realm1/r1m3a flag152=1
+g=1 e=2 seq=7 PLAYING say [Co-op] End of the MVP route
+```
+* **Observed:**
+  * the lobby, `!ready` and a host `!start`, with native intermission, world reload and
+    respawn (epoch 1);
+  * the client handle stayed the same across both level changes;
+  * a rejoin reclaimed slot 0.
+* **Command-initiated:** the R1M2B → R1M2C change came from the host `!next`. It is not
+  evidence of a natural exit.
+* **Exit handler:** on R1M2C the handler was reached with `NextWorld` `worlds/realm1/r1m3a`
+  while the player used a golden mirror. That build refused it. Without activator logging,
+  the line alone does not prove that the right-click caused it. The final line is the reply
+  to a separate `!next` at the end of the old two-world route.
+
+## Exit objects and the meaning of +0x152
+
+Static analysis of the original `object.lto` (see the evidence table) shows that `+0x152` is
+**not** a mirror marker. The property reader sets it for every exit when the game type is
+multiplayer, and also for a missing or overlong `NextWorld`/`StartPoint`. Build `262b6ead`
+therefore refused every natural exit in co-op, including the R1M2B hallway exit that had never
+been tested live. `coop-session-v2` accepts the verified native value 1 and validates the
+destination itself. In multiplayer, the flag cannot tell a valid exit from a broken one.
+
+## Three transition mechanisms
+
+| Mechanism | Path to a world change | Status |
+| --- | --- | --- |
+| Right-click golden mirror | client Use → mirror/trigger object → message `0x27` to the exit object → handler `0x2d450` (hooked at `0x2d455`) | Handler arrival observed on Windows. Acceptance implemented in v2, not yet observed live |
+| Walk-through exit volume | trigger volume → generic target loop `0xc2785` → message `0x27` → the same handler | Inferred from static analysis; v2 logs the activator for each arrival |
+| End of a scripted sequence | No script or cinematic code calls the single-player level change `0x2d530` directly, so such a change must trigger an exit object (logged by v2, typically with `activator=none` or `object`) or use a path outside `object.lto` | **UNVERIFIED**. Instrumented only; script playback stays out of scope |
+
+All three paths end at the same server decision: one change per epoch, to the next route world,
+through the native multiplayer end-of-level and NextLevel. The developer `ExitLevel` command
+calls the single-player level change directly and **bypasses the session**. Do not use it in
+tests.
+
+## Natural transition test (build `coop-session-v2`, cheats on the disposable server only)
+
+1. Check that the server log starts with `build=coop-session-v2 … sha256=0018a3f8…` and `route=R1M2B>R1M2C>R1M3A`.
+2. Launch the client with `Psycho.exe` → Play and join. In chat (**T**), type `!ready`, then `!start`.
+3. Noclip is allowed only because this test server starts with `AllowCheats=1`. Use the client
+   bindings `V` (NoClip) and `I` (Invuln).
+4. **Without typing `!next`**, walk into the R1M2B hallway exit. Expected log lines:
+   `exit-seen … activator=member:<name>`, then `exit next=worlds/realm1/r1m2c`, then
+   intermission and epoch 2. Note the time of entering the volume.
+5. On R1M2C, right-click (Use) the golden mirror and note the time. Expected:
+   `exit-seen next=worlds/realm1/r1m3a … activator=member:<name>`, then `exit …`, then
+   `world-loaded worlds\realm1\R1M3A` (epoch 3).
+6. Use the mirror or exit again during the intermission: there must be no second change.
+7. On R1M3A, report what any exit logs (off-route: `exit-refused`, one chat reply).
+
 ## Known limitations and risks
-* The exit trigger may never fire in multiplayer. This is the largest unknown, and `!next`
-  is the fallback.
+* A natural exit has not been observed changing the world on Windows yet. `!next` remains the
+  host fallback and must be reported as command-initiated.
 * Single-player level scripts (`CS2START.SCR`), cinematic events and AI scripting may not run
   in multiplayer. Enemies, doors and objectives may differ from single player. This is to be
   observed in step 4.
