@@ -28,6 +28,13 @@ jobs:
           ld --version | head -1
           test "$(gcc -dumpfullversion)" = "13.3.0"
           ld --version | head -1 | grep -F '2.42'
+      - name: Reject client release tags outside stable mainline
+        if: startsWith(github.ref, 'refs/tags/kpcfix-1.13-r')
+        shell: bash
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
+            { echo 'ERROR: client release tag is not on stable main history'; exit 1; }
       - name: Rebuild client from the exact commit
         run: python3 source/build.py --build-dir "${RUNNER_TEMP}/client-build" --output "${RUNNER_TEMP}/client-build/dinput.dll"
       - name: Verify tracked DLL, symbol map and build report
@@ -62,6 +69,30 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Block experimental co-op from stable Server Tools and server tags
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          dll = Path('server-tools/KPCServerTools.dll').read_bytes()
+          source = Path('server-tools/server-tools-source/src/proxy.c').read_text()
+          markers = (b'[KPCFix Co-op]', b'TraceCampaign', b'spawn-list-control-')
+          assert not any(m in dll for m in markers), 'Experimental co-op code detected in stable DLL'
+          assert '[KPCFix Co-op]' not in source and 'TraceCampaign' not in source, 'Experimental co-op code in stable server source'
+          print('PASS: stable server has no experimental co-op markers')
+          PY
+          if [[ "$GITHUB_REF" == refs/tags/server-tools-v* ]]; then
+            git fetch origin main
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
+              { echo 'ERROR: stable server tag does not point to main history'; exit 1; }
+          fi
+      - name: Verify shared client/server source copies
+        shell: bash
+        run: |
+          for name in sha256.c sha256.h winmini.h; do
+            cmp "source/src/$name" "server-tools/server-tools-source/src/$name"
+          done
+          echo 'PASS: shared sources remain byte-identical'
       - name: Rebuild with the beta's Debian GCC 14.2 / binutils 2.44
         shell: bash
         run: |
