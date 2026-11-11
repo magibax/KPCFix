@@ -2,7 +2,7 @@
 
 **Status (2026-11-11):**
 * **Live Windows client tested (DLL `262b6ead…`, one client):** join, lobby, `!ready`, `!start`, and a host `!next` change R1M2B → R1M2C.
-* **Natural exits:** implemented in build `coop-session-v2` (`0018a3f8…`) and tested in emulation. **A natural (non-`!next`) transition has NOT been observed on Windows.**
+* **Natural exits WINDOWS-TESTED (build `coop-session-v2`, `0018a3f8…`, one client):** R1M2B → R1M2C through the hallway exit, and R1M2C → R1M3A through the golden mirror, both **without `!next`**. The R1M3A → R1M3B exit was detected and refused as off-route.
 * **Not yet tested:** a second client.
 
 Experimental: this code is only on `feature/coop-campaign` and its child branches. It is not
@@ -17,8 +17,9 @@ part of the stable Server Tools R3 on `main`. Every switch defaults to off.
 | R1M2B separated placements (3 fixed positions) with slot reclamation | IMPLEMENTED; placements WINDOWS-TESTED earlier (trial build); slot 0 reused after a live rejoin | `SPAWN-ENGINE-TRACE.md` |
 | Server-coordinated Start (fresh R1M2B, epoch 1) | **WINDOWS-TESTED, 1 client** | native intermission, world reload and respawn observed |
 | Host override `!next` R1M2B → R1M2C | **WINDOWS-TESTED, 1 client** | a **command-initiated** change, not evidence of a natural exit |
-| Exit handler reached in multiplayer | **WINDOWS-OBSERVED** on R1M2C: `exit-seen next=worlds/realm1/r1m3a flag152=1` | the log alone does not prove that the player's right-click caused it; `coop-session-v2` logs the activator for that |
-| Natural exits (golden mirror, walk-through exit volume) → next route world | IMPLEMENTED in `coop-session-v2`, EMULATOR-TESTED; **NOT WINDOWS-TESTED** | `262b6ead` refused every multiplayer exit because of a misread flag; see [exit evidence](#exit-objects-and-the-meaning-of-0x152) |
+| Exit handler reached in multiplayer | **WINDOWS-OBSERVED** with the activator recorded (`activator=member:johnny`) | [natural transition evidence](#natural-transition-evidence-coop-session-v2) |
+| Natural exits → next route world: R1M2B hallway → R1M2C; R1M2C golden mirror → R1M3A | **WINDOWS-TESTED, 1 client** (`0018a3f8`), no `!next` | one change per epoch; the off-route R1M3B exit was refused with a single chat reply |
+| Intermission scoreboard and next-map music during transitions | **UNDER INVESTIGATION** | [transition intermission and music](#transition-intermission-and-music-investigation) |
 | Map changes at the end of a scripted sequence | **UNVERIFIED** | no direct level-change call from script code in `object.lto`; see [transition mechanisms](#three-transition-mechanisms) |
 | Intro cinematics | **NOT SUPPORTED** (skipped) | native multiplayer did not start the authored intro; it is not forced |
 | Generic safe spawning on other maps (allocator) | **DISABLED** | full-body clearance is not proven; see `GENERAL-ALLOCATOR.md` |
@@ -316,6 +317,72 @@ All three paths end at the same server decision: one change per epoch, to the ne
 through the native multiplayer end-of-level and NextLevel. The developer `ExitLevel` command
 calls the single-player level change directly and **bypasses the session**. Do not use it in
 tests.
+
+## Natural transition evidence (coop-session-v2)
+
+DLL `0018a3f8…`, one client (`johnny`), cheats allowed on the disposable server only.
+Excerpt from `KPCServerTools.log`. No `!next` was typed:
+```text
+g=1 e=1 seq=4 PLAYING exit-seen next=worlds/realm1/r1m2c flag152=1 exit=0x03280ef4 activator=member:johnny start=-
+g=1 e=1 seq=5 TRANSITION exit next=worlds/realm1/r1m2c flag152=1 exit=0x03280ef4 activator=member:johnny start=-
+g=1 e=1 seq=5 TRANSITION change [Co-op] Exit reached -> R1M2C
+g=1 e=2 seq=6 INTRO_PENDING world-loaded worlds\realm1\R1M2C
+g=1 e=2 seq=7 PLAYING exit-seen next=worlds/realm1/r1m3a flag152=1 exit=0x03280ef4 activator=member:johnny start=-
+g=1 e=2 seq=8 TRANSITION change [Co-op] Exit reached -> R1M3A
+g=1 e=3 seq=9 INTRO_PENDING world-loaded worlds\realm1\R1M3A
+g=1 e=3 seq=10 PLAYING exit-seen next=Worlds/Realm1/R1M3b flag152=1 exit=0x03280ef4 activator=member:johnny start=-
+g=1 e=3 seq=10 PLAYING exit-refused [Co-op] Exit destination is outside the MVP route; not changing world
+```
+The user reported the R1M2C change was made by right-clicking the golden mirror. The
+`exit=` address repeats across worlds because the engine reuses that object slot; it is not a
+stable exit identity.
+
+## Transition intermission and music (investigation)
+
+**User observation (natural transitions):**
+1. A multiplayer scoreboard/intermission appears.
+2. A mouse click dismisses it, and it can return while the new map is presented.
+3. The next map's DirectMusic is heard starting, then it stops.
+
+The user's hypothesis is that the click skips an intro cinematic. That is **not supported**
+by static evidence, see below.
+
+**Confirmed by static analysis of the stock 1.13 binaries** (`object.lto` `3a03f879…`,
+`cshell.dll` `703813a4…`; message names come from the `MID_*` table at cshell `0x2011ca6c`):
+
+| Step | Code | Finding |
+| --- | --- | --- |
+| Session change | `0x100760` | Stores the server time at `+0x1ae4` and broadcasts an empty message: `0x47` MID_SINGLE_INTERMISSION in single player, **`0x48` MID_MULTI_INTERMISSION** in multiplayer. Sets `+0x1ae8`. This is the same routine the frag and time limits use |
+| Deferred change | `0x1007c0`, `0x100720` | After 3.0 s, native NextLevel runs from the server update, outside object handlers |
+| NextLevel | `0x1005c0` | Sends `0x46` MID_CHANGING_LEVELS, then loads the world |
+| Client `0x48` | cshell `0xcb4f7` → `0xcdd50` | Sets client game state `[shell+0x1398]=7` and switches the screen manager to screen 2 (the scoreboard) |
+| Intro | `WorldProperties` `0x104830` | Calls `0xc5340(starting_cinematic)` **only when game type = 0**. In multiplayer the native code never starts the opening cinematic. The co-op line `Intro skipped` is accurate |
+| World music | `WorldProperties` `0x10494b` → `0xbad50` | Parses the world's music property and broadcasts MID_MUSIC_LOAD / MID_MUSIC_LOAD_STRING to all clients. Not gated on game type |
+| Client music | cshell OnMessage (`0xcad30`) | MUSIC_LOAD → `0xd9550`, MUSIC_PLAY → `0xd9880`, MUSIC_READY → `0xd9960`, CHANGING_LEVELS → `0xcdc80` |
+| Client menu music | cshell `0x2bff0` / `0x2c090` | Entering the menu/intermission UI saves the current music state and plays `menu`. Leaving it unloads `menu`, then **resumes playback only if the saved state can be restored** (`0xd9bd0`) |
+| Mouse input | cshell `OnCommandOn` (`0xc9d80`) | Mouse buttons are bound to Fire (31) and Use (32) |
+
+**Not established yet:**
+* whether the scoreboard path enters the menu-music swap;
+* which client handler runs on the dismissing click;
+* whether the music that stops is the new world's music, or the `menu` track that was
+  restored without a valid saved state.
+
+The leading **hypothesis** is that the intermission UI saves the music state before the new
+world's music exists, so leaving the UI restores nothing and playback stops. This needs the
+client-side trace below.
+
+**Discriminating tests (no code change):**
+* In the client console, set `c_DebugMessages 1`. The stock client then prints
+  `Client OnMessage: <id> <MID name>` for every server message, so the order of
+  MID_MULTI_INTERMISSION, MID_CHANGING_LEVELS and MID_MUSIC_* is visible.
+* A server-console `nextlevel` changes world through the same hooked NextLevel but **never
+  sends `0x48`**. If music survives that and not a natural exit, the intermission path is
+  implicated.
+
+**Pending instrumentation (not yet built):** opt-in `[Coop] TraceTiming=1` adds `t=<ms since
+session armed>` to each co-op log line. It stays uncommitted until it can be rebuilt and
+reproduced in the pinned toolchain.
 
 ## Natural transition test (build `coop-session-v2`, cheats on the disposable server only)
 
