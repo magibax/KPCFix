@@ -1,4 +1,5 @@
 /* Asset-free tests for the co-op lobby/session state machine (kpc-coop/1). */
+#pragma GCC diagnostic ignored "-Wunused-function"   /* campaign API is exercised in test_coop_campaign.c */
 #include "coop_session.h"
 #include <assert.h>
 #include <stdio.h>
@@ -37,13 +38,14 @@ static void test_normalize(void){
  assert(!coop_world_normalize("",out));
  assert(!coop_world_normalize("worlds\\realm1\\R1 M2B",out)); /* space rejected */
  {char big[200];memset(big,'a',199);big[199]=0;assert(!coop_world_normalize(big,out));}
- assert(coop_route_index("worlds\\realm1\\R1M2B")==0);
- assert(coop_route_index("worlds\\realm1\\R1M2C")==1);
+ {CoopSession mvp;coop_session_init(&mvp,1,3);
+ assert(coop_route_index(&mvp,"worlds\\realm1\\R1M2B")==0);
+ assert(coop_route_index(&mvp,"worlds\\realm1\\R1M2C")==1);
  /* NextWorld exactly as the R1M2C mirror exit object reported it on Windows. */
- assert(coop_route_index("worlds/realm1/r1m3a")==2);
- assert(coop_route_index("worlds\\realm1\\R1M3B")==-1);
- assert(coop_route_index("worlds\\deathmatch\\PM01")==-1);
- assert(coop_route_index(0)==-1);
+ assert(coop_route_index(&mvp,"worlds/realm1/r1m3a")==2);
+ assert(coop_route_index(&mvp,"worlds\\realm1\\R1M3B")==-1);
+ assert(coop_route_index(&mvp,"worlds\\deathmatch\\PM01")==-1);
+ assert(coop_route_index(&mvp,0)==-1);}
 }
 
 static void test_lobby_ready_start(void){

@@ -679,7 +679,11 @@ static struct {int valid;U32 epoch;char song[0x80];U8 has_song,play,intensity,gr
 static int coop_intro;
 static struct {int valid;U32 epoch;char name[0x100];} coop_intro_snap;
 /* Proof of concept: only R1M3A's intro (cathedral1start.scr) is enabled. */
-static int coop_intro_world_allowed(U32 route_pos){return route_pos==2u;}
+/* [Coop] CoopIntroAll (test only, default 0): allow any route world's intro. */
+static int coop_intro_all;
+static int coop_intro_world_allowed(U32 route_pos){
+ return route_pos<coop_state.route_len&&(coop_intro_all||(coop_state.route[route_pos].flags&COOP_W_INTRO_OK));
+}
 /* [Coop] CoopScriptClock (default = CoopIntro): run the original script clock
  * on wall-clock time. Evidence (stock server.dll 83b7bce8, dedicated.exe,
  * object.lto 3a03f879):
@@ -759,8 +763,13 @@ static U32 coop_spawner_ok,coop_spawner_no,coop_spawner_logged;
  * the original variable 15b678 before each world load. */
 static I32 coop_skill=-1;
 /* [Coop] CoopTestStartWorld: route world that !start loads (test option). */
-static U32 coop_start_pos;
+static const char *coop_start_label;
 static int coop_start_state;   /* 0 unset, 1 accepted, 2 rejected */
+/* [Coop] CoopCampaign (default 0): campaign graph from WORLDORDER with host
+ * selection (coop_campaign.h). [Coop] CoopLobbyWorld: world for the lobby
+ * after completion or !abort (empty = first world of the selection). */
+static int coop_campaign;
+static char coop_lobby_world[COOP_WORLD_MAX];
 /* Bounded, sequenced log: "[KPCFix Co-op] g=1 e=2 seq=7 PLAYING event detail" */
 static void coop_log(const char *event,const char *detail){
  char line[240];U32 n=0;
@@ -804,20 +813,33 @@ static void coop_presence(U32 now){
 }
 /* Select route[target] as the next native maplist entry. Fails closed if the
  * server's maplist does not contain the route world. */
+/* The native maplist holds at most 50 names (fdd3f: 0x32 entries of 0x7f
+ * bytes at shell+0x210; count shell+0x1ae0), too few for the 48-world
+ * campaign plus the map "start" prepends. In campaign mode a target world
+ * missing from the maplist is written (memory only; the file is untouched)
+ * into the slot NextLevel takes next; the MVP route still requires it. */
 static int coop_prepare_maplist(U32 target){
- U32 shell,count,i,mbi[7];char name[0x80];
- if(target>=COOP_ROUTE_LEN||!coop_rd((U32)coop_image+COOP_SHELL_RVA,&shell)||
-    !coop_rd(shell+0x1ae0u,&count)||!count||count>64)return 0;
+ U32 shell,count,i,cursor_value,slot,mbi[7];char name[0x80];
+ const char *world=coop_target_world(&coop_state,target);U32 *cursor=(U32 *)(coop_image+COOP_MAPCURSOR_RVA);
+ if(!world[0]||!coop_rd((U32)coop_image+COOP_SHELL_RVA,&shell)||
+    !coop_rd(shell+0x1ae0u,&count)||!count||count>50)return 0;
+ if(VirtualQuery(cursor,mbi,sizeof(mbi))!=sizeof(mbi)||mbi[4]!=0x1000||!(mbi[5]&0xccu)||(mbi[5]&0x100))return 0;
  for(i=0;i<count;i++){
   coop_copy_str(name,shell+0x210u+i*0x7fu,0x7f);
-  if(coop_world_equal(name,coop_route[target])){
-   U32 *cursor=(U32 *)(coop_image+COOP_MAPCURSOR_RVA);
-   if(VirtualQuery(cursor,mbi,sizeof(mbi))!=sizeof(mbi)||mbi[4]!=0x1000||!(mbi[5]&0xccu)||(mbi[5]&0x100))return 0;
-   *cursor=i?i-1:count-1;   /* fc640 pre-increments and wraps */
-   return 1;
-  }
+  if(coop_world_equal(name,world)){*cursor=i?i-1:count-1;return 1;}   /* fc640 pre-increments and wraps */
  }
- return 0;
+ if(!coop_campaign||!coop_rd((U32)coop_image+COOP_MAPCURSOR_RVA,&cursor_value))return 0;
+ slot=cursor_value+1u<count?cursor_value+1u:0u;
+ if(!bsp_mem_readable(shell+0x210u+slot*0x7fu,0x7f))return 0;
+ {
+  char *dst=(char *)(shell+0x210u+slot*0x7fu);U32 n=0,k;const char *pre="worlds\\";
+  for(k=0;pre[k]&&n<0x7e;k++)dst[n++]=pre[k];
+  for(k=0;world[k]&&n<0x7e;k++)dst[n++]=world[k]=='/'?'\\':world[k];
+  dst[n]=0;
+  {char line[160];U32 m=0;coop_text(line,&m,"slot=",sizeof line);coop_dec(line,&m,slot,sizeof line);
+   coop_text(line,&m," world=",sizeof line);coop_text(line,&m,dst,sizeof line);coop_log("maplist",line);}
+ }
+ return 1;
 }
 static void coop_current_world(char out[0x80]){
  U32 shell,count,cursor;out[0]=0;
@@ -1532,7 +1554,9 @@ static int apply_object(HMODULE module){
  if(coop_session_enabled){
   coop_image=b;coop_session_init(&coop_state,coop_min_players,coop_max_players);coop_t0=GetTickCount();
   coop_script_clock_reset(&coop_clock);coop_sb_reset(&coop_sb);
-  coop_state.start_pos=coop_start_pos;
+  if(coop_campaign)coop_session_enable_campaign(&coop_state);
+  {U32 k;for(k=0;coop_lobby_world[k]&&k+1<COOP_WORLD_MAX;k++)coop_state.lobby_world[k]=coop_lobby_world[k];coop_state.lobby_world[k]=0;}
+  coop_state.test_label=coop_start_label;coop_resolve_test_start(&coop_state);
   coop_apply_skill();
  }
  for(i=0;i<OPTIONAL_SITES;i++)if(site[i].enabled)copy(b+site[i].rva,site[i].hooked,site[i].size);
@@ -1648,18 +1672,29 @@ static void initialize(void){
  coop_sound_clock=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSoundClock",coop_script_clock,ini_path)!=0;
  /* Test-only start world: accepted only if it names a route world exactly
   * (case-insensitive ASCII); anything else is ignored (start stays R1M2B). */
- coop_start_pos=0;coop_start_state=0;
+ coop_start_label=0;coop_start_state=0;
+ coop_campaign=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopCampaign",0,ini_path)!=0;
+ coop_intro_all=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopIntroAll",0,ini_path)!=0;
+ coop_lobby_world[0]=0;
+ if(coop_session_enabled){
+  WCHAR w[0x80];U32 wn=GetPrivateProfileStringW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopLobbyWorld",(const WCHAR *)L"",w,0x80,ini_path),k;
+  char a[0x80];int ascii=wn>0&&wn<0x7f;
+  for(k=0;ascii&&k<wn;k++){if(w[k]<33||w[k]>126)ascii=0;a[k]=(char)w[k];}
+  if(ascii){a[wn]=0;if(!coop_world_normalize(a,coop_lobby_world))coop_lobby_world[0]=0;}
+ }
  if(coop_session_enabled){
   WCHAR w[16];U32 wn=GetPrivateProfileStringW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopTestStartWorld",(const WCHAR *)L"",w,16,ini_path),k,pos;
   if(wn>0&&wn<15){
    char a[16];int ascii=1;
    for(k=0;k<wn;k++){if(w[k]<32||w[k]>126)ascii=0;a[k]=(char)coop_lower((char)w[k]);}
    a[wn]=0;coop_start_state=2;
-   for(pos=0;ascii&&pos<COOP_ROUTE_LEN;pos++){
-    const char *label=coop_route_label(pos);int same_label=1;
-    for(k=0;label[k]||a[k];k++)if(coop_lower(label[k])!=a[k]){same_label=0;break;}
-    if(same_label){coop_start_pos=pos;coop_start_state=1;break;}
-   }
+   {const CoopWorld *table=coop_campaign?coop_campaign_worlds:coop_mvp_worlds;
+    U32 len=coop_campaign?COOP_CAMPAIGN_LEN:COOP_MVP_LEN;
+    for(pos=0;ascii&&pos<len;pos++){
+     const char *label=table[pos].label;int same_label=1;
+     for(k=0;label[k]||a[k];k++)if(coop_lower(label[k])!=a[k]){same_label=0;break;}
+     if(same_label){coop_start_label=label;coop_start_state=1;break;}
+    }}
   }else if(wn)coop_start_state=2;
  }
  if(active&&(spawn_trace_enabled||coop_session_enabled||campaign_trace)){
@@ -1704,8 +1739,16 @@ static void initialize(void){
     "[KPCFix Co-op] effective CoopSoundClock=0 (sound timers = engine frame time)");
   if(coop_start_state==1){
    char line[96];U32 m=0;coop_text(line,&m,"[KPCFix Co-op] effective CoopTestStartWorld=",sizeof line);
-   coop_text(line,&m,coop_route_label(coop_start_pos),sizeof line);coop_text(line,&m," (test start)",sizeof line);log_file(line);
-  }else if(coop_start_state==2)log_file("[KPCFix Co-op] CoopTestStartWorld ignored: not a route world (R1M2B, R1M2C, R1M3A)");
+   coop_text(line,&m,coop_start_label,sizeof line);coop_text(line,&m," (test start)",sizeof line);log_file(line);
+  }else if(coop_start_state==2)log_file(coop_campaign?"[KPCFix Co-op] CoopTestStartWorld ignored: not a WORLDORDER world":
+                                        "[KPCFix Co-op] CoopTestStartWorld ignored: not a route world (R1M2B, R1M2C, R1M3A)");
+  if(coop_session_enabled){
+   char line[200];U32 m=0;
+   coop_text(line,&m,coop_campaign?"[KPCFix Co-op] effective CoopCampaign=1 (WORLDORDER graph, 48 worlds; default selection full campaign from R1M0)":
+                                   "[KPCFix Co-op] effective CoopCampaign=0 (MVP route R1M2B>R1M2C>R1M3A)",sizeof line);log_file(line);
+   if(coop_lobby_world[0]){m=0;coop_text(line,&m,"[KPCFix Co-op] effective CoopLobbyWorld=",sizeof line);coop_text(line,&m,coop_lobby_world,sizeof line);log_file(line);}
+   if(coop_intro_all)log_file("[KPCFix Co-op] effective CoopIntroAll=1 (TEST: every route world's starting_cinematic may play)");
+  }
   log_file(model_registry_enabled?
     "[KPCFix Co-op] effective TraceModelRegistry=1":
     "[KPCFix Co-op] effective TraceModelRegistry=0 (set [Coop] TraceModelRegistry=1; restart)");

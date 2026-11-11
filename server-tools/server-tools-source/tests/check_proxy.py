@@ -105,6 +105,8 @@ def profile_int(a):
   if '--no-script-clock' in sys.argv:return 0
   if '--script-clock' in sys.argv:return 1
   return a[2]
+ if key=='CoopCampaign':return int('--campaign' in sys.argv)
+ if key=='CoopIntroAll':return 0
  if key=='CoopStartScoreboard':return 0 if '--no-start-scoreboard' in sys.argv else a[2]
  if key=='CoopSpawners':return 0 if '--no-spawners' in sys.argv else a[2]
  if key=='TraceSpawners':return int('--trace-spawners' in sys.argv)
@@ -126,6 +128,9 @@ def profile_str(a):
  if wstr(a[1])=='CoopTestStartWorld':
   for x in sys.argv:
    if x.startswith('--test-start='):value=x.split('=',1)[1]
+ if wstr(a[1])=='CoopLobbyWorld':
+  for x in sys.argv:
+   if x.startswith('--lobby='):value=x.split('=',1)[1]
  data=(value[:a[4]-1]+'\0').encode('utf-16le');u.mem_write(a[3],data);return len(value[:a[4]-1])
 functions['GetPrivateProfileStringW']=stub('GetPrivateProfileStringW',6,profile_str)
 clock=[1000]
@@ -357,6 +362,42 @@ def coop_scenario():
   clock[0]+=ms;call_regs(target[0xffbbf],[],{UC_X86_REG_ECX:shell},0)
  def sbm():return [(m[0],m[1]) for m in msgs if m[1] in (0x48,0x69)]
  def start_seq(client,song):return [[client,0x4a,song],[client,0x51,2],[client,0x4c,song],[client,0x50,1]]
+ if '--campaign' in sys.argv:
+  # CoopCampaign=1: WORLDORDER graph and host selection. The emulated maplist
+  # holds only R1M2B, R1M2C, R1M3A, so campaign worlds are written into the
+  # slot NextLevel takes next (memory only).
+  text=b''.join(log).decode('latin1')
+  assert 'effective CoopCampaign=1 (WORLDORDER graph, 48 worlds' in text
+  roster(0xa1);spawn(alice);roster(0xa1,0xb2);spawn(bob)
+  assert any('full campaign (R1M0..R5M1B, 48 worlds)' in m for m in chat(bob,'!campaign'))
+  assert any('Only the host' in m for m in chat(bob,'!campaign realm fire'))
+  out=chat(alice,'!campaign from earth');assert any('Host selected from Earth (R2M0..R5M1B, 36 worlds)' in m for m in out),out
+  chat(alice,'!ready');chat(bob,'!ready');out=chat(alice,'!start')
+  assert any('Starting -> R2M0' in m for m in out),out
+  if sb:frame(1100)
+  assert changes()==1
+  cur=read(obj+0x16da88);slot=cur+1 if cur+1<3 else 0
+  assert cstr(shell+0x210+slot*0x7f)=='worlds\\realm2\\r2m0',cstr(shell+0x210+slot*0x7f)
+  text=b''.join(log).decode('latin1');assert 'maplist slot=%d world=worlds\\realm2\\r2m0'%slot in text
+  next_level()
+  # The NextLevel stub advances the cursor exactly like fc640: it now names R2M0.
+  assert read(obj+0x16da88)==slot
+  u.mem_write(shell+0x210+slot*0x7f,b'worlds\\realm2\\R2M0\0')   # as the engine would show it
+  spawn(alice);assert any('R2M0 started (epoch 1)' in m for m in said),said[-3:]
+  # Natural exit to the WORLDORDER successor; anything else is refused.
+  n=len(said);exit_trigger('worlds/realm2/r2m1b',activator=0xa1);assert changes()==1
+  assert any('not the next world of the selected route' in m for m in said[n:]),said[n:]
+  exit_trigger('worlds/realm2/r2m1a',activator=0xa1);assert changes()==2
+  next_level();spawn(alice)
+  # Host abort returns everybody to the lobby world (CoopLobbyWorld or the route start).
+  out=chat(alice,'!abort');lobby='--lobby=' in ' '.join(sys.argv)
+  assert any(('-> lobby PM01' if lobby else '-> lobby R2M0') in m for m in out),out
+  assert changes()==3
+  next_level()
+  assert any('LOBBY' in m for m in chat(alice,'!coop')),'back in the lobby phase'
+  assert not any('Starting' in m for m in chat(bob,'!start')),'only the host starts'
+  print('PASS co-op campaign: selection, start into a world missing from the maplist, successor-only exits, abort to lobby')
+  return
  if intro_flag:
   # Synchronised original intro (CoopIntro). The stock WorldProperties lookup
   # (call site 1045b1 -> c50c0) runs inside the native NextLevel, so a small

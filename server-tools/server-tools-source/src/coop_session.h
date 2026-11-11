@@ -25,7 +25,8 @@
 /* Windows evidence: R1M2B -> R1M2C changed via the host !next override; on
  * R1M2C a golden-mirror exit object reported NextWorld realm1/r1m3a (refused
  * by the earlier build). A natural R1M2C -> R1M3A change is not yet observed. */
-#define COOP_ROUTE_LEN 3u
+#include "coop_campaign.h"
+#define COOP_TARGET_LOBBY 0xffffu   /* CoopResult.target_pos: return to the lobby world */
 #define COOP_TRANSITION_TIMEOUT_MS 30000u
 #define COOP_LOAD_GRACE_MS 90000u
 
@@ -74,6 +75,16 @@ typedef struct {
  unsigned int reject_reply_epoch;    /* epoch+1 of the last off-route reply (0 = none) */
  int host;                          /* member index or -1 */
  CoopMember m[COOP_SESSION_MAX_MEMBERS];
+ /* Route view: the MVP table (CoopCampaign=0) or a WORLDORDER slice. */
+ const CoopWorld *route;
+ unsigned int route_len;
+ unsigned int campaign;             /* CoopCampaign=1: host selection enabled */
+ unsigned int sel_mode,sel_realm;   /* host selection; kept until changed */
+ const char *test_label;            /* CoopTestStartWorld label (test only) or 0 */
+ unsigned int lobby_pending;        /* current transition returns to the lobby */
+ unsigned int completed;            /* routes completed in this server run */
+ char world_label[16];              /* loaded world, e.g. R1M2B */
+ char lobby_world[COOP_WORLD_MAX];  /* normalised lobby world or empty = route start */
 } CoopSession;
 
 typedef struct {
@@ -82,7 +93,6 @@ typedef struct {
  char msg[COOP_MSG_MAX];
 } CoopResult;
 
-static const char *const coop_route[COOP_ROUTE_LEN]={"realm1/r1m2b","realm1/r1m2c","realm1/r1m3a"};
 
 /* ---------- bounded string helpers (no libc) ---------- */
 static unsigned int coop_strlen(const char *s,unsigned int max){
@@ -142,15 +152,63 @@ static int coop_world_equal(const char *a,const char *b){
  for(i=0;x[i]||y[i];i++)if(x[i]!=y[i])return 0;
  return 1;
 }
-/* Returns the route index of a world or -1. */
-static int coop_route_index(const char *world){
+/* Returns the index of a world in the active route or -1. */
+static int coop_route_index(const CoopSession *s,const char *world){
  unsigned int i;
- for(i=0;i<COOP_ROUTE_LEN;i++)if(coop_world_equal(world,coop_route[i]))return (int)i;
+ for(i=0;i<s->route_len;i++)if(coop_world_equal(world,s->route[i].world))return (int)i;
  return -1;
 }
-static const char *coop_route_label(unsigned int pos){
- static const char *const label[COOP_ROUTE_LEN]={"R1M2B","R1M2C","R1M3A"};
- return pos<COOP_ROUTE_LEN?label[pos]:"?";
+static const char *coop_route_label(const CoopSession *s,unsigned int pos){
+ return pos<s->route_len?s->route[pos].label:"?";
+}
+/* World a CHANGE_WORLD result targets: a route world or the lobby world. */
+static const char *coop_target_world(const CoopSession *s,unsigned int target){
+ if(target==COOP_TARGET_LOBBY)return s->lobby_world[0]?s->lobby_world:(s->route_len?s->route[0].world:"");
+ return target<s->route_len?s->route[target].world:"";
+}
+/* Upper-case last path component without ".dat", bounded (e.g. R1M2B). */
+static void coop_world_label(const char *world,char out[16]){
+ char w[COOP_WORLD_MAX];unsigned int i,start=0,n=0;
+ out[0]=0;
+ if(!coop_world_normalize(world,w))return;
+ for(i=0;w[i];i++)if(w[i]=='/')start=i+1;
+ for(i=start;w[i]&&n<15;i++)out[n++]=(w[i]>='a'&&w[i]<='z')?(char)(w[i]-32):w[i];
+ out[n]=0;
+}
+/* Global WORLDORDER index of route position pos, or -1 for the MVP table. */
+static int coop_campaign_index(const CoopSession *s,unsigned int pos){
+ if(!s->campaign||pos>=s->route_len)return -1;
+ return (int)((unsigned int)(s->route-coop_campaign_worlds)+pos);
+}
+/* Resolve the test start label against the active route (0 if absent). */
+static void coop_resolve_test_start(CoopSession *s){
+ unsigned int i;
+ s->start_pos=0;
+ if(!s->test_label)return;
+ for(i=0;i<s->route_len;i++)if(coop_word(s->route[i].label,s->test_label)){s->start_pos=i;return;}
+}
+/* Apply a selection (campaign mode). Returns 0 if invalid; unchanged then. */
+static int coop_session_select(CoopSession *s,unsigned int mode,unsigned int realm){
+ unsigned int first,len;
+ if(!s->campaign||!coop_campaign_slice(mode,realm,&first,&len))return 0;
+ s->sel_mode=mode;s->sel_realm=mode==COOP_SEL_FULL?0:realm;
+ s->route=&coop_campaign_worlds[first];s->route_len=len;
+ coop_resolve_test_start(s);
+ return 1;
+}
+/* Proxy, once at arm: enable the campaign graph with the default selection
+ * (full campaign from the first world, realm1/r1m0). */
+static void coop_session_enable_campaign(CoopSession *s){
+ s->campaign=1;coop_session_select(s,COOP_SEL_FULL,0);
+}
+/* "full (R1M0..R5M1B, 49 worlds)" / "from Earth (...)" / "realm Fire (...)". */
+static void coop_selection_text(const CoopSession *s,char *out,unsigned int *n){
+ if(!s->campaign){coop_append(out,n,"MVP route R1M2B>R1M2C>R1M3A");return;}
+ if(s->sel_mode==COOP_SEL_FULL)coop_append(out,n,"full campaign");
+ else{coop_append(out,n,s->sel_mode==COOP_SEL_FROM?"from ":"realm ");coop_append(out,n,coop_realm_name(s->sel_realm));}
+ coop_append(out,n," (");coop_append(out,n,coop_route_label(s,0));coop_append(out,n,"..");
+ coop_append(out,n,coop_route_label(s,s->route_len-1u));coop_append(out,n,", ");
+ coop_append_uint(out,n,s->route_len);coop_append(out,n," worlds)");
 }
 static const char *coop_phase_name(int phase){
  switch(phase){
@@ -174,6 +232,7 @@ static void coop_session_init(CoopSession *s,unsigned int min_players,unsigned i
  if(min_players>max_players)min_players=max_players;
  s->min_players=min_players;s->max_players=max_players;
  s->phase=COOP_PHASE_LOBBY;s->generation=1;s->host=-1;
+ s->route=coop_mvp_worlds;s->route_len=COOP_MVP_LEN;s->sel_mode=COOP_SEL_MVP;
 }
 static int coop_find_client(const CoopSession *s,unsigned int client){
  unsigned int i;
@@ -220,7 +279,7 @@ static void coop_status(const CoopSession *s,char out[COOP_MSG_MAX]){
  unsigned int n=0,i;
  out[0]=0;
  coop_append(out,&n,"[Co-op] ");coop_append(out,&n,coop_phase_name(s->phase));
- coop_append(out,&n," ");coop_append(out,&n,coop_route_label(s->route_pos));
+ coop_append(out,&n," ");coop_append(out,&n,s->world_label[0]?s->world_label:coop_route_label(s,s->route_pos));
  coop_append(out,&n," e");coop_append_uint(out,&n,s->epoch);
  coop_append(out,&n,":");
  for(i=0;i<COOP_SESSION_MAX_MEMBERS;i++){
@@ -293,7 +352,7 @@ static int coop_session_seen(CoopSession *s,unsigned int client,unsigned int pla
    unsigned int n=0,k,ready=0;
    for(k=0;k<COOP_SESSION_MAX_MEMBERS;k++)if(s->m[k].used&&!s->m[k].away&&s->m[k].spawned&&s->m[k].seen_epoch==s->epoch)ready++;
    r->action=COOP_ACT_ANNOUNCE;r->msg[0]=0;
-   coop_append(r->msg,&n,"[Co-op] ");coop_append(r->msg,&n,coop_route_label(s->route_pos));
+   coop_append(r->msg,&n,"[Co-op] ");coop_append(r->msg,&n,coop_route_label(s,s->route_pos));
    coop_append(r->msg,&n," loaded. Intro starts when all players are in (");
    coop_append_uint(r->msg,&n,ready);coop_append(r->msg,&n,"/");coop_append_uint(r->msg,&n,coop_present_count(s));
    coop_append(r->msg,&n,")");
@@ -304,7 +363,7 @@ static int coop_session_seen(CoopSession *s,unsigned int client,unsigned int pla
   s->phase=COOP_PHASE_GAMEPLAY;s->seq++;
   if(r){
    unsigned int n=0;r->action=COOP_ACT_ANNOUNCE;r->msg[0]=0;
-   coop_append(r->msg,&n,"[Co-op] ");coop_append(r->msg,&n,coop_route_label(s->route_pos));
+   coop_append(r->msg,&n,"[Co-op] ");coop_append(r->msg,&n,coop_route_label(s,s->route_pos));
    coop_append(r->msg,&n," started (epoch ");coop_append_uint(r->msg,&n,s->epoch);
    coop_append(r->msg,&n,"). Intro skipped. Reach the exit together.");
   }
@@ -352,13 +411,15 @@ static void coop_begin_change(CoopSession *s,unsigned int target,unsigned int no
  s->transition_epoch=s->epoch;s->transition_ms=now;s->seq++;
  r->action=COOP_ACT_CHANGE_WORLD;r->target_pos=target;r->msg[0]=0;
  coop_append(r->msg,&n,"[Co-op] ");coop_append(r->msg,&n,why);
- coop_append(r->msg,&n," -> ");coop_append(r->msg,&n,coop_route_label(target));
+ coop_append(r->msg,&n," -> ");
+ if(target==COOP_TARGET_LOBBY){char l[16];coop_world_label(coop_target_world(s,target),l);coop_append(r->msg,&n,"lobby ");coop_append(r->msg,&n,l);}
+ else coop_append(r->msg,&n,coop_route_label(s,target));
 }
 
 /* Chat command from a known member. Text is untrusted. */
 static void coop_session_command(CoopSession *s,unsigned int client,const char *text,
   unsigned int now,CoopResult *r){
- char cmd[16];unsigned int i=0,n=0,len;int me=coop_find_client(s,client);
+ char cmd[16],arg[2][12];unsigned int i=0,n=0,len,argc=0;int me=coop_find_client(s,client);
  coop_result(r,COOP_ACT_NONE,"");
  len=coop_strlen(text,COOP_COMMAND_MAX+1);
  if(!text||len>COOP_COMMAND_MAX)return;
@@ -372,17 +433,58 @@ static void coop_session_command(CoopSession *s,unsigned int client,const char *
  }
  cmd[n]=0;
  while(i<len&&(text[i]==' '||text[i]=='\t'))i++;
- if(!n||i!=len)return;                 /* trailing arguments are not accepted */
+ /* At most two short alphanumeric argument words (only !campaign uses them). */
+ while(i<len&&argc<2){
+  unsigned int k=0;
+  while(i<len&&k<sizeof(arg[0])-1){
+   char c=coop_lower(text[i]);
+   if(!((c>='a'&&c<='z')||(c>='0'&&c<='9')))break;
+   arg[argc][k++]=c;i++;
+  }
+  arg[argc][k]=0;
+  if(!k)break;
+  argc++;
+  while(i<len&&(text[i]==' '||text[i]=='\t'))i++;
+ }
+ if(!n||i!=len)return;                 /* anything else is not a command */
 #define COOP_IS(word) coop_word(cmd,word)
+ if(argc&&!COOP_IS("campaign"))return; /* only !campaign takes arguments */
  if(COOP_IS("coop")||COOP_IS("status")){
   r->action=COOP_ACT_REPLY;coop_status(s,r->msg);return;
  }
  if(COOP_IS("help")){
-  coop_result(r,COOP_ACT_REPLY,"[Co-op] kpc-coop/1: !ready !unready !leave !join !start(host) !next(host) !coop");
+  coop_result(r,COOP_ACT_REPLY,s->campaign?
+   "[Co-op] kpc-coop/1: !ready !unready !leave !join !coop !campaign [full|from <realm>|realm <realm>] !start !abort !next":
+   "[Co-op] kpc-coop/1: !ready !unready !leave !join !start(host) !next(host) !coop");
+  return;
+ }
+ if(COOP_IS("campaign")){
+  unsigned int mode=COOP_SEL_FULL,realm=0,m=0;
+  if(!s->campaign){coop_result(r,COOP_ACT_REPLY,"[Co-op] Campaign selection is off (CoopCampaign=0): MVP route R1M2B>R1M2C>R1M3A");return;}
+  if(!argc){
+   r->action=COOP_ACT_REPLY;r->msg[0]=0;
+   coop_append(r->msg,&m,"[Co-op] Selected: ");coop_selection_text(s,r->msg,&m);
+   coop_append(r->msg,&m,". Realms: water earth air fire nightmare (1-5)");
+   return;
+  }
+  if(me<0||me!=s->host){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can change the campaign");return;}
+  if(s->phase!=COOP_PHASE_LOBBY){coop_result(r,COOP_ACT_REPLY,"[Co-op] Campaign can only be changed in the lobby");return;}
+  if(argc==1&&coop_word(arg[0],"full"))mode=COOP_SEL_FULL;
+  else if(argc==2&&(coop_word(arg[0],"from")||coop_word(arg[0],"realm"))&&(realm=coop_realm_parse(arg[1]))!=0)
+   mode=coop_word(arg[0],"from")?COOP_SEL_FROM:COOP_SEL_REALM;
+  else{coop_result(r,COOP_ACT_REPLY,"[Co-op] Usage: !campaign full | from <realm> | realm <realm> (water earth air fire nightmare)");return;}
+  if(mode==s->sel_mode&&(mode==COOP_SEL_FULL||realm==s->sel_realm)){
+   r->action=COOP_ACT_REPLY;r->msg[0]=0;coop_append(r->msg,&m,"[Co-op] Already selected: ");coop_selection_text(s,r->msg,&m);return;
+  }
+  coop_session_select(s,mode,realm);s->seq++;
+  /* Everybody confirms the new selection: readiness is cleared. */
+  for(i=0;i<COOP_SESSION_MAX_MEMBERS;i++)s->m[i].ready=0;
+  r->action=COOP_ACT_ANNOUNCE;r->msg[0]=0;
+  coop_append(r->msg,&m,"[Co-op] Host selected ");coop_selection_text(s,r->msg,&m);coop_append(r->msg,&m,". Type !ready");
   return;
  }
  if(me<0){
-  if(COOP_IS("ready")||COOP_IS("unready")||COOP_IS("leave")||COOP_IS("join")||COOP_IS("start")||COOP_IS("next"))
+  if(COOP_IS("ready")||COOP_IS("unready")||COOP_IS("leave")||COOP_IS("join")||COOP_IS("start")||COOP_IS("next")||COOP_IS("abort"))
    coop_result(r,COOP_ACT_REPLY,"[Co-op] You are not in the session (full or not spawned)");
   return;
  }
@@ -408,14 +510,24 @@ static void coop_session_command(CoopSession *s,unsigned int client,const char *
   if(present<s->min_players||ready!=present){
    r->action=COOP_ACT_REPLY;coop_status(s,r->msg);return;
   }
-  s->started=1;s->start_pending=1;
-  coop_begin_change(s,s->start_pos<COOP_ROUTE_LEN?s->start_pos:0u,now,r,"All ready. Starting");
+  s->started=1;s->start_pending=1;s->lobby_pending=0;
+  coop_begin_change(s,s->start_pos<s->route_len?s->start_pos:0u,now,r,"All ready. Starting");
+  return;
+ }
+ if(COOP_IS("abort")){
+  if(!s->campaign){coop_result(r,COOP_ACT_REPLY,"[Co-op] !abort needs CoopCampaign=1");return;}
+  if(me!=s->host){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can end the campaign");return;}
+  if(s->phase!=COOP_PHASE_GAMEPLAY&&s->phase!=COOP_PHASE_INTRO_PENDING&&s->phase!=COOP_PHASE_INTRO_RUNNING){
+   coop_result(r,COOP_ACT_REPLY,"[Co-op] Nothing to end (lobby or world change in progress)");return;
+  }
+  s->start_pending=0;s->lobby_pending=1;
+  coop_begin_change(s,COOP_TARGET_LOBBY,now,r,"Host ended the campaign");
   return;
  }
  if(COOP_IS("next")){
   if(me!=s->host){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can force the exit");return;}
   if(s->phase!=COOP_PHASE_GAMEPLAY){coop_result(r,COOP_ACT_REPLY,"[Co-op] Not in play; exit ignored");return;}
-  if(s->route_pos+1>=COOP_ROUTE_LEN){coop_result(r,COOP_ACT_REPLY,"[Co-op] End of the MVP route");return;}
+  if(s->route_pos+1>=s->route_len){coop_result(r,COOP_ACT_REPLY,s->campaign?"[Co-op] Last world of the selected route":"[Co-op] End of the MVP route");return;}
   if(s->transition_epoch==s->epoch){s->duplicate_exits++;return;}
   s->start_pending=0;
   coop_begin_change(s,s->route_pos+1,now,r,"Host override exit");
@@ -431,16 +543,32 @@ static void coop_session_exit(CoopSession *s,const char *next_world,unsigned int
  coop_result(r,COOP_ACT_NONE,"");
  if(s->phase==COOP_PHASE_TRANSITION||s->phase==COOP_PHASE_WORLD_LOADING||
     (s->epoch&&s->transition_epoch==s->epoch)){s->duplicate_exits++;return;}
- if(s->phase!=COOP_PHASE_GAMEPLAY){s->rejected_exits++;
+ /* A realm-opening INTRO world (R1M0-R4M0) leaves through its own script:
+  * the intro's last event is "trigger_generic CExitTrigger0". */
+ if(s->phase==COOP_PHASE_INTRO_RUNNING&&s->route_pos<s->route_len&&(s->route[s->route_pos].flags&COOP_W_INTRO)){}
+ else if(s->phase!=COOP_PHASE_GAMEPLAY){s->rejected_exits++;
   if(s->rejected_exits==1)coop_result(r,COOP_ACT_REPLY,"[Co-op] Exit ignored: session not started (!coop)");
   return;}
- idx=coop_route_index(next_world);
+ idx=coop_route_index(s,next_world);
+ /* Campaign: an exit from the last world of the selection to its WORLDORDER
+  * successor (or any exit from the final campaign world) completes it. */
+ if(s->campaign&&s->route_pos+1u>=s->route_len){
+  int g=coop_campaign_index(s,s->route_pos);
+  int finale=g<0||(unsigned int)g+1u>=COOP_CAMPAIGN_LEN;
+  char w[COOP_WORLD_MAX];
+  if(coop_world_normalize(next_world,w)&&(finale||coop_world_equal(next_world,coop_campaign_worlds[g+1].world))){
+   s->start_pending=0;s->lobby_pending=1;s->completed++;
+   coop_begin_change(s,COOP_TARGET_LOBBY,now,r,"Selected route complete");
+   return;
+  }
+ }
  if(idx<0||(unsigned int)idx!=s->route_pos+1){
   s->rejected_exits++;
   /* An exit volume can fire repeatedly while touched: reply once per epoch. */
   if(s->reject_reply_epoch!=s->epoch+1u){
    s->reject_reply_epoch=s->epoch+1u;
-   coop_result(r,COOP_ACT_REPLY,"[Co-op] Exit destination is outside the MVP route; not changing world");
+   coop_result(r,COOP_ACT_REPLY,s->campaign?"[Co-op] Exit destination is not the next world of the selected route; not changing world":
+                                          "[Co-op] Exit destination is outside the MVP route; not changing world");
   }
   return;
  }
@@ -487,8 +615,15 @@ static int coop_session_music_take(CoopSession *s,unsigned int now,int music_epo
 }
 /* Called after the native NextLevel returned with the loaded world name. */
 static void coop_session_world_loaded(CoopSession *s,const char *world){
- int idx=coop_route_index(world);
+ int idx=coop_route_index(s,world);
+ coop_world_label(world,s->world_label);
  s->start_pending=0;s->intro_armed=0;
+ if(s->lobby_pending){
+  /* Completion or host abort: back to the lobby, members kept, unready. */
+  s->lobby_pending=0;s->started=0;s->phase=COOP_PHASE_LOBBY;s->generation++;
+  for(idx=0;idx<(int)COOP_SESSION_MAX_MEMBERS;idx++)s->m[idx].ready=0;
+  return;
+ }
  if(idx>=0)s->route_pos=(unsigned int)idx;
  if(s->started&&idx>=0)s->phase=COOP_PHASE_INTRO_PENDING;
  else{
@@ -534,7 +669,7 @@ static int coop_session_intro_tick(CoopSession *s,unsigned int now,CoopResult *r
     (unsigned int)(now-s->epoch_ms)<COOP_INTRO_BARRIER_MS)return 0;
  s->phase=COOP_PHASE_INTRO_RUNNING;s->intro_ms=now;s->seq++;
  {unsigned int n=0;r->action=COOP_ACT_INTRO_START;r->msg[0]=0;
-  coop_append(r->msg,&n,"[Co-op] ");coop_append(r->msg,&n,coop_route_label(s->route_pos));
+  coop_append(r->msg,&n,"[Co-op] ");coop_append(r->msg,&n,coop_route_label(s,s->route_pos));
   coop_append(r->msg,&n," intro starting (epoch ");coop_append_uint(r->msg,&n,s->epoch);
   coop_append(r->msg,&n,", ");coop_append_uint(r->msg,&n,ready);coop_append(r->msg,&n,"/");
   coop_append_uint(r->msg,&n,present);coop_append(r->msg,&n," players)");}
