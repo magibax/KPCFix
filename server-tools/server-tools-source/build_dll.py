@@ -113,6 +113,9 @@ previous_proxies=[
     # coop-session-v1 262b6ead: native Windows server smoke and live one-client
     # lobby/!start/!next test on 2026-11-11 (C:\KPCTest\smoke1).
     '262b6ead146e2ca33639d5ecf6435e67b9e42033de7fa1aae57bc06891bc0f5d',
+    # coop-session-v2 0018a3f8 (9b01c2f): live natural R1M2B -> R1M2C and
+    # R1M2C mirror -> R1M3A transitions with one client on 2026-11-11.
+    '0018a3f8b655bb616cf07be8737378716855365045b643946ee9db97ec143557',
 ]
 if new_hash in previous_proxies:
  raise SystemExit('Current proxy SHA-256 unexpectedly appears in the previous allowlist')

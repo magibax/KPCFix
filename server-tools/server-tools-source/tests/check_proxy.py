@@ -1,10 +1,10 @@
 """Run the compiled proxy with mapped original images and mocked Win32 APIs.
-Usage: python check_proxy.py FIXTURE_DIRECTORY [--cheats] [--off] [--bad-object] [--coop-session]
+Usage: python check_proxy.py FIXTURE_DIRECTORY [--cheats] [--off] [--bad-object] [--coop-session [--trace-timing]]
 SHA compression is accelerated with hashlib in this emulator; the same C SHA
 implementation is separately tested natively by the build validation workflow.
 """
 from pathlib import Path
-import hashlib,json,struct,sys
+import hashlib,json,re,struct,sys
 from unicorn import Uc,UC_ARCH_X86,UC_MODE_32,UC_HOOK_CODE
 from unicorn.x86_const import *
 root=Path(__file__).resolve().parents[2];fixtures=Path(sys.argv[1]);report=json.loads((root/'SERVER_TOOLS_BUILD.json').read_text())
@@ -93,6 +93,9 @@ def profile_int(a):
  if key=='Enabled':return 0 if '--off' in sys.argv else 1
  if key=='CoopSession':return int(coop_session)
  if key in ('CoopMinPlayers','CoopMaxPlayers'):return a[2]
+ if key=='TraceTiming':return int('--trace-timing' in sys.argv)
+ if key=='CoopIntermission':return int('--intermission' in sys.argv)
+ if key=='TraceMusic':return int('--trace-music' in sys.argv)
  return int('--cheats' in sys.argv)
 functions['GetPrivateProfileIntW']=stub('GetPrivateProfileIntW',4,profile_int)
 clock=[1000]
@@ -180,11 +183,12 @@ def coop_scenario():
  Native engine routines are replaced by recording stubs; the patch sites,
  compiled proxy and assembled broadcast adapter are the shipped bytes."""
  sites={0xf13c4:(6,'ff91e0010000'),0xf13a4:(5,'e817fdffff'),0x2d455:(6,'8b90d0010000'),0x1045b1:(5,'e80a0bfcff'),
-        0xfeec4:(6,'81c6e8010000'),0xf167a:(5,'e841faffff'),0x100744:(5,'e877feffff'),0xfde97:(5,'e824270000')}
+        0xfeec4:(6,'81c6e8010000'),0xf167a:(5,'e841faffff'),0x100744:(5,'e877feffff'),0xfde97:(5,'e824270000'),
+        0x10494b:(5,'e80064fbff')}
  target={}
  for rva,(size,orig) in sites.items():
   now=bytes(u.mem_read(obj+rva,size))
-  if rva in (0xf13c4,0x1045b1):
+  if rva in (0xf13c4,0x1045b1) or (rva==0x10494b and '--trace-music' not in sys.argv):
    assert now==bytes.fromhex(orig),hex(rva)
    continue
   assert now[0]==0xe8 and all(x==0x90 for x in now[5:]),hex(rva)
@@ -237,6 +241,14 @@ def coop_scenario():
   assert u.reg_read(UC_X86_REG_EDX)==1  # native multiplayer gate preserved
  def next_level():
   clock[0]+=4000;call_regs(target[0x100744],[],{UC_X86_REG_ECX:shell},0)
+ # World-change requests: native end-level calls with --intermission, otherwise
+ # the shell's pending-NextLevel flag +0x1ae9, consumed here as 100720 would.
+ intermission='--intermission' in sys.argv;pending=[0]
+ def changes():
+  if intermission:return len(ends)
+  assert u.mem_read(shell+0x1ae8,1)[0]==0,'no native intermission flag in co-op default mode'
+  if u.mem_read(shell+0x1ae9,1)[0]:pending[0]+=1;u.mem_write(shell+0x1ae9,b'\0')
+  return pending[0]
  roster(0xa1);assert spawn(alice)==0xc5380000
  roster(0xa1,0xb2);assert spawn(bob)==0xc5320000          # slot 1: +96 Z
  assert not telefrag,'native telefrag loop must be skipped in a session'
@@ -246,15 +258,15 @@ def coop_scenario():
  assert any('Only the host' in m for m in chat(bob,'!start'))
  chat(bob,'!READY')
  out=chat(alice,'!start');assert any('Starting -> R1M2B' in m for m in out),out
- assert len(ends)==1 and ends[0]==shell and read(obj+0x16da88)==2   # count-1: native pre-increment wraps to R1M2B
+ assert changes()==1 and (not intermission or ends[0]==shell) and read(obj+0x16da88)==2   # count-1: native pre-increment wraps to R1M2B
  next_level();assert len(nextlevels)==1 and read(obj+0x16da88)==0
  spawn(alice);assert any('R1M2B started (epoch 1)' in m for m in said),said
  spawn(bob)
- exit_trigger('worlds\\realm1\\R1M2C',flag=0,activator=0xa1);assert len(ends)==1   # not the native MP value: refused
- exit_trigger('',activator=0xa1);assert len(ends)==1                               # missing NextWorld: refused
- exit_trigger('worlds\\realm1\\R1M2C',activator=0xa1);assert len(ends)==2 and read(obj+0x16da88)==0
+ exit_trigger('worlds\\realm1\\R1M2C',flag=0,activator=0xa1);assert changes()==1   # not the native MP value: refused
+ exit_trigger('',activator=0xa1);assert changes()==1                               # missing NextWorld: refused
+ exit_trigger('worlds\\realm1\\R1M2C',activator=0xa1);assert changes()==2 and read(obj+0x16da88)==0
  for i in range(5):exit_trigger('worlds\\realm1\\R1M2C',activator=0xb2)
- assert len(ends)==2,'exit must be debounced'
+ assert changes()==2,'exit must be debounced'
  next_level();assert read(obj+0x16da88)==1
  spawn(alice,path=0xf167a);spawn(bob);assert not telefrag
  roster(0xa1)                                              # Bob disconnected
@@ -262,22 +274,44 @@ def coop_scenario():
  assert any('Bob left' in m for m in said) and any('PLAYING R1M2C e2' in m for m in out),(said,out)
  # Golden-mirror exit object on R1M2C, NextWorld as logged on Windows.
  n=len(said);exit_trigger('worlds/realm1/r1m3a',activator=0xa1)
- assert len(ends)==3 and read(obj+0x16da88)==1 and any('Exit reached -> R1M3A' in m for m in said[n:]),said[n:]
- exit_trigger('worlds/realm1/r1m3a',activator=0xa1);assert len(ends)==3
+ assert changes()==3 and read(obj+0x16da88)==1 and any('Exit reached -> R1M3A' in m for m in said[n:]),said[n:]
+ exit_trigger('worlds/realm1/r1m3a',activator=0xa1);assert changes()==3
  next_level();assert read(obj+0x16da88)==2
  spawn(alice);assert any('R1M3A started (epoch 3)' in m for m in said),said
  n=len(said)
  for i in range(4):exit_trigger('worlds/realm1/r1m3b',activator=0xa1)
- assert len(ends)==3 and sum('outside the MVP route' in m for m in said[n:])==1,said[n:]
+ assert changes()==3 and sum('outside the MVP route' in m for m in said[n:])==1,said[n:]
  assert any('End of the MVP route' in m for m in chat(alice,'!next'))
  text=b''.join(log).decode('latin1')
  for marker in ('build=coop-session-v2 proto=kpc-coop/1 sha256=','effective CoopSession=1','session armed kpc-coop/1',
                 'change [Co-op] All ready','world-loaded worlds\\realm1\\R1M2C','telefrag=skipped',
                 'exit-refused flag152 differs','exit-seen next= flag152=1',
                 'exit-seen next=worlds\\realm1\\R1M2C flag152=1 exit=0x','activator=member:Alice start=-',
-                'exit next=worlds/realm1/r1m3a flag152=1','world-loaded worlds\\realm1\\R1M3A'):
+                'exit next=worlds/realm1/r1m3a flag152=1','world-loaded worlds\\realm1\\R1M3A',
+                'native intermission requested' if intermission else 'native pending NextLevel set (no intermission scoreboard)',
+                'effective CoopIntermission=1' if intermission else 'effective CoopIntermission=0'):
   assert marker in text,marker
  assert text.count('exit-seen')<=3*8,'exit logging must stay bounded per epoch'
+ assert intermission or not ends,'default co-op mode must not call the native end-level (MID_MULTI_INTERMISSION)'
+ if '--trace-music' in sys.argv:
+  # Drive the hooked WorldProperties call: bad50 is stubbed to record its arguments.
+  music=[]
+  def music_stub():
+   sp=u.reg_read(UC_X86_REG_ESP);music.append((read(sp+4),read(sp+8),read(sp+12)))
+   u.reg_write(UC_X86_REG_EAX,0x1234);u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+  stubs[obj+0xbad50]=music_stub
+  argv=strings+0x900;toks=[b'music1',b'ambient',b'3']
+  for i,tk in enumerate(toks):u.mem_write(strings+0xa00+i*0x20,tk+b'\0');write(argv+4*i,strings+0xa00+i*0x20)
+  call_regs(target[0x10494b],[obj+0x14c06c,3,argv],{},0)
+  assert u.reg_read(UC_X86_REG_EAX)==0x1234 and music==[(obj+0x14c06c,3,argv)],music
+  text=b''.join(log).decode('latin1')
+  assert 'effective TraceMusic=1' in text and 'music-world argc=3 music1 ambient 3 event=created' in text
+ session_lines=[l for l in text.splitlines() if ' seq=' in l]
+ if '--trace-timing' in sys.argv:
+  assert 'effective TraceTiming=1' in text
+  assert session_lines and all(re.match(r'\[KPCFix Co-op\] t=\d+ g=\d+ e=\d+ seq=',l) for l in session_lines),session_lines[:3]
+ else:
+  assert 'TraceTiming' not in text and all(l.startswith('[KPCFix Co-op] g=') for l in session_lines),session_lines[:3]
  print('PASS co-op session hooks:',len(said),'broadcasts,',len(ends),'native end-level requests,',len(nextlevels),'NextLevel calls, telefrag skipped')
 
 call(proxy+ps['_DllMain'],[proxy,1,0],True)
