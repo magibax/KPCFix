@@ -1,6 +1,7 @@
 """Run the compiled proxy with mapped original images and mocked Win32 APIs.
 Usage: python check_proxy.py FIXTURE_DIRECTORY [--cheats] [--off] [--bad-object] [--coop-session [--trace-timing]
-       [--intro [--test-start=R1M3A] [--intro-overrun] [--script-clock|--no-script-clock]]]
+       [--intro [--test-start=R1M3A] [--intro-overrun] [--script-clock|--no-script-clock]]
+       [--sound-clock|--no-sound-clock] [--no-health-bars]]
 SHA compression is accelerated with hashlib in this emulator; the same C SHA
 implementation is separately tested natively by the build validation workflow.
 """
@@ -104,6 +105,19 @@ def profile_int(a):
   if '--no-script-clock' in sys.argv:return 0
   if '--script-clock' in sys.argv:return 1
   return a[2]
+ if key=='CoopStartScoreboard':return 0 if '--no-start-scoreboard' in sys.argv else a[2]
+ if key=='CoopSpawners':return 0 if '--no-spawners' in sys.argv else a[2]
+ if key=='TraceSpawners':return int('--trace-spawners' in sys.argv)
+ if key=='CoopSkill':
+  for x in sys.argv:
+   if x.startswith('--skill='):return int(x.split('=',1)[1])&0xffffffff
+  return a[2]
+ if key=='CoopHealthBars':return 0 if '--no-health-bars' in sys.argv else a[2]
+ if key=='CoopSoundClock':
+  # Default argument is the effective CoopScriptClock.
+  if '--no-sound-clock' in sys.argv:return 0
+  if '--sound-clock' in sys.argv:return 1
+  return a[2]
  return int('--cheats' in sys.argv)
 functions['GetPrivateProfileIntW']=stub('GetPrivateProfileIntW',4,profile_int)
 def profile_str(a):
@@ -200,13 +214,25 @@ def coop_scenario():
  compiled proxy and assembled broadcast adapter are the shipped bytes."""
  sites={0xf13c4:(6,'ff91e0010000'),0xf13a4:(5,'e817fdffff'),0x2d455:(6,'8b90d0010000'),0x1045b1:(5,'e80a0bfcff'),
         0xfeec4:(6,'81c6e8010000'),0xf167a:(5,'e841faffff'),0x100744:(5,'e877feffff'),0xfde97:(5,'e824270000'),
-        0x10494b:(5,'e80064fbff'),0xffbbf:(5,'e85c0b0000'),0xffba5:(5,'e8865afcff')}
+        0x10494b:(5,'e80064fbff'),0xffbbf:(5,'e85c0b0000'),0xffba5:(5,'e8865afcff'),
+        0xea6d2:(5,'e809e90000'),0xea7c3:(5,'e818e80000'),0xeaa10:(5,'e8cbe50000'),0xeab11:(5,'e8cae40000'),
+        0x93c5d:(2,'0c10'),0x93c65:(5,'e896530600')}
  music_flag='--no-music' not in sys.argv
  intro_flag='--intro' in sys.argv
  trace_timing='--trace-timing' in sys.argv
  script_clock='--script-clock' in sys.argv or (intro_flag and '--no-script-clock' not in sys.argv)
  hooked_optional={0x10494b:music_flag or '--trace-music' in sys.argv,0xffbbf:music_flag or intro_flag,0x1045b1:intro_flag,
                   0xffba5:script_clock or trace_timing}
+ bars='--no-health-bars' not in sys.argv
+ for rva in (0xea6d2,0xea7c3,0xeaa10,0xeab11):hooked_optional[rva]=bars
+ spawners='--no-spawners' not in sys.argv;trace_spawners='--trace-spawners' in sys.argv
+ hooked_optional[0x93c65]=trace_spawners
+ # CMonsterSpawner forced MP-off (or al,0x10 at 93c5d): NOPs with CoopSpawners.
+ assert bytes(u.mem_read(obj+0x93c5d,2))==(b'\x90\x90' if spawners else bytes.fromhex('0c10'))
+ del sites[0x93c5d]
+ sb='--intermission' not in sys.argv and '--no-start-scoreboard' not in sys.argv
+ hooked_optional[0xffbbf]=hooked_optional[0xffbbf] or sb   # per-frame hook also drives the start scoreboard
+ skill=[int(x.split('=',1)[1]) for x in sys.argv if x.startswith('--skill=')]
  target={}
  for rva,(size,orig) in sites.items():
   now=bytes(u.mem_read(obj+rva,size))
@@ -217,6 +243,38 @@ def coop_scenario():
   target[rva]=(obj+rva+5+struct.unpack('<i',now[1:5])[0])&0xffffffff
   assert proxy<=target[rva]<proxy+0x100000
  assert target[0x100744]==target[0xfde97]
+ text=b''.join(log).decode('latin1')
+ assert ('effective CoopSpawners=1' if spawners else 'effective CoopSpawners=0') in text
+ assert ('effective CoopStartScoreboard=1' if sb else 'effective CoopStartScoreboard=0') in text
+ if skill and 0<=skill[0]<=4:
+  assert read(obj+0x15b678)==skill[0] and 'effective CoopSkill=%d'%skill[0] in text
+ else:
+  assert read(obj+0x15b678)==0 and 'effective CoopSkill=unchanged' in text
+ if trace_spawners:
+  # Original filter f9000 runs for real against the multiplayer shell below.
+  write(obj+0x16de60,scratch+0x100000);write(scratch+0x100000+0x1d0,1)
+  res=[]
+  for args in ((0,1),(0,6),(2,6),(0,0x11),(4,4)):
+   call_regs(target[0x93c65],list(args),{},0);res.append(u.reg_read(UC_X86_REG_EAX)&0xff)
+  assert res==[1,0,1,0,1],res
+  text=b''.join(log).decode('latin1')
+  assert 'spawner-filter skill=0 miscflags=1 create=1' in text and 'spawner-filter skill=0 miscflags=17 create=0' in text
+  print('PASS co-op spawner trace: authored difficulty bits and designer 0x10 still honoured')
+ if bars:
+  # Enemy health bars (CoopHealthBars): the four callers of the single-player
+  # test f8fe0 get 1 (proceed as in single player); Send is limited to 10 Hz.
+  for rva in (0xea6d2,0xea7c3,0xeaa10):
+   call_regs(target[rva],[],{},0);assert u.reg_read(UC_X86_REG_EAX)&0xff==1,hex(rva)
+  sends=[]
+  for ms in (0,50,49,1,100,250):
+   clock[0]+=ms;call_regs(target[0xeab11],[],{},0);sends.append(u.reg_read(UC_X86_REG_EAX)&0xff)
+  assert sends==[1,0,0,1,1,1],sends
+  text=b''.join(log).decode('latin1')
+  assert 'effective CoopHealthBars=1' in text and text.count(' health-bar first monster damage')==1
+  call_regs(target[0xea7c3],[],{},0);assert b''.join(log).decode('latin1').count(' health-bar ')==1,'logged once per epoch'
+  print('PASS co-op health bars: update/damage/remove gates open, send limited to 10 Hz')
+ else:
+  assert 'effective CoopHealthBars=0' in b''.join(log).decode('latin1')
  said=[];ends=[];telefrag=[];nextlevels=[]
  base=scratch+0x100000;shell=base;manager=base+0x4000;players=base+0x5000;strings=base+0x8000
  write(obj+0x16de60,shell);write(shell+0x1d0,1);write(shell+0x1ae0,3)
@@ -297,6 +355,7 @@ def coop_scenario():
   call_regs(target[0x10494b],[obj+0x14c06c,3,strings+0x900],{},0)
  def frame(ms=1600):
   clock[0]+=ms;call_regs(target[0xffbbf],[],{UC_X86_REG_ECX:shell},0)
+ def sbm():return [(m[0],m[1]) for m in msgs if m[1] in (0x48,0x69)]
  def start_seq(client,song):return [[client,0x4a,song],[client,0x51,2],[client,0x4c,song],[client,0x50,1]]
  if intro_flag:
   # Synchronised original intro (CoopIntro). The stock WorldProperties lookup
@@ -324,8 +383,9 @@ def coop_scenario():
   for i,t in enumerate(authored):
    write(sarr+4*i,evs+16*i);u.mem_write(evs+16*i+4,struct.pack('<f',t))
   write(obj+0x15a0a8,plist);write(obj+0x15a0a4,0)
+  play_at=[]
   def play(a):
-   scripts.append(cstr(a[0]));playing[0]=1
+   scripts.append(cstr(a[0]));playing[0]=1;play_at.append(len(msgs))
    u.mem_write(sobj+0x110,struct.pack('<f',0.0));write(sobj+0x114,0)
    write(plist,sobj);write(obj+0x15a0a4,1)
   given=[]
@@ -352,6 +412,7 @@ def coop_scenario():
   roster(0xa1);spawn(alice);roster(0xa1,0xb2);spawn(bob)
   chat(alice,'!ready');chat(bob,'!ready');out=chat(alice,'!start')
   assert any('Starting -> '+world in m for m in out),out
+  if sb:assert sbm()==[(0x111,0x48),(0x222,0x48)] and changes()==0;frame(1100)
   assert changes()==1
   next_level()
   text=b''.join(log).decode('latin1')
@@ -367,6 +428,13 @@ def coop_scenario():
   assert not scripts and any('Intro starts when all players are in (1/2)' in m for m in said[n:]),said[n:]
   spawn(bob);frame(1000);assert not scripts,'settle delay after the last player'
   frame(2100);assert scripts==[name] and any('R1M3A intro starting (epoch 1, 2/2 players)' in m for m in said),said[-3:]
+  if sb:
+   # Shown at !start, closed by the stock re-entry, shown again after each spawn,
+   # closed for both immediately before the script player is called.
+   assert sbm()==[(0x111,0x48),(0x222,0x48),(0x111,0x48),(0x222,0x48),(0x111,0x69),(0x222,0x69)],sbm()
+   closes=[i for i,m in enumerate(msgs) if m[1]==0x69];assert closes and max(closes)<play_at[0],(closes,play_at)
+   print('PASS co-op start scoreboard: shown at !start and after re-entry, closed before the intro script')
+  else:assert sbm()==[]
   frame();frame();assert scripts==[name],'the intro starts exactly once'
   assert any('Not in play' in m for m in chat(alice,'!next')),'no world change during the intro'
   overrun='--intro-overrun' in sys.argv
@@ -426,6 +494,10 @@ def coop_scenario():
  assert any('Only the host' in m for m in chat(bob,'!start'))
  chat(bob,'!READY')
  out=chat(alice,'!start');assert any('Starting -> R1M2B' in m for m in out),out
+ if sb:
+  assert sbm()==[(0x111,0x48),(0x222,0x48)],sbm()
+  assert changes()==0,'world change held while the scoreboard shows';frame(500);assert changes()==0;frame(600)
+ else:assert sbm()==[]
  assert changes()==1 and (not intermission or ends[0]==shell) and read(obj+0x16da88)==2   # count-1: native pre-increment wraps to R1M2B
  next_level();assert len(nextlevels)==1 and read(obj+0x16da88)==0
  if music_on:n=len(msgs);music_world('song5')               # reloaded world creates its music (epoch 1)
@@ -475,7 +547,7 @@ def coop_scenario():
   assert 'music-send client=273 name=Alice song=song5 intensity=1 transition=2 sent' in text
   assert 'music-send client=273 name=Alice song=song1 intensity=255 transition=2 sent' in text
  else:
-  assert 'effective CoopMusic=0' in text and 'music-send' not in text and not msgs
+  assert 'effective CoopMusic=0' in text and 'music-send' not in text and not [m for m in msgs if m[1] not in (0x48,0x69)]
  if '--trace-music' in sys.argv:
   # Drive the hooked WorldProperties call: bad50 is stubbed to record its arguments.
   music=[]
@@ -495,11 +567,47 @@ def coop_scenario():
   assert session_lines and all(re.match(r'\[KPCFix Co-op\] t=\d+ g=\d+ e=\d+ seq=',l) for l in session_lines),session_lines[:3]
  else:
   assert 'TraceTiming' not in text and all(l.startswith('[KPCFix Co-op] g=') for l in session_lines),session_lines[:3]
+ assert sbm()==([(0x111,0x48),(0x222,0x48)] if sb else []),'no scoreboard on natural exits or worlds without an intro'
+ if sb:assert 'scoreboard show client=273 msg=0x48 sent' in text and 'native pending NextLevel deferred' in text
  print('PASS co-op session hooks:',len(said),'broadcasts,',len(ends),'native end-level requests,',len(nextlevels),'NextLevel calls, telefrag skipped')
 
 call(proxy+ps['_DllMain'],[proxy,1,0],True)
 u.mem_write(scratch+0x90000,b'KPC\0')
 assert call(proxy+ps['_CreateServer'],[3,scratch+0x90000,scratch+0x90010])==17
+# CoopSoundClock: server.dll call site 2a1fc (e8 0a fd ff ff -> sound-track
+# updater 29f0b, thiscall, one float dt, ret 4). Installed only in a session
+# with the sound clock on and the Europe-family server.dll hash.
+sound_site=bytes(u.mem_read(engine+0x2a1fc,5))
+intro_on='--intro' in sys.argv
+script_on=coop_session and '--off' not in sys.argv and ('--script-clock' in sys.argv or (intro_on and '--no-script-clock' not in sys.argv))
+sound_on=coop_session and '--off' not in sys.argv and ('--sound-clock' in sys.argv or (script_on and '--no-sound-clock' not in sys.argv))
+if not sound_on:
+ assert sound_site==bytes.fromhex('e80afdffff'),sound_site.hex()
+else:
+ assert sound_site[0]==0xe8,sound_site.hex()
+ sound_target=(engine+0x2a1fc+5+struct.unpack('<i',sound_site[1:5])[0])&0xffffffff
+ assert proxy<=sound_target<proxy+0x100000
+ got=[]
+ def sound_tracks():
+  sp=u.reg_read(UC_X86_REG_ESP);got.append((u.reg_read(UC_X86_REG_ECX),read(sp+4)))
+  u.reg_write(UC_X86_REG_ESP,sp+8);u.reg_write(UC_X86_REG_EIP,read(sp))
+ stubs[engine+0x29f0b]=sound_tracks
+ # 44.19 s narration: time left 44.69 s (2c6e6). Frames every 40 ms of wall
+ # time, each credited 50 ms (the measured 1.25x), as the server sends them.
+ dt=struct.unpack('<I',struct.pack('<f',0.05))[0];t0=clock[0];left=44.69;wall=None;mgr=0x30081234
+ for i in range(3000):
+  clock[0]+=40;call_regs(sound_target,[dt],{UC_X86_REG_ECX:mgr},4)
+  left-=struct.unpack('<f',struct.pack('<I',got[-1][1]))[0]
+  if left<=0:wall=clock[0]-t0;break
+ assert all(m==mgr for m,_ in got),'the server manager is forwarded'
+ assert max(struct.unpack('<f',struct.pack('<I',g))[0] for _,g in got)<=0.05+1e-7,'never a larger step than the engine'
+ assert wall is not None and 44600<=wall<=44800,wall   # stock: 44.69/1.25 = 35.75 s
+ del stubs[engine+0x29f0b]
+ text=b''.join(log).decode('latin1')
+ assert 'effective CoopSoundClock=1' in text and 'sound clock hook installed (server.dll 2a1fc -> 29f0b)' in text
+ print('PASS co-op sound clock: 44.69 s narration timer expires after',wall,'ms of wall clock (stock 35750)')
+if coop_session and '--off' not in sys.argv and not sound_on and script_on:
+ text=b''.join(log).decode('latin1');assert 'effective CoopSoundClock=0' in text and 'sound clock hook installed' not in text
 assert read(scratch+0x90010)==0x30080000 and setup_calls[0][0]==3
 # Locate the engine's original import slot, after initialization.
 pe=struct.unpack_from('<I',backend,60)[0];at=engine+read(engine+pe+24+96+8);slot=None
@@ -534,6 +642,9 @@ else:
  assert call(read(slot),[obj,scratch+0x90100],True)==obj+0xfdab0
  assert len(protect)==count,'second lookup reinstalled hooks'
  assert object_file==files[prefix+'object.lto']
+ if not coop_session:
+  for rva,orig in ((0x93c5d,'0c10'),(0x93c65,'e896530600'),(0xea6d2,'e809e90000'),(0xea7c3,'e818e80000'),(0xeaa10,'e8cbe50000'),(0xeab11,'e8cae40000')):
+   assert bytes(u.mem_read(obj+rva,len(orig)//2))==bytes.fromhex(orig),hex(rva)
  if coop_session:coop_scenario()
  call(proxy+ps['_DeleteServer'],[0x30080000]);assert setup_calls[-1]==('delete',0x30080000)
  print('PASS compiled DLL:',fixtures.name,'proxy relocation, export forwarding, IAT interception, object relocation, guarded memory patching, initial policy, idempotence, unchanged headers/relocations and unchanged original file')
