@@ -226,13 +226,16 @@ static void test_difficulty_and_host_exits(void){
  cmd(&s,A,"!campaign water");load(&s,"worlds\\realm1\\R1M0",1000);spawn(&s,A,"Alice",1100);
  cmd(&s,A,"!difficulty lullaby");assert(strstr(r.msg,"only be changed in the lobby")&&s.skill==3);
  /* Exits: outside GAMEPLAY (intro running, R1M0's scripted exit) any activator passes on. */
- s.phase=COOP_PHASE_INTRO_RUNNING;assert(coop_session_exit_by(&s,1,1,&x)&&x.action==COOP_ACT_NONE);
+ s.phase=COOP_PHASE_INTRO_RUNNING;assert(coop_session_exit_by(&s,1,1,1000,&x)&&x.action==COOP_ACT_NONE);
  s.phase=COOP_PHASE_GAMEPLAY;
- assert(coop_session_exit_by(&s,0,1,&x));                                  /* host (Alice) */
- assert(coop_session_exit_by(&s,-1,0,&x));                                 /* a script/object */
- assert(!coop_session_exit_by(&s,1,1,&x)&&x.action==COOP_ACT_ANNOUNCE&&strstr(x.msg,"Only the host"));
- assert(!coop_session_exit_by(&s,1,1,&x)&&x.action==COOP_ACT_NONE);       /* replied once per world */
- assert(!coop_session_exit_by(&s,-1,1,&x));                                /* a player outside the session */
+ assert(coop_session_exit_by(&s,0,1,1000,&x));                                  /* host (Alice) */
+ assert(coop_session_exit_by(&s,-1,0,1000,&x));                                 /* a script/object */
+ assert(!coop_session_exit_by(&s,1,1,1000,&x)&&x.action==COOP_ACT_ANNOUNCE&&strstr(x.msg,"Only the host"));
+ assert(!coop_session_exit_by(&s,1,1,1000+COOP_HOST_EXIT_REPLY_MS-1,&x)&&x.action==COOP_ACT_NONE);   /* rate limited */
+ assert(!coop_session_exit_by(&s,1,1,1000+COOP_HOST_EXIT_REPLY_MS,&x)&&x.action==COOP_ACT_ANNOUNCE); /* said again */
+ {unsigned int e=s.epoch;s.epoch++;                                         /* a new world replies at once */
+  assert(!coop_session_exit_by(&s,1,1,1001+COOP_HOST_EXIT_REPLY_MS,&x)&&x.action==COOP_ACT_ANNOUNCE);s.epoch=e;}
+ assert(!coop_session_exit_by(&s,-1,1,1002+COOP_HOST_EXIT_REPLY_MS,&x));                                /* a player outside the session */
  /* Campaign default: the intro starts with the last spawn (no settle). */
  assert(COOP_CAMPAIGN_SETTLE_MS==0u);
 }

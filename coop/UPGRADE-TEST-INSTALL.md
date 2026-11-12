@@ -12,6 +12,51 @@ Installs used for testing:
 | `C:\KPCTest\smoke1\Psycho` | disposable server for `Invoke-CoopServerSmoke.ps1` | server |
 | laptop | second player | client, through a package folder |
 
+## Quick path: the build script
+
+`tools\build-changed.cmd` (or `sh tools/build-changed.sh`) does sections 1 to 5 for the desktop
+install in one run. Docker Desktop must be running. The steps below stay as the reference
+for what it does, for `smoke1`, for the laptop and for when it stops.
+
+| Step | What happens |
+| --- | --- |
+| Build | The client and the server are rebuilt only if their source changed since the last run (`--force` rebuilds anyway; `--client` / `--server` pick one). Outputs are copied to the usual places in the repository |
+| Package | `tools/refresh_manifests.py` rewrites the hashes in `SHA256SUMS` and `SHA256SUMS-Server-Tools`; `tools/package_release.py` writes both release ZIPs to `dist\`; `dist\client\` gets the three laptop files. `--no-package` skips this |
+| Install | `tools/install_game.py` updates the game folder. `--no-install` skips it; `--dry-run-install` only lists what it would change |
+
+The install step, `tools/install_game.py`:
+
+* **Target:** `C:\Games\Psycho`. Change it with `--game-dir <path>` or the `KPC_GAME_DIR` variable.
+  A folder without `client.exe` is refused.
+* **Running game:** if `client.exe` or `dedicated.exe` is running it stops before writing anything.
+* **Backup first:** every file it is about to change is copied to
+  `C:\KPCTest\backup\<folder name>-<date>-<time>-before-<short hash>` (the server DLL's hash, or the
+  client's when only the client is installed).
+* **Client files:** `dinput.dll` and the client package's scripts and documents are replaced when
+  they differ from the repository.
+* **Client settings:** `KPCFix.ini` and `DDrawCompat-CLIENT.ini` are never replaced. A key or a
+  section that the repository file has and the installed file lacks is added, with its comment
+  lines; every existing line and value stays. In a file without sections (DDrawCompat) a new
+  key goes to the end of the file.
+* **Server files:** every tracked file under `server-tools\` is copied to the same path in the
+  game folder when it differs.
+* **Active `server.dll`:** replaced with the new `KPCServerTools.dll` only when it already is a
+  Server Tools build (it contains the `[KPCFix Server Tools]` marker) and `server.original.dll`
+  exists and is not one. This replaces the "move `server.dll` aside and run setup again" step of
+  section 4. In any other case it leaves `server.dll` alone and tells you to run
+  `Setup-KPCServerTools.cmd`.
+* **Never touched:** `KPCServerTools.ini`, `server.original.dll`, `object.lto`, `client.exe`,
+  `cshell.dll`, `dedicated.exe`, and anything it does not ship.
+* **Second run:** it prints "is up to date" and changes nothing.
+
+What it does not do: commit (the rule "install only committed builds" below is yours to
+keep), run the tests, update `smoke1`, copy anything to the laptop, or write the handoff.
+After an install, do sections 6 and 7 by hand. To undo an install, copy the files back from
+the backup folder with the game closed.
+
+Run it alone, without a build:
+`python tools/install_game.py --game-dir C:\Games\Psycho --client --server --dry-run` (drop `--dry-run` to apply).
+
 ## 1. Build and commit
 
 * **Client:** run `C:\KPCTest\clientbuild\build-coop.sh <dir>`. Copy `out\dinput.dll` to the repository root,
@@ -26,8 +71,9 @@ Installs used for testing:
 * **Commit:** commit on `coop/mvp-lobby`. Install only committed builds, so every installed hash can be
   traced to a commit.
 
-The build scripts copy from `C:\Projects\KPCFix-coop`, the main checkout. When you build from another
-worktree, use a copy of the script that points at that worktree.
+The `C:\KPCTest\` wrapper scripts copy from `C:\Users\magi\Documents\GitHub\KPCFix`. When you build from
+another worktree, use a copy of the script that points at that worktree. `tools/build-changed.sh` always
+builds the checkout it lives in.
 
 ## 2. Before installing
 

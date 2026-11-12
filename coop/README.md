@@ -6,7 +6,23 @@
 > for settings, [CONFIGURATION.md](CONFIGURATION.md). The research ledger below is the
 > 2026-11-11 spawn and collision research and is kept as history.
 
-Status: three-player R1M2B separation **live-tested successfully**; general fail-closed spawn allocator implemented and tested as a standalone policy (**not yet connected to game physics**). The map-specific prototype stays off by default. Continue experimental co-op development on `feature/coop-campaign`. Since the 2026-11-11 release-isolation remediation, `main` has the stable Server Tools R3 implementation only; experimental sources, tests and diagnostics remain on this feature branch.
+## Document map
+
+| Read this | For |
+| --- | --- |
+| [COOP-MVP.md](COOP-MVP.md) | How the co-op campaign works now (features, commands, engine addresses) |
+| [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md) | Installed builds, test plan and results, playtest triage, open items |
+| [CONFIGURATION.md](CONFIGURATION.md) | Every `[Coop]` setting |
+| [UPGRADE-TEST-INSTALL.md](UPGRADE-TEST-INSTALL.md) | Putting a new build on the test PCs: the one-command build, package and install script, and the manual steps behind it |
+| [CAMPAIGN-ARCHITECTURE.md](CAMPAIGN-ARCHITECTURE.md), [CAMPAIGN-MAP-INVENTORY.md](CAMPAIGN-MAP-INVENTORY.md) | Design of the unfinished parts; per-world data |
+| [GENERAL-ALLOCATOR.md](GENERAL-ALLOCATOR.md), [BSP-VOLUME-ABI.md](BSP-VOLUME-ABI.md), [BOX-OVERLAP-ABI.md](BOX-OVERLAP-ABI.md), [INTERSECT-ABI.md](INTERSECT-ABI.md), [SPAWN-ENGINE-TRACE.md](SPAWN-ENGINE-TRACE.md), [SPAWN-FINDINGS.md](SPAWN-FINDINGS.md) | Spawn and collision research (2026-11-10/11). Reference only: the shipped spawn spread is described in COOP-MVP.md |
+| [CAMPAIGN-SYNC-DESIGN.md](CAMPAIGN-SYNC-DESIGN.md) | The original sync proposal. Mostly implemented since; COOP-MVP.md is the current description |
+| [archive/](archive/) | Superseded evidence and finished session prompts |
+
+The rest of this file is the 2026-11-11 research ledger and roadmap. Where it
+disagrees with COOP-MVP.md or the handoff, those two are right.
+
+Status: three-player R1M2B separation **live-tested successfully**; general fail-closed spawn allocator implemented and tested as a standalone policy (**not yet connected to game physics**). The map-specific prototype stays off by default. Experimental co-op development is on `coop/mvp-lobby` (the earlier `feature/coop-campaign` branch no longer exists). Since the 2026-11-11 release-isolation remediation, `main` has the stable Server Tools R3 implementation only; experimental sources, tests and diagnostics remain on this feature branch.
 
 
 ## Current evidence ledger — 2026-11-11
@@ -88,7 +104,9 @@ Do not import or package original game maps, models, textures, sound, or artwork
 
 Lobby/ready-up UI, synchronized films, scripted triggers, shared pickups, saves, campaign progression, and complete co-op playability. These require separate gates after basic player spawning is proven.
 
-## Next live test
+## Next live test (2026-11-11, superseded)
+
+Superseded by the test plan in [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md). Kept for the allocator research.
 
 The volume evidence gate passed its four Windows controls. The box-vs-box overlap primitive is now statically verified; next identify and verify **native full-hull against world BSP**, followed by active-player enumeration. Do not infer safe spawns from clear rays or broadphase box tests. Keep the trial at three clients and restart before reusing slots until authoritative departure and world-reset events are verified. See [allocator integration](GENERAL-ALLOCATOR.md).
 

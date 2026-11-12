@@ -1,6 +1,6 @@
 # Experimental co-op configuration
 
-These settings apply **only** to the `feature/coop-campaign` Server Tools
+These settings apply **only** to the `coop/mvp-lobby` Server Tools
 DLL. The stable R3 Server Tools release on `main` does not implement them.
 All values shown are the shipped defaults in
 `server-tools/KPCServerTools-default.ini`. Restart the dedicated server

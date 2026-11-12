@@ -42,7 +42,9 @@
  * the picture. While the picture is up and its minimum has not passed, both
  * replies are recorded and sent, in order, from the per-frame draw hook once
  * the minimum has passed, the picture was closed or replaced, or after
- * HOLD_CAP_MS. A new world load drops a stale hold. */
+ * HOLD_CAP_MS. A new world load drops a stale hold, and so does a new
+ * connection (g_loading_entered cleared by the "Got ID packet" print): the
+ * held reply belonged to the server that is gone and is not sent. */
 U8 *g_loading_shell;
 U32 g_loading_enabled,g_loading_min_ms=5000,g_loading_hold;
 void (*g_loading_log)(const char *);
@@ -152,6 +154,11 @@ static void hold_release(const char *why){
 static void hold_tick(void){
     U8 *screens;
     if(!hold_reply)return;
+    if(!g_loading_entered){   /* a hold only starts after entry, so this is a new connection */
+        hold_reply=hold_initvars=0;hold_self=0;
+        loading_log("Loading picture: spawn reply dropped (new connection)",0,0);
+        return;
+    }
     screens=art_shell?(U8 *)get32(art_shell+SHELL_SCREENS):0;
     if(screens&&(I32)get32(screens+4)!=0)hold_release(" (picture replaced)");
     else if(!art_active)hold_release(" (picture closed)");

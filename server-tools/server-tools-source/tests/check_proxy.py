@@ -1099,6 +1099,16 @@ def coop_scenario():
   spawn(bob,z=zz)                                               # respawn: previous reservation retried
   write(dev2+0x90,old90);del stubs[code90]
   print('PASS co-op spawn spread: taken start probed (floor, line, body), unknown body fails closed')
+ # Log budget, per map epoch: a flood stops at the budget with one notice and
+ # the next world's lines are written again (a whole campaign keeps its log).
+ n0=len(log)
+ for i in range(1100):chat(alice,'!coop')
+ flood=b''.join(log[n0:]).decode('latin1')
+ assert flood.count(' log-budget ')==1 and flood.count('[KPCFix Co-op] g=')<=1001,flood.count('[KPCFix Co-op] g=')
+ n0=len(log);chat(alice,'!coop');assert len(log)==n0,'lines after the budget are dropped'
+ next_level();n0=len(log);chat(alice,'!coop')
+ assert b' say ' in b''.join(log[n0:]),'the next world renews the budget'
+ print('PASS co-op log budget: per map epoch, one notice, renewed by the next world')
  print('PASS co-op session hooks:',len(said),'broadcasts,',len(ends),'native end-level requests,',len(nextlevels),'NextLevel calls, telefrag skipped')
 
 call(proxy+ps['_DllMain'],[proxy,1,0],True)

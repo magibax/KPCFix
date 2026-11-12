@@ -639,13 +639,15 @@ static void CDECL trace_spawn_position(void *object,const U32 *pos){
 #define COOP_PLAYERLIST_RVA 0x157724u
 #define COOP_END_LEVEL_RVA 0x100760u
 #define COOP_NEXT_LEVEL_RVA 0x1005c0u
-#define COOP_LOG_BUDGET 3000u
+/* Per map epoch (reset in coop_log): one long campaign run keeps its log. */
+#define COOP_LOG_BUDGET 1000u
 extern void CDECL runtime_broadcast(void *,const char *);
 static int coop_session_enabled;
 static U32 coop_min_players=2,coop_max_players=3;
 static U8 *coop_image;
 static CoopSession coop_state;
 static volatile U32 coop_log_count,campaign_log_count;
+static U32 coop_log_epoch=0xffffffffu,coop_log_generation;
 typedef void (__attribute__((thiscall)) *ShellFn)(void *);
 
 static void coop_text(char *out,U32 *n,const char *s,U32 cap){while(s&&*s&&*n+1<cap)out[(*n)++]=*s++;out[*n]=0;}
@@ -789,8 +791,13 @@ static U32 coop_intro_settle_ms=COOP_INTRO_SETTLE_MS;
 static char coop_lobby_world[COOP_WORLD_MAX];
 /* Bounded, sequenced log: "[KPCFix Co-op] g=1 e=2 seq=7 PLAYING event detail" */
 static void coop_log(const char *event,const char *detail){
- char line[240];U32 n=0;
- if(__sync_fetch_and_add(&coop_log_count,1)>=COOP_LOG_BUDGET)return;
+ char line[240];U32 n=0,used;
+ if(coop_log_epoch!=coop_state.epoch||coop_log_generation!=coop_state.generation){
+  coop_log_epoch=coop_state.epoch;coop_log_generation=coop_state.generation;coop_log_count=0;
+ }
+ used=__sync_fetch_and_add(&coop_log_count,1);
+ if(used>COOP_LOG_BUDGET)return;
+ if(used==COOP_LOG_BUDGET){event="log-budget";detail="reached for this world; further lines are dropped until the next world load";}
  coop_text(line,&n,"[KPCFix Co-op] ",sizeof line);
  if(coop_trace_timing){coop_text(line,&n,"t=",sizeof line);coop_dec(line,&n,GetTickCount()-coop_t0,sizeof line);coop_text(line,&n," ",sizeof line);}
  coop_text(line,&n,"g=",sizeof line);coop_dec(line,&n,coop_state.generation,sizeof line);
@@ -1229,7 +1236,7 @@ static void coop_exit_trigger(U32 trigger,U32 activator_ptr){
  {
   int member=-1;
   for(i=0;act&&i<COOP_SESSION_MAX_MEMBERS;i++)if(coop_state.m[i].used&&coop_state.m[i].object==act){member=(int)i;break;}
-  if(!coop_session_exit_by(&coop_state,member,kind[0]=='m'||kind[0]=='p',&r)){
+  if(!coop_session_exit_by(&coop_state,member,kind[0]=='m'||kind[0]=='p',now,&r)){
    if(logged)coop_log("exit-refused","not the host");
    coop_rearm_used_deco(now);
    coop_execute(&r);
@@ -1491,7 +1498,7 @@ __asm__(".global coop_trigger_filter_entry\n"
  * Gubba") used by a non-host was refused at the exit but stayed used, so
  * the host's later click did nothing. The last used deco is remembered;
  * coop_exit_trigger re-arms it when it refuses that exit. */
-static U32 coop_used_deco,coop_used_deco_ms;
+static U32 coop_used_deco,coop_used_deco_ms,coop_rearm_log_epoch=0xffffffffu,coop_rearm_logged;
 U32 coop_c4230_target;
 static void __attribute__((used,noinline)) CDECL coop_deco_used(U32 deco){coop_used_deco=deco;coop_used_deco_ms=GetTickCount();}
 void coop_deco_use_entry(void);
@@ -1508,7 +1515,12 @@ static void coop_rearm_used_deco(U32 now){
  U8 *used;
  if(!coop_used_deco||now-coop_used_deco_ms>COOP_DECO_REARM_MS)return;
  used=(U8 *)(coop_used_deco+0x1a1u);
- if(bsp_mem_readable((U32)used,1)&&*used==1u){*used=0;coop_log("exit-rearmed","the refused exit's use object can be used again by the host");}
+ if(bsp_mem_readable((U32)used,1)&&*used==1u){
+  *used=0;
+  /* Bounded like exit-seen: a non-host can use a mirror hundreds of times. */
+  if(coop_rearm_log_epoch!=coop_state.epoch){coop_rearm_log_epoch=coop_state.epoch;coop_rearm_logged=0;}
+  if(coop_rearm_logged<COOP_EXIT_LOG_PER_EPOCH){coop_rearm_logged++;coop_log("exit-rearmed","the refused exit's use object can be used again by the host");}
+ }
  coop_used_deco=0;
 }
 /* Sub-commands that move or animate one body go to the activator only;
@@ -1688,16 +1700,20 @@ static void coop_share_ammo(U32 player,U32 id,U32 amount){
  }
 }
 static void __attribute__((thiscall)) coop_item_pickup(void *item,void *player){
- U32 def=0,id=0,live[64],n,i,given=0,self=0,before=0,after;
+ U32 def=0,id=0,live[64],n,i,given=0,self=0,before=0,after;int known;
  if(coop_rd((U32)player+8u,&self))coop_set_activator(self);   /* a pickup can start a cutscene */
- if(coop_rd((U32)item+0x54u,&def)&&def&&coop_rd(def,&id)&&coop_item_ammo_id(id))before=coop_ammo_count((U32)player,id);
+ /* The item id is read once, before the stock pickup: a taken item that does
+  * not respawn may be removed by it, so the item is not read again. */
+ known=coop_rd((U32)item+0x54u,&def)&&def&&coop_rd(def,&id);
+ if(!known)id=0;
+ if(coop_item_ammo_id(id))before=coop_ammo_count((U32)player,id);
  ((PickupFn)(coop_image+0xcc180u))(item,player);
  if(coop_item_ammo_id(id)){
   after=coop_ammo_count((U32)player,id);
   if(after>before)coop_share_ammo((U32)player,id,after-before);
   return;
  }
- if(!coop_rd((U32)item+0x54u,&def)||!def||!coop_rd(def,&id)||!coop_item_shared_id(id))return;
+ if(!known||!coop_item_shared_id(id))return;
  if(coop_item_armour_id(id)&&coop_script_events&&*(const U8 *)(coop_image+COOP_ARMOUR_GIVE_FLAG_RVA)!=1u){
   coop_log("item","armour piece touched; its cutscene gives it to every player (single-player timing)");
   return;

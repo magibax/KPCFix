@@ -5,7 +5,7 @@ cf5777e589d78656c45fe2510c95d4fecad74d8484643dfc3a416b5b1ed8ee9a  ./COMPATIBILIT
 30a3312c1e17da7e1bdd252c94001230d76abe5fcd0f9617e97597c9f87c4ea8  ./CONFIGURATION.md
 94895cf6ede8fd0f74ee1447fdc08b7044a9c65a1a25a49a4df893a0370975a3  ./ddraw.dll
 0fb022743b4f0442a2b6de3800e0e6cf5ccb533ed4eb7fba2adce6ed6d2fb207  ./DDrawCompat-CLIENT.ini
-2ab53bd78df3d3e77f8e75c5ef755d7d2edec258c9d5f198091079a6f14b43ae  ./dinput.dll
+cf896d631f6a3ed350beb537ea73d0e020ae1b1a7f95a3f4d40ed787b9c5e390  ./dinput.dll
 80c03b7bbd446152cacb8b5d64f89ce29240ef87a1981959c1b959086ba48820  ./KPCFix.ini
 f6992e4b6e132a182ef7dbf5faac311885492e869cc92921e4c8f17d812828eb  ./Launch-KPCFix.cmd
 111bd19eff641ab11fd75afbeec380a96e822ac3153344271456fa7629c496d7  ./LICENSE
@@ -16,7 +16,7 @@ b0873927b5d56ef88a557713375f8f4fdbbd9b85855ff797d8048c3abe73cb57  ./LICENSES/KPC
 2cd804cf4d7ac30d9ca2247873df75b8a40d88f08162843d9c7f11868dda90d5  ./source/audit_sites.py
 33bfa971e3ff995ea16207736f7083871b88fbf6f5bf40d127ae168272793d0e  ./source/BUILD.md
 000510bf750afc10cf3507484d8caded6be8643d188471cc6c74626e875918d6  ./source/build.py
-9ef4064e5ee8fbd6c667d791288ed7004574af65527937e30d75e56d8a6a8021  ./source/BUILD_RESULT.json
+93236d167952a27adf7d00161f8c9fbf7e3b2bf602bf90337022957f13d5bffb  ./source/BUILD_RESULT.json
 977bf28aea6171e9929b14c5f7d04a4291bbf902e900d93005ef28ae41a7a176  ./source/fixture_layout.py
 59d24d686d8bba6d86fc6ccd24d0a61860a16ffcbdd743a46b739bd41ebe5ad5  ./source/pe_tools.py
 ceee7fd9836a14c4f6095c0d46dad350df400a715ba6b509f9fd7354d781cc8f  ./source/src/cinematic.c
@@ -30,7 +30,7 @@ b297debfedf220a93ddfbf74cd5a7815256edcafa3782d8086a78e2eafc5b78e  ./source/src/g
 34a452c68882c4e205372dee1965d30281ccf04dcdec96c378c458b7a4978f30  ./source/src/hud_hooks.S
 b668b30431c56e44065d3020b3e8cd572f40a66391d243166091a6c6c4c12fa7  ./source/src/input_interval.S
 0c8e4fe394815a43619df7269d541c9583a70813f71f2cef7cc89a200dcfbc27  ./source/src/kpcfix.c
-3606b6f3eead5e22e3dab0b2d7960eb94f485be9ef5120857a1c8f0644b5f9b5  ./source/src/loading.c
+2f59cfcf9e9ce4b962e3adda56242e5462ea1b1aee8f474460b1473042d7e555  ./source/src/loading.c
 2caaca55c4d961396e0d2f5778ea3e83b727d9cc1f90e8be6eada94031a7c224  ./source/src/loading.h
 f2dc1d3024a30da7ed42566626454b14220ba3f644500431a56754da3d096d07  ./source/src/minstep_hook.S
 91014bb72870b823fbf33f9bf06d478951a97ac1a8914c30846253fe15c4f929  ./source/src/netwatch.c
@@ -45,7 +45,7 @@ b46876bfda8a4092231ad0f9c9feb599bda3617f13f4aa40418b27af8f6f2d48  ./source/src/s
 fc909d5d00f2edb80c745542ac72481da3c6cf633a6e04ac6cf0420c9e422af8  ./source/src/ui.h
 17da28c8e64381118fc09061a51a6c3b8f25bfc20efe9c877b84dab9cc0d83e6  ./source/src/ui_hooks.S
 fc9fa8882bd17af9c612f9e3e1c0ba76b34f8f41f898f63293c14ae382879ecb  ./source/src/winmini.h
-cd054aab13aac244f32d6276ddf9eec4338f90729d6eb6f73e3b90ae1bf9aecb  ./source/SYMBOLS.json
+3a6dd1789452b0fedba64d7cb22e47bff7e750b019a25c3a1b2786e31372d665  ./source/SYMBOLS.json
 3f2c6bb63496de59105e39102be40db298075c56d8911a1d22dc1b18ec8ef3aa  ./source/test_bindfix.py
 95561e45bbe160796b603c1710156b3298c8b8bc5edccdcb67074e33cb8ebd36  ./source/test_carousel.py
 f0e8addd2f0aa04cbb2e4784410b15e16c39e3af323816716fc76c9c95b0c5ab  ./source/test_cinematic.py
@@ -56,7 +56,7 @@ a6fc5557301ed0e39ffed8606fd103e48dd851919bf5727ad95f4b8a92898c98  ./source/test_
 825f01fa064ea03a4fc2348afc0fea4eec07a2018908777819ac7a20936e0bf6  ./source/test_focus.py
 d7b260f1e5495d7504838319032eebc9c8c8642c8a1e4b1e302044985501818a  ./source/test_hud.py
 e5adb34db1557dbe544280315403c4ac3ae5110730ae1f66cd7e80e27faaa020  ./source/test_hud_loop.py
-4650605679a8293bd8580f2a4ed27ea5a7635f7fd023da120549a77a712984ed  ./source/test_loading_art.py
+ce5c55b1aa0da502ad0813b99495c1136bc4cb476690b60ed33001d7f36baf98  ./source/test_loading_art.py
 a40ac82b0e382ca8a6cb54e564387c6b1a16cca4f18a6fd563d39ed993b6b838  ./source/test_minstep.py
 ed34b51289536067861deaeaf025a7556b47373e3582834c713e3a8791d77be3  ./source/test_movie_filter.py
 8ee8e434deab4c12ca553215eb2e0aac1f1b85c50d147fdf5f37909337d7e2ab  ./source/test_nettrace.py

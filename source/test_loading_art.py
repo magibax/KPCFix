@@ -208,6 +208,14 @@ setup_shell(u); rig.tick = 700000; rig.invoke_address(preload, (world(rig, 'worl
 log.clear(); rig.tick = 700100; answer(); assert log == []
 rig.invoke_address(preload, (world(rig, 'worlds\\realm3\\R3M1A'),), this=SHELL)
 log.clear(); rig.tick = 709000; rig.invoke_address(draw, (2,), this=SCREENS); assert ('reply', P) not in log, log
+# A new connection drops a held reply: it belonged to the server that is gone.
+setup_shell(u); rig.tick = 720000; rig.invoke_address(preload, (world(rig, 'worlds\\realm3\\R3M1B'),), this=SHELL)
+log.clear(); rig.tick = 720100; answer(); assert log == [], log
+u.mem_write(dll + syms['_g_loading_entered'], pack(0))            # as kpc_new_connection_print does
+rig.tick = 726000; rig.invoke_address(draw, (2,), this=SCREENS); assert ('reply', P) not in log and ('initvars', P) not in log, log
+assert b'spawn reply dropped (new connection)' in bytes(rig.logs)
+rig.tick = 760000; rig.invoke_address(draw, (2,), this=SCREENS); assert ('reply', P) not in log, log   # not at the safety cap either
+u.mem_write(dll + syms['_g_loading_entered'], pack(1))
 # Hold disabled: the two calls stay original.
 rig5 = Rig(settings={'Multiplayer.CampaignLoadingHoldSpawn': 0}); rig5.factory(); assert not rig5.messages
 for site in (0xbeadc, 0xbeae3):

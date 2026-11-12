@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 KPCFix: unofficial fixes for **KISS Psycho Circus: The Nightmare Child 1.13** (LithTech
 1.x, 2000). Two independent products, each a proxy DLL that patches the original game
 **in memory only**:
@@ -19,7 +21,7 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) for the product design and
   release only; do not merge co-op work into it unless asked.
 * **Start every session with [coop/NEXT-SESSION-HANDOFF.md](coop/NEXT-SESSION-HANDOFF.md)**:
   what is installed, the two-PC test plan and its results, the triage table of
-  playtest reports, open items. Session prompts live in `coop/NEXT-PROMPTS-*.md`.
+  playtest reports, open items. Finished session prompts are in `coop/archive/`; [coop/README.md](coop/README.md) maps every co-op document.
 * Settings: [coop/CONFIGURATION.md](coop/CONFIGURATION.md) (every `[Coop]` key, with the
   evidence behind it) and `server-tools/KPCServerTools-default.ini`.
 
@@ -39,20 +41,83 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) for the product design and
 
 ## Build and test (Windows host, Docker Desktop running)
 
-Scripts live **outside the repo** and copy from `C:\Projects\KPCFix-coop` (the main
-checkout). When working in another worktree, use a copy pointed at that worktree.
+The wrapper scripts live **outside the repo** and have the source checkout hardcoded
+as `C:\Users\magi\Documents\GitHub\KPCFix`. Before the first run, check that path
+against the checkout you are in (`git rev-parse --show-toplevel`); if it differs (a
+worktree, a second clone), use a copy of the script pointed at your checkout, or the
+script builds and tests the wrong tree. The scripts without `-coop` in the name
+(`build.sh`, `unit.sh`, `suite.sh`, `sums.py`) belong to an older `main` checkout,
+`C:\Projects\KPCFix-audit`, which is gone; do not use them as they are.
 
 | Task | Command |
 | --- | --- |
+| Build what changed (client and/or server, skips unchanged ones) | `tools\build-changed.cmd` or `sh tools/build-changed.sh` (options: `--client`, `--server`, `--force`, `--no-package`, `--no-install`, `--dry-run-install`; see the script header) |
 | Server build (disposable copy, pinned GCC 14.2 / binutils 2.44 image `kpc-gcc14:local`) | `C:\KPCTest\pass2\build-coop.sh <dir>` → `C:\KPCTest\pass2\<dir>\server-tools\` |
 | Server unit tests (all `tests/test_coop_*.c`, 64 and 32 bit, `-Werror`) | `C:\KPCTest\pass2\unit-coop.sh` |
-| Server emulator matrix (`tests/check_proxy.py` on the real `object.lto` fixture, 48 option sets) | `C:\KPCTest\pass2\matrix-coop.sh <dir>` (takes ~10 min; run in the background) |
+| Server emulator matrix (`tests/check_proxy.py` on the real `object.lto` fixture, one `run …` line per option set) | `C:\KPCTest\pass2\matrix-coop.sh <dir>` (takes ~10 min; run in the background) |
 | Server live checks | `check_live.py <object.lto> <dedicated.exe> [--disabled]` with `C:\KPCTest\re-venv\Scripts\python.exe -I` |
 | Native server smoke (real `dedicated.exe`, no clients) | `coop/tools/Invoke-CoopServerSmoke.ps1 -GameDir C:\KPCTest\smoke1\Psycho -Mode Coop\|Normal\|PassThrough -Report <json>` in its own console (`Start-Process -Wait`) |
 | Client build | `C:\KPCTest\clientbuild\build-coop.sh <dir>`; copy `out\dinput.dll` to the root, `SYMBOLS.json` and `BUILD_RESULT.json` to `source\` |
 | Client tests | `C:\KPCTest\clientbuild\suite-coop.sh`; `source/audit_sites.py` inside the `kpc-client-gcc13:local` container (needs `objdump`) |
 
 Builds are byte-identical across rebuilds: a hash change means a source change.
+
+`tools/build-changed.sh` is the preferred build entry point. It hashes `source/` plus
+`KPCFix.ini` (client) and `server-tools/server-tools-source/` plus `legacy-object-patches.json`
+and `SERVER_TOOLS_SUPPORTED_BUILDS.json` (server), rebuilds only the component whose inputs
+changed, and copies outputs back to the same places as the manual steps above. Its state
+lives in `.git/kpc-build-state/`. It then packages on every run:
+`tools/refresh_manifests.py` rewrites the hashes in both manifests from the working tree,
+`tools/package_release.py` writes the two full release ZIPs to `dist/` (every tracked file
+of each product: DLL, INIs, README and other docs, scripts, source), and `dist/client/` gets
+the three files a test PC needs (`dinput.dll`, `KPCFix.ini`, `DDrawCompat-CLIENT.ini`). The
+client ZIP needs the pinned `ddraw.dll` (`--ddraw`, `KPC_DDRAW`, or `C:\Games\Psycho`).
+A new shipped file must be tracked and have a manifest line, or packaging stops with
+"Manifest/tree mismatch". `dist/` is ignored by git.
+
+Last it updates the desktop test install with `tools/install_game.py` (game folder
+`C:\Games\Psycho`, or `--game-dir` / `KPC_GAME_DIR`; `--no-install` skips it,
+`--dry-run-install` only lists the changes). It copies only files that differ, backs up
+what it changes to `C:\KPCTest\backup\`, replaces the active `server.dll` only when that is
+already a Server Tools proxy, and adds missing keys to `KPCFix.ini` and
+`DDrawCompat-CLIENT.ini` without changing existing lines. It never touches
+`KPCServerTools.ini`, `server.original.dll` or original game files, and refuses while
+`client.exe` or `dedicated.exe` is running. After an install, record the hashes and the
+backup folder in the handoff ("Where things stand").
+
+### What the wrappers run (for a single test, or without the wrappers)
+
+| Task | Command |
+| --- | --- |
+| One server unit test (no game files, any GCC) | `gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src server-tools/server-tools-source/tests/test_coop_session.c -o /tmp/t && /tmp/t` (repeat with `-m32`) |
+| One emulator option set | `python.exe -I <built copy>\server-tools\server-tools-source\tests\check_proxy.py C:\KPCTest\fixtures\Europe --coop-session --campaign` (flags are plain `sys.argv` tests; it checks the DLL next to it, so run it from the built copy) |
+| Server assembly harness (synthetic fixtures; Unicorn 2.1.4 + binutils) | `python server-tools-source/tests/run_checks.py` and again with `--usa`, from `server-tools/` |
+| Server build | `python3 server-tools-source/build_dll.py` from `server-tools/`. It **writes the DLL and manifest in place**, hence the disposable copy |
+| Client build | `python3 source/build.py --build-dir <new dir> --output <new dir>/dinput.dll` (GCC 13.3.0 / binutils 2.42; the output must be a new file) |
+| One client test | `python.exe source/test_focus.py --fixtures C:\KPCTest\clientfix\Europe --symbols source/SYMBOLS.json --dependency-dir C:/KPCTest/re-venv/Lib/site-packages --output <json>`. It tests the root `dinput.dll` with `source/SYMBOLS.json`, so copy a new build in first. Some tests need extra flags; see `suite-coop.sh` |
+| Asset-free co-op tool tests | `python -m unittest discover -s coop/tools -p "test_*.py" -v` (one file: `-p test_decode_spawn_log.py`; `coop/tools` is not a package, so dotted module names do not work) |
+| Packaging tests / package check | `python -m unittest discover -s tools -p "test_*.py" -v`; `python tools/package_release.py --component server --output-dir <dir>` (fails when a tracked file disagrees with `SHA256SUMS-Server-Tools`) |
+
+### CI (what a push to `coop/**` checks)
+
+`.github/workflows/coop-spawn-trace-build.yml` runs on this branch;
+`release-integrity.yml` runs on `main` and release tags only.
+
+* The tracked `KPCServerTools.dll` and `SERVER_TOOLS_BUILD.json` must reproduce
+  byte-for-byte from the committed source in `debian:trixie-slim` (GCC 14.2.0,
+  binutils 2.44). Never commit source without the matching rebuilt DLL and manifest.
+* `git add --renormalize .` must change nothing (`.gitattributes`: LF everywhere, a few
+  files `-text`).
+* `sha256.c`, `sha256.h` and `winmini.h` must be byte-identical in `source/src/` and
+  `server-tools/server-tools-source/src/`. Edit both copies.
+* The workflow asserts literal strings in the DLL (build banner
+  `build=coop-session-v2 proto=kpc-coop/1`, many `effective <Key>=…` lines, trace
+  markers) and six fixed entries in `previous_proxy_hashes`. Renaming a log line or a
+  setting means updating the workflow in the same commit.
+* Each `tests/test_coop_*.c` is compiled by its own step; a new unit test needs a new step.
+* `main` works the other way round: `release-integrity.yml` fails if `[KPCFix Co-op]` or
+  `TraceCampaign` appears in the server source or DLL. This is why co-op stays off `main`.
+* Every tracked `.ps1` must parse under Windows PowerShell 5.1.
 
 After a server build: copy `KPCServerTools.dll` and `SERVER_TOOLS_BUILD.json` into
 `server-tools/`, stage, then recompute `server-tools/SHA256SUMS-Server-Tools` from the
@@ -75,13 +140,27 @@ package only.
   pointers) with a `tests/test_coop_*.c` unit test; `proxy.c` reads engine memory with
   guarded reads (`coop_rd`, `bsp_mem_readable`, `coop_copy_str`) and calls original
   routines by RVA from `coop_image`.
-* **Logging**: `coop_log(event, detail)` → `KPCServerTools.log`, bounded per world epoch;
+* **Logging**: `coop_log(event, detail)` → `KPCServerTools.log`. The budget is 1000 lines per map epoch (then one `log-budget` line), so still cap any repeating line per epoch yourself;
   chat replies via `CoopResult` + `coop_execute` (broadcast; there is no unicast chat).
 * **Emulator test** (`tests/check_proxy.py`): add new INI keys to `profile_int`, new
   sites to `sites` and `hooked_optional` in `coop_scenario`, and a behaviour check with
   recording stubs (`stubs[obj+RVA]`). Fake players have no vtable and read as dead. A
   default `ee7d0` stub exists for per-frame code. Keep fake memory regions from
   overlapping. Add new option flags as runs in `matrix-coop.sh`.
+
+## Client conventions (`source/`)
+
+* `src/profiles.h` holds the exact 1.13 fingerprints and three `cshell.dll` layouts
+  (Europe+USA, Germany, Italy). A new shell hook needs its site, original bytes and
+  stack layout for **each** layout; the Italian build allocates its stack differently.
+* `src/kpcfix.c` validates the files, picks the layout and stages the edits; client and
+  shell installs are separate stages, and the shell may load before or after the proxy
+  (the `LoadLibraryA` hook covers the second case). Keep both paths working.
+* A feature is usually a `.c` file plus a `*_hook.S` bridge that preserves the game's
+  calling convention, and a `source/test_<feature>.py` emulator test (Unicorn, real
+  fixtures). Add the test as a `run` line in `suite-coop.sh`.
+* `source/SYMBOLS.json` and `source/BUILD_RESULT.json` are build outputs that are
+  tracked and must match the root `dinput.dll`.
 
 ## Reverse engineering
 

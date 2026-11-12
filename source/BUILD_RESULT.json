@@ -1,8 +1,8 @@
 {
   "output": "dinput.dll",
   "platform": "windows",
-  "sha256": "2ab53bd78df3d3e77f8e75c5ef755d7d2edec258c9d5f198091079a6f14b43ae",
-  "bytes": 57856,
+  "sha256": "cf896d631f6a3ed350beb537ea73d0e020ae1b1a7f95a3f4d40ed787b9c5e390",
+  "bytes": 58368,
   "exports": [
     "DirectInputCreateA",
     "DirectInputCreateW",
@@ -47,7 +47,7 @@
     },
     {
       "object": "loading.obj",
-      "dir32": 111,
+      "dir32": 119,
       "rel32": 9
     },
     {

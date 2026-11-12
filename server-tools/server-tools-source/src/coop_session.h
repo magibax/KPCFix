@@ -88,6 +88,7 @@ typedef struct {
  unsigned int abort_after_load;     /* !abort during a world change: back to the lobby once it has loaded */
  int skill;                         /* difficulty written before each world load: 0-4, or -1 = unchanged */
  unsigned int host_exit_epoch;      /* epoch+1 of the last "only the host" exit reply */
+ unsigned int host_exit_ms;         /* its time (repeated after COOP_HOST_EXIT_REPLY_MS) */
  unsigned int host_seq_ms,host_seq_said; /* last "only the host" sequence reply (rate limit) */
  unsigned int rejected_sequences;
  unsigned int completed;            /* routes completed in this server run */
@@ -446,17 +447,20 @@ static int coop_skill_parse(const char *a,const char *b){
  return -1;
 }
 /* Exits during play belong to the host: a native exit (mirror, exit volume)
- * set off by any other player is refused with a reply, once per world.
+ * set off by any other player is refused. The reply comes at the first
+ * refusal in a world and again at most every COOP_HOST_EXIT_REPLY_MS, so a
+ * later attempt does not look like a dead exit.
  * Exits fired by a script or by a non-player object (an intro's own
  * "trigger_generic CExitTrigger0") and every exit outside GAMEPLAY are left
  * to coop_session_exit. member: session index of the activator or -1. */
-static int coop_session_exit_by(CoopSession *s,int member,int is_player,CoopResult *r){
+#define COOP_HOST_EXIT_REPLY_MS 5000u
+static int coop_session_exit_by(CoopSession *s,int member,int is_player,unsigned int now,CoopResult *r){
  coop_result(r,COOP_ACT_NONE,"");
  if(s->phase!=COOP_PHASE_GAMEPLAY||!is_player)return 1;
  if(member>=0&&member==s->host)return 1;
  s->rejected_exits++;
- if(s->host_exit_epoch!=s->epoch+1u){
-  s->host_exit_epoch=s->epoch+1u;
+ if(s->host_exit_epoch!=s->epoch+1u||now-s->host_exit_ms>=COOP_HOST_EXIT_REPLY_MS){
+  s->host_exit_epoch=s->epoch+1u;s->host_exit_ms=now;
   coop_result(r,COOP_ACT_ANNOUNCE,"[Co-op] Only the host (*) can take the exit");
  }
  return 0;

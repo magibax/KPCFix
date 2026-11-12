@@ -2,11 +2,11 @@
 
 Two independent sessions: **A (client, `source/`, `dinput.dll`)** and **B (server, `server-tools/`,
 `KPCServerTools.dll`)**. They touch different DLLs and can run in parallel on branch `coop/mvp-lobby`
-(each in its own worktree; merge in order). Read [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md)
+(each in its own worktree; merge in order). Read [NEXT-SESSION-HANDOFF.md](../NEXT-SESSION-HANDOFF.md)
 first. Rules: never ship or modify original game assets; patches are in memory only, verified against
 expected bytes; every change gets tests (client: `source/test_*.py` + `audit_sites.py`, run
 `suite-coop.sh`; server: `unit-coop.sh`, `matrix-coop.sh`). Install for testing per
-[UPGRADE-TEST-INSTALL.md](UPGRADE-TEST-INSTALL.md). Commit on the branch; don't push.
+[UPGRADE-TEST-INSTALL.md](../UPGRADE-TEST-INSTALL.md). Commit on the branch; don't push.
 
 **Status:** Prompt B is done (`f37135a`, Server Tools `7dbba5eb`, installed; results go in the
 handoff's test plan). Prompt A runs in worktree branch `claude/zealous-cori-401c64`.

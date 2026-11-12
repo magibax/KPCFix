@@ -16,7 +16,7 @@ items to "Live-confirmed").
   untouched).
   * `f37135a` Server Tools: spawner radius from the nearest player, cheat keybinds,
     inventory persistence, pickup respawn, powerup re-send, `!kill` `!all` `!class`
-    `!changelevel` (prompt B of [NEXT-PROMPTS-2026-11-12.md](NEXT-PROMPTS-2026-11-12.md)).
+    `!changelevel` (prompt B of [archive/NEXT-PROMPTS-2026-11-12.md](archive/NEXT-PROMPTS-2026-11-12.md)).
   * `d00dee5` and the following docs commit: findings, install, this handoff, `CLAUDE.md`.
   * Prompt A (client: Audio checkbox state and position) runs in its own session on
     worktree branch `claude/zealous-cori-401c64` (`.claude/worktrees/zealous-cori-401c64`),
@@ -29,6 +29,13 @@ items to "Live-confirmed").
   | --- | --- | --- | --- |
   | Server Tools `server.dll` | `7dbba5eb` | `f37135a` | `C:\KPCTest\backup\games-psycho-20261112-before-7dbba5eb` (previous `035f23a2` files; the moved proxy as `server.dll.active-moved`); smoke1: `C:\KPCTest\backup\smoke1-20261112-before-7dbba5eb` |
   | Client `dinput.dll` | `2ab53bd7` | `2b50501` | `C:\KPCTest\backup\games-psycho-20261112-before-2ab53bd7` |
+
+  **Update, 2026-11-12 23:14 (desktop only; uncommitted working tree):** `tools/install_game.py`
+  installed Server Tools `7d01059a` as `server.dll` and client `cf896d63` as `dinput.dll`, and added
+  `FpsLimiter = off` to the desktop's `DDrawCompat-CLIENT.ini`. Backup of the replaced files
+  (the `7dbba5eb` proxy, the `2ab53bd7` client, the old INI and docs): `C:\KPCTest\backup\psycho-20261112-231420-before-7d01059a`.
+  `smoke1` is unchanged. New laptop package: `C:\KPCTest\pkg-client-cf896d63` (not yet on the laptop).
+  The rows above describe the previous install.
 
   The laptop needs only the client: package `C:\KPCTest\pkg-client-2ab53bd7` (unchanged by
   `7dbba5eb`; Server Tools runs only on the hosting PC).
@@ -95,6 +102,76 @@ players stuck in the floor (row 17)): add a line under the table with the world 
   (cshell SFX table `0x201bf94c`) probably plays only for the local player; then the fix
   belongs in the client.
 * **T16 changelevel:** a "maplist" error → `coop_prepare_maplist` could not write the slot.
+
+## Code review 2026-11-12: found in the code and in the desktop log
+
+Source: review of `proxy.c` / `coop_session.h` / client `loading.c`, and the last run in
+`C:\Games\Psycho\KPCServerTools.log` (build `7dbba5eb`, ended 19:14, two players, worlds
+R1M0, R1M1A, R4M1A, R4M1B, R4M1C, R4M2A, R3M4B). R1, R2, R3 and R5 are fixed in Server Tools
+build `7d01059a` and R4 in client build `cf896d63` (both in the repo and installed on the desktop at 23:14; the laptop still has client
+`2ab53bd7` and needs package `pkg-client-cf896d63`). Tests passed for these builds: server unit tests 26/26, emulator matrix
+48/48, `check_live.py` both modes, client suite 20/20, packaging of both ZIPs
+(`tools/build-changed.cmd`). Not run: `audit_sites.py`, native server smoke, two-PC test.
+R6 is open: see the pickup notes.
+
+| # | Finding | Evidence | Proposed fix |
+| --- | --- | --- | --- |
+| R1 | The co-op log stops for good after 3000 lines per server process | `coop_log` counts against `COOP_LOG_BUDGET` and nothing resets the counter (`proxy.c`). The 19:14 run wrote 1224 lines in 7 worlds, so a 48-world campaign loses its log around world 17 | **fixed** (`7d01059a`): 1000 lines per map epoch, one `log-budget` line when it runs out, renewed by the next world (`check_proxy.py`) |
+| R2 | A non-host using an exit mirror floods the log | 357 `exit-rearmed` lines in that run (from R4M1C on): every refused use re-arms the deco and logs, without the 8-per-world cap that `exit-seen` has. Each line opens and closes the log file on the game thread | **fixed** (`7d01059a`): at most 8 `exit-rearmed` lines per world; the re-arm itself is unchanged. No dedicated test |
+| R3 | "Only the host can take the exit" is said once per world | `coop_session_exit_by` announces only on the first refusal of an epoch; later attempts look like a dead mirror | **fixed** (`7d01059a`): said at the first refusal in a world and again at most every 5 s (`test_coop_campaign.c`) |
+| R4 | A held spawn reply can be sent after the connection is gone (not observed) | client `loading.c`: `hold_tick` releases the held `0x17` reply when the minimum time passes; a new load clears it, a disconnect does not | **fixed in part** (client `cf896d63`): a new connection drops the held reply instead of sending it (`test_loading_art.py`). Still open: a disconnect to the menu with no new connection sends it when the minimum time passes; the shell state that marks "disconnected" is not identified |
+| R5 | Item id is read from the item after the stock pickup ran (not observed) | `coop_item_pickup` reads `item+0x54` again after `cc180`; a non-respawning item may already be removed | **fixed** (`7d01059a`): the id is read once before the stock pickup and the item is not read afterwards. No dedicated test (the existing shared-item and ammo checks pass) |
+| R6 | Player list is walked with guarded reads many times per frame | `coop_live_objects` (two `VirtualQuery` calls per node) runs for every spawner update, pickup and script event | open; see "R6 pickup notes" below |
+
+### R6 pickup notes (open; to be done in a separate session)
+
+Goal: stop walking the engine's player list with guarded reads many times per server
+frame. This is a performance change only; behaviour must not change.
+
+* **What is slow.** `coop_live_objects` (`proxy.c`) reads the list at
+  `[0x10157724]+4` (nodes `{HOBJECT, next}`) through `coop_rd`, and every `coop_rd` is a
+  `VirtualQuery` system call (`bsp_mem_readable`): two per node plus two for the head.
+* **Callers.** Hot: `coop_spawner_target` (site `0xd51fb`, once per spawner per update,
+  with `CoopSpawnerNearest=1`) and `coop_member_player` (from `coop_inv_frame`, per
+  member, every frame while a restore is pending and once a second otherwise). Per
+  event: `coop_presence`, `coop_exit_trigger`, `coop_player_event_all`,
+  `coop_view_set_all`, `coop_view_reset_all`, `coop_share_ammo`, `coop_item_pickup`,
+  `coop_inventory_give`, `coop_item_respawn`, `coop_powerup_frame`.
+* **Not measured yet.** The cost is an estimate from the code (R4M1A has dozens of
+  spawners; the server runs 62.5 frames a second). Measure first: count
+  `coop_live_objects` calls per second behind `TraceTiming=1` and log one line every
+  10 s. If it is a few hundred a second or less, close R6 as "not worth it".
+* **Proposed change.** Keep one cached copy of the list (handles and count) with a
+  frame stamp. `coop_frame` (site `0xffbbf`, once per server frame) advances the stamp;
+  `coop_live_objects` refills the cache when the stamp differs and otherwise copies it.
+  Also invalidate in `coop_spawn_hook`, `coop_client_enter_place` and `coop_next_level`,
+  where the list changes inside a frame.
+* **Risk to check before coding.** A cached HOBJECT is passed to engine calls
+  (GetObjectPos `[de+0x1d0]`, `ee7d0`). If the engine can remove a player object in the
+  middle of a frame (disconnect), a cached handle would be stale for the rest of that
+  frame. Whether removal is deferred to the end of the frame is **not verified**. If it
+  cannot be shown, cache only inside `coop_spawner_target` and keep every other caller
+  on the live walk.
+* **Tests.** `tests/check_proxy.py` writes the fake player list straight into memory
+  and then calls one hook (`roster(...)`, the spawner block near "co-op spawners:
+  activation radius"). With a cache those steps need the frame hook called (`frame()`)
+  or an explicit invalidation after each `roster`; otherwise they read the old list.
+  Add a check that two spawner calls in one frame walk the list once (count the
+  `VirtualQuery` stub calls) and that a roster change is seen on the next frame.
+* **Related, same session if wanted.** `log_file` opens and closes
+  `KPCServerTools.log` for every line (`CreateFileW` / `WriteFile` / `CloseHandle`) on
+  the game thread. Lines are now bounded per world (R1, R2), so this is minor; a kept
+  handle would need a flush policy so a crash does not lose the last lines.
+* **Done means.** Unit tests 26/26, the full `matrix-coop.sh`, `check_live.py` both
+  modes, the rebuilt DLL and `SERVER_TOOLS_BUILD.json` copied in,
+  `SHA256SUMS-Server-Tools` refreshed from the git index, the R6 row below updated with
+  the build hash, and the measured before/after call counts written here.
+
+Log markers seen in that run (evidence for the test plan above; the user's own report still decides PASS/FAIL):
+`inventory-saved`/`inventory-restored` 14 each with `gives=11..12` (T10), `spawner reference moved` 23 (T6),
+`(key)` cheat lines 152 (T7), `used !kill` 4 (T12), `used !all` 8 (T13), `item-respawn` scheduled 16 /
+respawned 16 / waiting 2 (T14), `effect 0x35 re-sent` 3 (T15), `Host changed level` 2 (T16), `shared ammo` 5,
+`secret` 1. Not seen: `sequence-refused`, `is now <class>` (T9), `Cheats are disabled` (T8), `change-failed`, `intro-abort`.
 
 ## Playtest 2026-11-12 (two PCs, whole campaign): triage
 
@@ -163,8 +240,7 @@ music, health bars, monster spawners (host-triggered). Single player:
    has spawned.
 3. **Only the host skips cutscenes** (row 6): find the client message → `endingscript` path.
 4. **Collectables HUD in co-op** (row 10) and the **Disconnect menu item** (row 21).
-5. **Smooth cutscene cameras** (client): interpolate the server's camera samples
-   (`0x3d` sub 5 from `c58c0`) between frames.
+5. (done: `SmoothCutsceneCamera`, client `camera.c`; needs the in-game look of T20.)
 6. **Switches/levers host gate** (row 3: `CSwitch` `44dd6` and other command-list owners).
 7. **Collision-checked spawn allocator** (`coop/GENERAL-ALLOCATOR.md`) and a
    **protected waiting state** between client enter (`0xfdfb0`) and spawn (`0xfec56`).
@@ -172,7 +248,8 @@ music, health bars, monster spawners (host-triggered). Single player:
 ## Tooling
 
 * Installing a new build on the test PCs: [UPGRADE-TEST-INSTALL.md](UPGRADE-TEST-INSTALL.md).
-* `C:\KPCTest\pass2\`: `build-coop.sh <dir>`, `unit-coop.sh`, `matrix-coop.sh <dir>` (48 runs).
+* `C:\KPCTest\pass2\`: `build-coop.sh <dir>`, `unit-coop.sh`, `matrix-coop.sh <dir>`. They read the checkout
+  `C:\Users\magi\Documents\GitHub\KPCFix` (see `CLAUDE.md`).
 * `C:\KPCTest\clientbuild\`: `build-coop.sh <dir>`, `suite-coop.sh`.
 * `coop/tools/Invoke-CoopServerSmoke.ps1` (native server smoke; never on a folder with
   a running server).
