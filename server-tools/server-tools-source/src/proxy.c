@@ -757,6 +757,7 @@ static CoopScoreboard coop_sb;
 static int coop_spawners=1,coop_trace_spawners;
 static U32 coop_spawner_ok,coop_spawner_no,coop_spawner_logged;
 static int coop_sp_start=1,coop_trace_scripts,coop_script_events=1,coop_friendly_fire,coop_shared_items=1,coop_spread;
+static int coop_host_sequences=1;   /* [Coop] CoopHostSequences (default 1) */
 /* [Coop] CoopSkill (absent = unchanged; 0 Lullaby, 1 Daydream, 2 Sleepless,
  * 3 Cold Sweat, 4 Nightmare as printed by the stock skill command fb710).
  * f9000 maps skill 0-1 to MiscFlags bit 1, 2 to bit 2, 3-4 to bit 4. The
@@ -1105,6 +1106,7 @@ static void __attribute__((naked)) coop_chat_entry(void){
  * The activator HOBJECT comes from the trigger message (2d400 -> vtbl+0x70). */
 #define COOP_EXIT_LOG_PER_EPOCH 8u
 static U32 coop_exit_log_epoch=0xffffffffu,coop_exit_log_count;
+static void coop_rearm_used_deco(U32 now);
 static void coop_exit_trigger(U32 trigger,U32 activator_ptr){
  char next[0x80],start[0x80],line[240],who[COOP_NAME_MAX];
  U32 n=0,now=GetTickCount(),flag=0x100u,act=0,i,logged;CoopResult r;const char *kind="none";
@@ -1143,6 +1145,7 @@ static void coop_exit_trigger(U32 trigger,U32 activator_ptr){
   for(i=0;act&&i<COOP_SESSION_MAX_MEMBERS;i++)if(coop_state.m[i].used&&coop_state.m[i].object==act){member=(int)i;break;}
   if(!coop_session_exit_by(&coop_state,member,kind[0]=='m'||kind[0]=='p',&r)){
    if(logged)coop_log("exit-refused","not the host");
+   coop_rearm_used_deco(now);
    coop_execute(&r);
    return;
   }
@@ -1305,14 +1308,121 @@ typedef U32 (CDECL *ToPlayerFn)(U32 *);
 typedef U32 (__attribute__((thiscall)) *PlayerTextFn)(void *,const char *);
 typedef U32 (CDECL *IsPlayerFn)(U32);
 /* Activator: the player who last set off a trigger. The three trigger
- * classes test their activator with ee900 (IsPlayer, cdecl HOBJECT -> AL):
+ * classes test their activator with ee900 (IsPlayer, cdecl, argument a
+ * POINTER to the HOBJECT: ee925 "mov ecx,[esp+4]; mov edx,[ecx]" -> AL):
  * CTriggerCommand 2e205 (filter 2e200, then its command list 2eac2) and two
- * trigger touch paths 2ffea / 3005a. The result is forwarded unchanged. */
+ * trigger touch paths 2ffea / 3005a. The result is forwarded unchanged.
+ * (Until 2026-11-12 the pointer itself was stored, so it never matched a
+ * live player and every personal command went to the first player: the
+ * "player 2 teleported in front of the camera" playtest report.) */
 static U32 coop_activator,coop_activator_ms;
-static U32 CDECL coop_record_activator(U32 object){
- U32 r=((IsPlayerFn)(coop_image+0xee900u))(object);
- if(r&0xffu){coop_activator=object;coop_activator_ms=GetTickCount();}
+static void coop_set_activator(U32 handle){if(handle){coop_activator=handle;coop_activator_ms=GetTickCount();}}
+static U32 CDECL coop_record_activator(U32 object_ptr){
+ U32 r=((IsPlayerFn)(coop_image+0xee900u))(object_ptr),h=0;
+ if((r&0xffu)&&coop_rd(object_ptr,&h))coop_set_activator(h);
  return r;
+}
+static int coop_member_of(U32 handle){
+ U32 i;
+ for(i=0;handle&&i<COOP_SESSION_MAX_MEMBERS;i++)if(coop_state.m[i].used&&coop_state.m[i].object==handle)return (int)i;
+ return -1;
+}
+
+/* ---- Host-only level-ending sequences (with CoopScriptEvents) ----
+ * object.lto script registry: loaded scripts at [0x1015a0b8] (count
+ * [0x1015a0b4]); c63f0(name, script) (cdecl) is 1 when the names match.
+ * A script keeps its events at script+0x108 (array) / +0x104 (count), each
+ * event [vtable, float time, ...]. The events that name something keep it
+ * at event+0x108: trigger_generic (vtable 0x1011d4a8, factory bf560),
+ * scriptplay (0x1011d0d4, Fire b8670 -> c5340) and endingscript (0x1011d128,
+ * Fire b8cf0 -> c50c0: the script that runs when the sequence is skipped).
+ * A CTriggerCommand's commands are themselves a registered script whose name
+ * is the command-list object [trigger+0x54] (c4230: played if byte +0x40). */
+typedef U32 (CDECL *ScriptMatchFn)(const char *,U32);
+static U32 coop_find_script(const char *name){
+ U32 count=0,arr=0,i,s;
+ if(!name||!bsp_mem_readable((U32)name,1)||!name[0])return 0;
+ if(!coop_rd((U32)coop_image+0x15a0b4u,&count)||!coop_rd((U32)coop_image+0x15a0b8u,&arr)||!arr||count>4096u)return 0;
+ for(i=0;i<count;i++)if(coop_rd(arr+i*4u,&s)&&s&&(((ScriptMatchFn)(coop_image+0xc63f0u))(name,s)&0xffu)==1u)return s;
+ return 0;
+}
+static int coop_script_reaches_exit(U32 script,const char *label,U32 depth){
+ U32 count=0,arr=0,i,ev,vt;char name[0x80];
+ if(!script||depth>4u||!coop_rd(script+0x104u,&count)||!coop_rd(script+0x108u,&arr)||!arr||count>4096u)return 0;
+ for(i=0;i<count;i++){
+  if(!coop_rd(arr+i*4u,&ev)||!ev||!coop_rd(ev,&vt))continue;
+  if(vt!=(U32)coop_image+0x11d4a8u&&vt!=(U32)coop_image+0x11d0d4u&&vt!=(U32)coop_image+0x11d128u)continue;
+  coop_copy_str(name,ev+0x108u,sizeof name);
+  if(vt==(U32)coop_image+0x11d4a8u){if(coop_is_exit_name(label,name))return 1;}
+  else if(coop_script_reaches_exit(coop_find_script(name),label,depth+1u))return 1;
+ }
+ return 0;
+}
+static int coop_commands_reach_exit(U32 cmdlist){
+ U8 armed=0;
+ if(!cmdlist||!bsp_mem_readable(cmdlist+0x40u,1))return 0;
+ armed=*(const U8 *)(cmdlist+0x40u);
+ if(!armed||!coop_state.world_label[0])return 0;
+ return coop_script_reaches_exit(coop_find_script((const char *)cmdlist),coop_state.world_label,0);
+}
+/* CTriggerCommand filter 2e200 (ECX = trigger, unchanged before 2e205):
+ * a non-host player in a trigger that starts a level-ending sequence is
+ * reported as "not a player", so 2eaa0 neither plays the commands nor marks
+ * the trigger used (2eabd -> 2eacb): it stays armed for the host. */
+static U32 coop_seq_refused_logged;
+static U32 __attribute__((used,noinline)) CDECL coop_trigger_filter(U32 object_ptr,U32 trigger){
+ U32 r=coop_record_activator(object_ptr),h=0,cmd=0,now;int member;CoopResult res;
+ if(!(r&0xffu)||!coop_host_sequences||!coop_rd(object_ptr,&h)||!coop_rd(trigger+0x54u,&cmd))return r;
+ if(coop_state.phase!=COOP_PHASE_GAMEPLAY)return r;
+ member=coop_member_of(h);
+ if(member>=0&&member==coop_state.host)return r;
+ if(!coop_commands_reach_exit(cmd))return r;
+ now=GetTickCount();
+ if(coop_session_sequence_by(&coop_state,member,now,&res))return r;
+ if(res.action){
+  char line[120];U32 n=0;
+  coop_text(line,&n,"trigger refused for a non-host player (",sizeof line);
+  coop_text(line,&n,member>=0?coop_state.m[member].name:"unknown",sizeof line);
+  coop_text(line,&n,"): its commands reach the exit of ",sizeof line);coop_text(line,&n,coop_state.world_label,sizeof line);
+  coop_log("sequence-refused",line);coop_seq_refused_logged++;
+  coop_execute(&res);
+ }
+ return 0;
+}
+void coop_trigger_filter_entry(void);
+__asm__(".global coop_trigger_filter_entry\n"
+        "coop_trigger_filter_entry:\n"
+        " pushl %ecx\n"
+        " pushl 8(%esp)\n"
+        " call coop_trigger_filter\n"
+        " addl $8,%esp\n"
+        " ret\n");
+
+/* CModelDeco use (409a0, vtable 0x119d68): plays its use command list
+ * (409bb call c4230) and marks itself used (+0x1a1 = 1, honoured when
+ * play_use_script_once +0x178 is set). An exit mirror ("trigger_generic
+ * Gubba") used by a non-host was refused at the exit but stayed used, so
+ * the host's later click did nothing. The last used deco is remembered;
+ * coop_exit_trigger re-arms it when it refuses that exit. */
+static U32 coop_used_deco,coop_used_deco_ms;
+U32 coop_c4230_target;
+static void __attribute__((used,noinline)) CDECL coop_deco_used(U32 deco){coop_used_deco=deco;coop_used_deco_ms=GetTickCount();}
+void coop_deco_use_entry(void);
+__asm__(".global coop_deco_use_entry\n"
+        "coop_deco_use_entry:\n"
+        " pushl %ecx\n"
+        " pushl %esi\n"
+        " call coop_deco_used\n"
+        " addl $4,%esp\n"
+        " popl %ecx\n"
+        " jmp *coop_c4230_target\n");
+#define COOP_DECO_REARM_MS 3000u
+static void coop_rearm_used_deco(U32 now){
+ U8 *used;
+ if(!coop_used_deco||now-coop_used_deco_ms>COOP_DECO_REARM_MS)return;
+ used=(U8 *)(coop_used_deco+0x1a1u);
+ if(bsp_mem_readable((U32)used,1)&&*used==1u){*used=0;coop_log("exit-rearmed","the refused exit's use object can be used again by the host");}
+ coop_used_deco=0;
 }
 /* Sub-commands that move or animate one body go to the activator only;
  * the rest (giveitem, invulnerable, sethealth, class, ...) to everyone. */
@@ -1408,10 +1518,27 @@ static U32 coop_shared_list[COOP_SHARED_MAX],coop_shared_count,coop_shared_epoch
 static int coop_item_shared_id(U32 id){
  return (id>=3u&&id<=14u)||id==0x23u||id==0x19u||id==0x24u||id==0x25u||(id>=0x27u&&id<=0x2cu);
 }
+/* Armour touch c8340 (all six piece classes, vtables 0x11db1c..0x11ddd4):
+ * byte 0x1013e1b8 = 1 in multiplayer (c8348 game-type load), else the
+ * item's ReallyGiveArmor (+0xe8); the use function c8310 gives the piece
+ * only when it is 1. So multiplayer handed the piece over at the touch,
+ * playing the unsheathe sound at once, while single player gives nothing
+ * at the touch: the piece's script ("player giveitem <piece>" at 6.75-8.75 s,
+ * e.g. r1m1a_gauntlets.scr, cs1belt.scr) gives it near the end of its
+ * cutscene. With CoopScriptEvents the c8348 load yields 0 (single-player
+ * rule) and that giveitem reaches every player; a piece whose
+ * ReallyGiveArmor is set (TUTORIAL) is still given at the touch and shared. */
+#define COOP_ARMOUR_GIVE_FLAG_RVA 0x13e1b8u
+static int coop_item_armour_id(U32 id){return id>=0x27u&&id<=0x2cu;}
 static void __attribute__((thiscall)) coop_item_pickup(void *item,void *player){
  U32 def=0,id=0,live[64],n,i,given=0,self=0;
+ if(coop_rd((U32)player+8u,&self))coop_set_activator(self);   /* a pickup can start a cutscene */
  ((PickupFn)(coop_image+0xcc180u))(item,player);
  if(!coop_rd((U32)item+0x54u,&def)||!def||!coop_rd(def,&id)||!coop_item_shared_id(id))return;
+ if(coop_item_armour_id(id)&&coop_script_events&&*(const U8 *)(coop_image+COOP_ARMOUR_GIVE_FLAG_RVA)!=1u){
+  coop_log("item","armour piece touched; its cutscene gives it to every player (single-player timing)");
+  return;
+ }
  if(coop_shared_epoch!=coop_state.epoch){coop_shared_epoch=coop_state.epoch;coop_shared_count=0;}
  for(i=0;i<coop_shared_count;i++)if(coop_shared_list[i]==(U32)item)return;
  if(coop_shared_count<COOP_SHARED_MAX)coop_shared_list[coop_shared_count++]=(U32)item;
@@ -1447,6 +1574,47 @@ static void CDECL coop_secret_message(U32 client,U32 kind,U32 seconds,U32 text){
  }
  if(!sent)((ClientMessageFn)(coop_image+0xf8d90u))(client,kind,seconds,text);
  coop_log("secret","found; message sent to every player");
+}
+
+/* Keys and tickets: the campaign has no key item objects. A CPickupTrigger
+ * runs "inventory add key" (20 worlds) and a door runs "inventory remove
+ * key". The inventory event's Fire b6730 has no game-type gate but uses the
+ * FIRST player only (b673c list 0x10157724 head -> ee7d0), so in co-op the
+ * key went to whichever player was first, not the finder. Its add call
+ * b676f f3440(player, id, 1, 1) (thiscall, ret 0xc) is redirected to give
+ * the item to every player and to announce keys and tickets with the
+ * finder's name (the pickup trigger's activator). Removal (b6789, the
+ * inventory's own vt+4) stays with the first player: the others keep a
+ * spare key, which only matters on worlds with two key doors. */
+#define COOP_ITEM_KEY 0x24u
+#define COOP_ITEM_TICKET 0x25u
+#define COOP_KEY_FINDER_MS 3000u
+static U32 __attribute__((thiscall)) coop_inventory_give(void *head,U32 id,U32 a,U32 b){
+ U32 live[64],n=coop_live_objects(live,64),i,given=0,result=0,now=GetTickCount();
+ for(i=0;i<n;i++){
+  U32 h=live[i],player=((ToPlayerFn)(coop_image+0xee7d0u))(&h);
+  if(!player)continue;
+  result=((GiveItemFn)(coop_image+0xf3440u))((void *)player,id,a,b);given++;
+ }
+ if(!given&&head)result=((GiveItemFn)(coop_image+0xf3440u))(head,id,a,b);
+ {
+  char line[120],name[24];U32 m=0,np=0;
+  name[0]=0;if(coop_rd((U32)coop_image+0x141e40u+id*0x20u,&np)&&np)coop_copy_str(name,np,sizeof name);
+  coop_text(line,&m,"inventory add item=",sizeof line);coop_text(line,&m,name[0]?name:"?",sizeof line);
+  coop_text(line,&m," id=",sizeof line);coop_dec(line,&m,id,sizeof line);
+  coop_text(line,&m," players=",sizeof line);coop_dec(line,&m,given,sizeof line);
+  coop_log("item",line);
+ }
+ if(id==COOP_ITEM_KEY||id==COOP_ITEM_TICKET){
+  CoopResult r;U32 m=0;int who=-1;
+  if(coop_activator&&now-coop_activator_ms<COOP_KEY_FINDER_MS)who=coop_member_of(coop_activator);
+  coop_result(&r,COOP_ACT_ANNOUNCE,"");
+  coop_text(r.msg,&m,"[Co-op] ",sizeof r.msg);
+  coop_text(r.msg,&m,who>=0?coop_state.m[who].name:"Someone",sizeof r.msg);
+  coop_text(r.msg,&m,id==COOP_ITEM_KEY?" found the key (everyone has it)":" found a ticket (everyone has it)",sizeof r.msg);
+  coop_execute(&r);
+ }
+ return result;
 }
 
 /* ---- Waiting player placement (with CoopSinglePlayerStart) ----
@@ -1878,7 +2046,7 @@ static void make_call(OptionalSite *s,U8 *b,const void *target){
  s->hooked[0]=0xe8;copy(s->hooked+1,(const U8 *)&rel,4);
  for(i=5;i<s->size;i++)s->hooked[i]=0x90;
 }
-#define OPTIONAL_SITES 38u
+#define OPTIONAL_SITES 41u
 static void optional_sites(OptionalSite *s,U8 *b){
  static const struct {U32 rva,size;U8 original[6];} table[OPTIONAL_SITES]={
   {SPAWN_POS_CALL_RVA,6,{0xff,0x91,0xe0,0x01,0x00,0x00}},
@@ -1919,6 +2087,9 @@ static void optional_sites(OptionalSite *s,U8 *b){
   {0xcc145,5,{0xe8,0x36,0x00,0x00,0x00}},        /* pickup -> cc180(item, player) */
   {0x30c9e,5,{0xe8,0xed,0x80,0x0c,0x00}},        /* secret found -> message to the finder f8d90 */
   {0xfdfdb,6,{0xff,0x90,0xf0,0x00,0x00,0x00}},   /* client enter -> attach object [de+0xf0] */
+  {0xc8348,6,{0x8b,0x88,0xd0,0x01,0x00,0x00}},   /* armour touch: game-type gate (give at touch in MP) */
+  {0x409bb,5,{0xe8,0x70,0x38,0x08,0x00}},        /* CModelDeco use -> command list play c4230 */
+  {0xb676f,5,{0xe8,0xcc,0xcc,0x03,0x00}},        /* inventory add (first player) -> f3440 */
  };
  U32 i;
  for(i=0;i<OPTIONAL_SITES;i++){s[i].rva=table[i].rva;s[i].size=table[i].size;copy(s[i].original,table[i].original,6);}
@@ -1953,13 +2124,16 @@ static void optional_sites(OptionalSite *s,U8 *b){
  make_call(&s[28],b,(const void *)coop_gate_zero_ecx);
  make_call(&s[29],b,(const void *)coop_gate_zero_edx);
  make_call(&s[30],b,(const void *)coop_gate_zero_ecx);
- make_call(&s[31],b,(const void *)coop_record_activator);
+ make_call(&s[31],b,(const void *)coop_trigger_filter_entry);
  make_call(&s[32],b,(const void *)coop_record_activator);
  make_call(&s[33],b,(const void *)coop_record_activator);
  make_call(&s[34],b,(const void *)coop_ff_entry);
  make_call(&s[35],b,(const void *)coop_item_pickup);
  make_call(&s[36],b,(const void *)coop_secret_message);
  make_call(&s[37],b,(const void *)coop_client_enter_place);
+ make_call(&s[38],b,(const void *)coop_gate_zero_ecx);
+ make_call(&s[39],b,(const void *)coop_deco_use_entry);
+ make_call(&s[40],b,(const void *)coop_inventory_give);
  s[0].enabled=spawn_trace_enabled;
  s[1].enabled=spawn_separation_enabled||coop_session_enabled;
  s[2].enabled=campaign_trace||coop_session_enabled;
@@ -1977,7 +2151,11 @@ static void optional_sites(OptionalSite *s,U8 *b){
  s[34].enabled=coop_session_enabled&&!coop_friendly_fire;
  s[35].enabled=s[36].enabled=coop_session_enabled&&coop_shared_items;
  s[37].enabled=coop_session_enabled&&coop_sp_start;
+ s[38].enabled=coop_session_enabled&&coop_script_events;
+ s[39].enabled=coop_session_enabled;
+ s[40].enabled=coop_session_enabled&&coop_shared_items;
  coop_ff_skip_target=(U32)b+0xf3f1eu;
+ coop_c4230_target=(U32)b+0xc4230u;
 }
 static int apply_object(HMODULE module){
  U8 *b=(U8 *)module;U8 hash[32],expected[8];U32 i,j,old,restore,already=1;
@@ -2149,6 +2327,7 @@ static void initialize(void){
  coop_script_events=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopScriptEvents",1,ini_path)!=0;
  coop_friendly_fire=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopFriendlyFire",0,ini_path)!=0;
  coop_shared_items=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSharedItems",1,ini_path)!=0;
+ coop_host_sequences=coop_session_enabled&&coop_script_events&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopHostSequences",1,ini_path)!=0;
  coop_spread=coop_session_enabled&&same(back_sha,bsp_original_hash,32)&&
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSpawnSpread",1,ini_path)!=0;
  coop_spread_bsp=coop_spread;
@@ -2226,6 +2405,9 @@ static void initialize(void){
   if(coop_session_enabled)log_file(coop_shared_items?
     "[KPCFix Co-op] effective CoopSharedItems=1 (weapons, armour, pamphlets, keys and tickets go to every player)":
     "[KPCFix Co-op] effective CoopSharedItems=0 (stock: pickups only for whoever takes them)");
+  if(coop_session_enabled)log_file(coop_host_sequences?
+    "[KPCFix Co-op] effective CoopHostSequences=1 (only the host can start a level-ending sequence)":
+    "[KPCFix Co-op] effective CoopHostSequences=0 (any player can start a level-ending sequence)");
   if(coop_session_enabled)log_file(coop_friendly_fire?
     "[KPCFix Co-op] effective CoopFriendlyFire=1 (players can hurt each other)":
     "[KPCFix Co-op] effective CoopFriendlyFire=0 (no damage between players; self and monster damage unchanged)");

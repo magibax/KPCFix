@@ -99,4 +99,45 @@ static int coop_campaign_slice(unsigned int mode,unsigned int realm,unsigned int
  *first=a;*len=(mode==COOP_SEL_FROM?COOP_CAMPAIGN_LEN:b+1u)-a;
  return 1;
 }
+/* Name of each world's exit object (CExitTrigger), from the stock world
+ * object tables (one exit per world; names only, no world data is shipped).
+ * A script line "trigger_generic <name>" naming it ends the level, so a
+ * trigger whose command list reaches such a line starts a level-ending
+ * sequence (e.g. R1M1A r1m1a_victory.scr, R1M1B's mirror "Gubba"). */
+static const char *const coop_exit_names[][2]={
+ {"TUTORIAL","exit"},{"R1M0","CExitTrigger0"},{"R1M1A","CExitTrigger0"},{"R1M1B","Gubba"},
+ {"R1M2A","CExitTrigger0"},{"R1M2B","CExitTrigger0"},{"R1M2C","exit"},{"R1M3A","CExitTrigger0"},
+ {"R1M3B","CExitTrigger0"},{"R1M3C","exit"},{"R1M4A","exit"},{"R1M4B","exit"},{"R1M4C","exit"},
+ {"R2M0","CExitTrigger0"},{"R2M1A","CExitTrigger0"},{"R2M1B","CExitTrigger0"},{"R2M1C","exit"},
+ {"R2M2A","CExitTrigger0"},{"R2M2B","CExitTrigger0"},{"R2M2C","levexit01"},{"R2M3A","CExitTrigger0"},
+ {"R2M3B","exit"},{"R2M3C","exit"},{"R2M4A","CExitTrigger0"},{"R2M4B","CExitTrigger0"},{"R2M4C","exit"},
+ {"R3M0","CExitTrigger0"},{"R3M1A","sloopy"},{"R3M1B","kooklook"},{"R3M2A","CExitTrigger0"},
+ {"R3M2B","exittrigger"},{"R3M3A","CExitTrigger0"},{"R3M3B","CExitTrigger0"},{"R3M3C","exit"},
+ {"R3M4A","CExitTrigger0"},{"R3M4B","exit"},{"R4M0","CExitTrigger0"},{"R4M1A","CExitTrigger0"},
+ {"R4M1B","CExitTrigger0"},{"R4M1C","exit"},{"R4M2A","exitout01"},{"R4M2B","CExitTrigger0"},
+ {"R4M2C","exit"},{"R4M3A","CExitTrigger0"},{"R4M3B","exit"},{"R4M4A","finalfire"},{"R4M4B","exit"},
+ {"R5M1A","CExitTrigger0"},{"R5M1B","exit"},
+};
+#define COOP_EXIT_NAMES (sizeof(coop_exit_names)/sizeof(coop_exit_names[0]))
+static int coop_ieq(const char *a,const char *b){
+ unsigned int i;
+ for(i=0;i<128;i++){
+  char x=(a[i]>='A'&&a[i]<='Z')?(char)(a[i]+32):a[i],y=(b[i]>='A'&&b[i]<='Z')?(char)(b[i]+32):b[i];
+  if(x!=y)return 0;
+  if(!x)return 1;
+ }
+ return 0;
+}
+/* 1 if name is the exit object of the world with this label (e.g. R1M1A).
+ * Leading/trailing blanks of the script argument are ignored. */
+static int coop_is_exit_name(const char *label,const char *name){
+ char n[64];unsigned int i,k=0;
+ if(!label||!name)return 0;
+ for(i=0;name[i]==' '||name[i]=='\t';i++){}
+ for(;name[i]&&name[i]!=' '&&name[i]!='\t'&&k+1<sizeof n;i++)n[k++]=name[i];
+ n[k]=0;
+ if(!k)return 0;
+ for(i=0;i<COOP_EXIT_NAMES;i++)if(coop_ieq(coop_exit_names[i][0],label))return coop_ieq(coop_exit_names[i][1],n);
+ return 0;
+}
 #endif

@@ -88,6 +88,8 @@ typedef struct {
  unsigned int abort_after_load;     /* !abort during a world change: back to the lobby once it has loaded */
  int skill;                         /* difficulty written before each world load: 0-4, or -1 = unchanged */
  unsigned int host_exit_epoch;      /* epoch+1 of the last "only the host" exit reply */
+ unsigned int host_seq_ms,host_seq_said; /* last "only the host" sequence reply (rate limit) */
+ unsigned int rejected_sequences;
  unsigned int completed;            /* routes completed in this server run */
  char world_label[16];              /* loaded world, e.g. R1M2B */
  char lobby_world[COOP_WORLD_MAX];  /* normalised lobby world or empty = route start */
@@ -455,6 +457,23 @@ static int coop_session_exit_by(CoopSession *s,int member,int is_player,CoopResu
  if(s->host_exit_epoch!=s->epoch+1u){
   s->host_exit_epoch=s->epoch+1u;
   coop_result(r,COOP_ACT_ANNOUNCE,"[Co-op] Only the host (*) can take the exit");
+ }
+ return 0;
+}
+/* Level-ending sequences belong to the host too: a trigger whose commands
+ * reach the world's exit (a cutscene ending in "trigger_generic <exit>") is
+ * refused for any other player before it runs, so it stays armed for the
+ * host. The reply is repeated at most every COOP_HOST_SEQ_REPLY_MS while a
+ * player stands in the trigger. Outside GAMEPLAY nothing is refused. */
+#define COOP_HOST_SEQ_REPLY_MS 5000u
+static int coop_session_sequence_by(CoopSession *s,int member,unsigned int now,CoopResult *r){
+ coop_result(r,COOP_ACT_NONE,"");
+ if(s->phase!=COOP_PHASE_GAMEPLAY)return 1;
+ if(member>=0&&member==s->host)return 1;
+ s->rejected_sequences++;
+ if(!s->host_seq_said||now-s->host_seq_ms>=COOP_HOST_SEQ_REPLY_MS){
+  s->host_seq_said=1;s->host_seq_ms=now;
+  coop_result(r,COOP_ACT_ANNOUNCE,"[Co-op] Only the host (*) can start this sequence (it ends the level)");
  }
  return 0;
 }

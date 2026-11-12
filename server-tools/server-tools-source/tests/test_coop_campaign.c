@@ -236,8 +236,32 @@ static void test_difficulty_and_host_exits(void){
  /* Campaign default: the intro starts with the last spawn (no settle). */
  assert(COOP_CAMPAIGN_SETTLE_MS==0u);
 }
+/* Host-only level-ending sequences and the per-world exit names. */
+static void test_host_sequences_and_exit_names(void){
+ CoopSession s;CoopResult x;unsigned int i,k;
+ assert(coop_is_exit_name("R1M1A","CExitTrigger0")&&coop_is_exit_name("r1m1a"," cexittrigger0 "));
+ assert(coop_is_exit_name("R1M1B","Gubba")&&!coop_is_exit_name("R1M1B","CExitTrigger0"));
+ assert(coop_is_exit_name("R3M1A","sloopy")&&!coop_is_exit_name("R3M1A","sloopy2"));
+ assert(!coop_is_exit_name("R1M1A","")&&!coop_is_exit_name("","exit")&&!coop_is_exit_name("PM01","exit"));
+ assert(!coop_is_exit_name(0,"exit")&&!coop_is_exit_name("R1M2C",0));
+ /* Every campaign world has exactly one exit name. */
+ for(i=0;i<COOP_CAMPAIGN_LEN;i++){
+  unsigned int found=0;
+  for(k=0;k<COOP_EXIT_NAMES;k++)if(coop_ieq(coop_exit_names[k][0],coop_campaign_worlds[i].label))found++;
+  assert(found==1u);
+ }
+ lobby(&s);cmd(&s,A,"!campaign water");load(&s,"worlds\\realm1\\R1M1A",1000);spawn(&s,A,"Alice",1100);
+ s.phase=COOP_PHASE_INTRO_RUNNING;assert(coop_session_sequence_by(&s,1,2000,&x)&&x.action==COOP_ACT_NONE);
+ s.phase=COOP_PHASE_GAMEPLAY;
+ assert(coop_session_sequence_by(&s,0,2000,&x)&&x.action==COOP_ACT_NONE);           /* host */
+ assert(!coop_session_sequence_by(&s,1,2000,&x)&&x.action==COOP_ACT_ANNOUNCE&&strstr(x.msg,"Only the host"));
+ assert(!coop_session_sequence_by(&s,1,2000+COOP_HOST_SEQ_REPLY_MS-1,&x)&&x.action==COOP_ACT_NONE);
+ assert(!coop_session_sequence_by(&s,-1,2000+COOP_HOST_SEQ_REPLY_MS,&x)&&x.action==COOP_ACT_ANNOUNCE);
+ assert(s.rejected_sequences==3u&&strlen(x.msg)<COOP_MSG_MAX);
+}
 int main(void){
  test_difficulty_and_host_exits();
+ test_host_sequences_and_exit_names();
  test_abort_any_state();
  test_table();test_selection_commands();test_full_route_and_exits();test_realm_completion_and_abort();test_test_start_and_legacy();
  printf("PASS coop campaign graph: WORLDORDER table, selection commands, exits, realm completion, abort, lobby return, test start, legacy route\n");

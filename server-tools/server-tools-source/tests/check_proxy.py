@@ -237,7 +237,7 @@ def coop_scenario():
         0xc269b:(6,'8b88d0010000'),0xc2a75:(6,'8b90d0010000'),0xb8ad8:(6,'8b88d0010000'),
         0x2e205:(5,'e8f6060c00'),0x2ffea:(5,'e811e90b00'),0x3005a:(5,'e8a1e80b00'),
         0xf3c08:(6,'39b8f0010000'),0xcc145:(5,'e836000000'),0x30c9e:(5,'e8ed800c00'),
-        0xfdfdb:(6,'ff90f0000000')}
+        0xfdfdb:(6,'ff90f0000000'),0xc8348:(6,'8b88d0010000'),0x409bb:(5,'e870380800'),0xb676f:(5,'e8cccc0300')}
  music_flag='--no-music' not in sys.argv
  intro_flag='--intro' in sys.argv
  trace_timing='--trace-timing' in sys.argv
@@ -252,11 +252,11 @@ def coop_scenario():
  hooked_optional[0xf12be]=hooked_optional[0xf15f2]=hooked_optional[0xfdfdb]=sp_start
  for rva in (0xc4238,0xb8677,0xc5358,0xc53a3,0xc53c0,0x44dd6):hooked_optional[rva]=trace_scripts
  script_events='--no-script-events' not in sys.argv
- for rva in (0xc1a89,0xc1abe,0xc28a5,0xc269b,0xc2a75,0xb8ad8,0x2e205,0x2ffea,0x3005a):hooked_optional[rva]=script_events
+ for rva in (0xc1a89,0xc1abe,0xc28a5,0xc269b,0xc2a75,0xb8ad8,0x2e205,0x2ffea,0x3005a,0xc8348):hooked_optional[rva]=script_events
  friendly_fire='--friendly-fire' in sys.argv
  hooked_optional[0xf3c08]=not friendly_fire
  shared_items='--no-shared-items' not in sys.argv
- hooked_optional[0xcc145]=hooked_optional[0x30c9e]=shared_items
+ hooked_optional[0xcc145]=hooked_optional[0x30c9e]=hooked_optional[0xb676f]=shared_items
  # CMonsterSpawner forced MP-off (or al,0x10 at 93c5d): NOPs with CoopSpawners.
  assert bytes(u.mem_read(obj+0x93c5d,2))==(b'\x90\x90' if spawners else bytes.fromhex('0c10'))
  del sites[0x93c5d]
@@ -378,7 +378,7 @@ def coop_scenario():
  text=b''.join(log).decode('latin1')
  assert ('effective CoopScriptEvents=1' if script_events else 'effective CoopScriptEvents=0') in text
  if script_events:
-  for rva in (0xc1a89,0xc269b,0xb8ad8):
+  for rva in (0xc1a89,0xc269b,0xb8ad8,0xc8348):   # c8348: armour touch, single-player rule
    call_regs(target[rva],[],{UC_X86_REG_ECX:0x1234},0);assert u.reg_read(UC_X86_REG_ECX)==0,hex(rva)
   for rva in (0xc28a5,0xc2a75):
    call_regs(target[rva],[],{UC_X86_REG_EDX:0x1234},0);assert u.reg_read(UC_X86_REG_EDX)==0,hex(rva)
@@ -400,13 +400,15 @@ def coop_scenario():
   u.mem_write(strings+0xf40,b'teleport gauntletspot\0');applied.clear()
   call_regs(target[0xc1abe],[strings+0xf40],{UC_X86_REG_ECX:0x7a1},4)
   assert applied==[(0x7a1,'teleport gauntletspot')],applied        # no activator yet: first player
-  def is_player():
-   sp=u.reg_read(UC_X86_REG_ESP);u.reg_write(UC_X86_REG_EAX,1 if read(sp+4) in (0xa1,0xb2) else 0)
+  def is_player():   # ee900 takes a POINTER to the HOBJECT (object.lto ee925: mov ecx,[esp+4]; mov edx,[ecx])
+   sp=u.reg_read(UC_X86_REG_ESP);u.reg_write(UC_X86_REG_EAX,1 if read(read(sp+4)) in (0xa1,0xb2) else 0)
    u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
   stubs[obj+0xee900]=is_player
+  ref_c3=strings+0x1180;ref_b2=strings+0x1184;trig=strings+0x1188;write(ref_c3,0xc3);write(ref_b2,0xb2);write(trig+0x54,0)
   for site in (0x2e205,0x2ffea,0x3005a):
-   call_regs(target[site],[0xc3],{},0);assert u.reg_read(UC_X86_REG_EAX)&0xff==0     # not a player: not recorded
-  call_regs(target[0x2ffea],[0xb2],{},0);assert u.reg_read(UC_X86_REG_EAX)&0xff==1   # Bob touched the trigger
+   call_regs(target[site],[ref_c3],{UC_X86_REG_ECX:trig},0);assert u.reg_read(UC_X86_REG_EAX)&0xff==0     # not a player: not recorded
+  call_regs(target[0x2e205],[ref_b2],{UC_X86_REG_ECX:trig},0);assert u.reg_read(UC_X86_REG_EAX)&0xff==1  # no command list: passes
+  call_regs(target[0x2ffea],[ref_b2],{},0);assert u.reg_read(UC_X86_REG_EAX)&0xff==1   # Bob touched the trigger
   applied.clear();call_regs(target[0xc1abe],[strings+0xf40],{UC_X86_REG_ECX:0x7a1},4)
   assert applied==[(0x7b2,'teleport gauntletspot')],applied
   u.mem_write(strings+0xf80,b'giveitem gauntlets\0');applied.clear()
@@ -466,6 +468,7 @@ def coop_scenario():
    write(node,h);write(node+4,node+8 if i<1 else 0);node+=8
   item=strings+0xc00;item2=strings+0xc80;dfn=strings+0xbc0;dfn2=strings+0xbe0
   write(item+0x54,dfn);write(dfn,0x27);write(item2+0x54,dfn2);write(dfn2,0x17)
+  if script_events:u.mem_write(obj+0x13e1b8,b'\x01')            # piece given at the touch (ReallyGiveArmor)
   call_regs(target[0xcc145],[pa],{UC_X86_REG_ECX:item},4)
   assert picked==[(item,pa)] and gave==[(pb,0x27,1,1)],(picked,gave)
   call_regs(target[0xcc145],[pb],{UC_X86_REG_ECX:item},4)        # same item again: not shared twice
@@ -477,6 +480,18 @@ def coop_scenario():
   assert gave[-1]==(pa,0x09,1,1),gave
   text=b''.join(log).decode('latin1')
   assert 'shared item=Gauntlets id=39 given to 1 other player(s)' in text and 'shared item=ZeroCannon id=9' in text,text[-400:]
+  if script_events:
+   # Single-player armour rule: a piece not given at the touch is left to its cutscene's giveitem.
+   u.mem_write(obj+0x13e1b8,b'\x00');item4=strings+0xa80;dfn4=strings+0xa40;write(item4+0x54,dfn4);write(dfn4,0x28)
+   n_gave=len(gave);call_regs(target[0xcc145],[pa],{UC_X86_REG_ECX:item4},4)
+   assert len(gave)==n_gave and 'armour piece touched; its cutscene gives it' in b''.join(log).decode('latin1')
+  # "inventory add key" (b676f, first player only in stock): every player gets it, the finder is named.
+  gave.clear();call_regs(target[0xb676f],[0x24,1,1],{UC_X86_REG_ECX:pa},12)
+  assert gave==[(pa,0x24,1,1),(pb,0x24,1,1)],gave
+  text=b''.join(log).decode('latin1')
+  assert 'inventory add item=Key id=36 players=2' in text and 'found the key (everyone has it)' in text,text[-400:]
+  gave.clear();call_regs(target[0xb676f],[0x19,1,1],{UC_X86_REG_ECX:pa},12)
+  assert gave==[(pa,0x19,1,1),(pb,0x19,1,1)] and b''.join(log).decode('latin1').count('everyone has it')==1,gave
   write(manager+4,0)
   del stubs[obj+0xcc180];del stubs[obj+0xf3440];del stubs[obj+0xee7d0]
   # Secret found: the message goes to every session member (cdecl, caller pops).
@@ -491,6 +506,15 @@ def coop_scenario():
   assert 'secret found; message sent to every player' in b''.join(log).decode('latin1')
   del stubs[obj+0xf8d90]
   print('PASS co-op shared items: weapons/armour/pamphlets/keys to every player once per item, health not shared')
+ played_lists=[]
+ def c4230():
+  sp=u.reg_read(UC_X86_REG_ESP);played_lists.append(u.reg_read(UC_X86_REG_ECX))
+  u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+ stubs[obj+0xc4230]=c4230
+ call_regs(target[0x409bb],[],{UC_X86_REG_ECX:0x5150,UC_X86_REG_ESI:strings+0x1100},0)
+ assert played_lists==[0x5150],played_lists
+ del stubs[obj+0xc4230]
+ print('PASS co-op deco use: command list played unchanged, use object remembered for exit re-arming')
  if trace_scripts:
   played=[]
   def c5340():
