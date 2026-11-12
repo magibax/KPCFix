@@ -44,7 +44,13 @@ two-PC tested.
 * **Installed** in `C:\Games\Psycho` (desktop, host and server) and
   `C:\KPCTest\smoke1\Psycho` (disposable test server): see the latest backup folder
   in `C:\KPCTest\backup\` for what each install replaced. The laptop installs from
-  `C:\KPCTest\pkg-client-*` or GitHub.
+  `C:\KPCTest\pkg-client-*` or GitHub. How to upgrade:
+  [UPGRADE-TEST-INSTALL.md](UPGRADE-TEST-INSTALL.md).
+* **Current install (2026-11-12, commit `2b50501`):** `C:\Games\Psycho` has client
+  `dinput.dll` `2ab53bd7` and Server Tools `035f23a2`; backup
+  `C:\KPCTest\backup\games-psycho-20261112-before-2ab53bd7` (it also holds the moved
+  `9ff661bf` `server.dll`). `smoke1` already had `035f23a2`. Laptop package:
+  `C:\KPCTest\pkg-client-2ab53bd7`.
 
 ## Live-confirmed (two PCs)
 
@@ -103,6 +109,7 @@ Send `KPCServerTools.log` and both `KPCFix.log`.
 
 ## Tooling
 
+* Installing a new build on the test PCs: [UPGRADE-TEST-INSTALL.md](UPGRADE-TEST-INSTALL.md).
 * `C:\KPCTest\pass2\`: `build-coop.sh <dir>`, `unit-coop.sh`, `matrix-coop.sh <dir>`.
 * `C:\KPCTest\clientbuild\`: `build-coop.sh <dir>`, `suite-coop.sh`.
 * `coop/tools/Invoke-CoopServerSmoke.ps1` (native server smoke; never on a folder with
