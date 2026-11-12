@@ -17,6 +17,8 @@ typedef struct {
     /* Campaign loading art (loading.c); zero = not verified for this edition. */
     U32 preload_slot, preload_world, load_background, screen_show, screen_close;
     U32 close_call, screen_draw, draw_call, render_frame, multiplayer_test;
+    /* Spawn hold (loading.c): the 0x17 handler's reply calls; zero = off. */
+    U32 spawn_reply_call, spawn_reply, initvars_call, spawn_initvars;
     /* Server-connection timeout (netwatch.c): global holding the client shell. */
     U32 client_shell_global;
 } ShellLayout;

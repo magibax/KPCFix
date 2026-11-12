@@ -30,10 +30,25 @@
  * close on entry is deferred until the picture has been visible for at least
  * CampaignLoadingMinimumMs of monotonic real time (GetTickCount); a slower
  * load adds nothing. Deathmatch worlds (PM01...) and single player keep the
- * stock behaviour. There is no progress bar: the stock game has none. */
+ * stock behaviour. There is no progress bar: the stock game has none.
+ *
+ * Spawn hold ([Multiplayer] CampaignLoadingHoldSpawn, default 1). The server
+ * creates the player only when the client answers its 0x17 with the client's
+ * own 0x17 (name, settings) and 0x15 INITVARS (shell handler 0xbea70: calls
+ * 0xbeadc -> 0xbf300 and 0xbeae3 -> 0xbf400; both thiscall on the handler's
+ * ESI, no stack arguments, reading only shell globals). Without the hold a
+ * fast load put the player in the world, controllable and attackable, behind
+ * the picture. While the picture is up and its minimum has not passed, both
+ * replies are recorded and sent, in order, from the per-frame draw hook once
+ * the minimum has passed, the picture was closed or replaced, or after
+ * HOLD_CAP_MS. A new world load drops a stale hold. */
 U8 *g_loading_shell;
-U32 g_loading_enabled,g_loading_min_ms=5000;
+U32 g_loading_enabled,g_loading_min_ms=5000,g_loading_hold;
+void (*g_loading_log)(const char *);
 static U32 art_active,art_since,close_pending,art_shown;
+static void *hold_self;static U8 *art_shell;static U32 hold_reply,hold_initvars,hold_since,holds;
+U8 *g_loading_client;
+#define HOLD_CAP_MS 30000u
 
 #define THISCALL __attribute__((thiscall))
 typedef void (THISCALL *PreloadFn)(void *,const char *);
@@ -44,6 +59,7 @@ typedef void (THISCALL *DrawFn)(void *,U32);
 typedef void (THISCALL *FrameFn)(void *);
 typedef U32 (CDECL *LoadFn)(const char *);
 typedef void (CDECL *FreeFn)(U32);
+typedef void (THISCALL *ReplyFn)(void *);
 #define SHELL_SCREENS 0x138cu
 #define SHELL_RENDER 0x1388u
 #define SHELL_STATE 0x1398u
@@ -73,7 +89,7 @@ static void show_art(U8 *shell,const char *world){
         old=get32(screen+0xc);*(U32 *)(screen+0xc)=picture;
         if(old&&old!=picture)((FreeFn)get32(api+0x158))(old);
     }
-    art_active=1;close_pending=0;art_since=GetTickCount();art_shown++;
+    art_active=1;close_pending=0;art_since=GetTickCount();art_shown++;art_shell=shell;
     /* Present it now, as the stock 0x46 path (0xcdc80) does, because the
      * client blocks in its world load right after this callback. */
     if(get32(shell+SHELL_STATE)==STATE_CHANGING_LEVELS){
@@ -83,15 +99,73 @@ static void show_art(U8 *shell,const char *world){
         for(i=0;i<frames;i++)((FrameFn)shell_rva(g_shell_layout->render_frame))(shell);
     }
 }
+static void loading_log(const char *a,const char *b,const char *c){
+    if(!g_loading_log)return;
+    g_loading_log(a);if(b)g_loading_log(b);if(c)g_loading_log(c);g_loading_log("\r\n");
+}
 void THISCALL kpc_preload_world(void *shell,const char *world){
-    art_active=0;close_pending=0;
-    if(g_loading_enabled&&shell&&kpc_campaign_world(world)&&
-       ((MultiplayerFn)shell_rva(g_shell_layout->multiplayer_test))(shell))
+    const char *why=0;
+    art_active=0;close_pending=0;hold_reply=hold_initvars=0;hold_self=0;
+    if(!g_loading_enabled)why=" (stock: CampaignLoadingArt=0)";
+    else if(!shell)why=" (stock: no shell)";
+    else if(!kpc_campaign_world(world))why=" (stock: not a campaign world)";
+    else if(!((MultiplayerFn)shell_rva(g_shell_layout->multiplayer_test))(shell))why=" (stock: not multiplayer)";
+    else{
+        U32 before=art_shown;
         show_art((U8 *)shell,world);
+        why=art_shown!=before?" (picture shown)":" (stock: loading screen unavailable)";
+    }
+    loading_log("Loading world: ",world?world:"?",why);
     /* The original last: it ends music and arms the next world's music flag. */
     ((PreloadFn)shell_rva(g_shell_layout->preload_world))(shell,world);
 }
 static int art_due(void){return (U32)(GetTickCount()-art_since)>=g_loading_min_ms;}
+static int hold_wanted(void){
+    U8 *screens;
+    if(!g_loading_hold||!g_loading_client||!art_active||art_due()||!art_shell)return 0;
+    screens=(U8 *)get32(art_shell+SHELL_SCREENS);
+    return screens&&(I32)get32(screens+4)==0;
+}
+static void hold_release(const char *why){
+    void *self=hold_self;U32 reply=hold_reply,initvars=hold_initvars;
+    hold_reply=hold_initvars=0;hold_self=0;
+    if(reply)((ReplyFn)shell_rva(g_shell_layout->spawn_reply))(self);
+    if(initvars)((ReplyFn)shell_rva(g_shell_layout->spawn_initvars))(self);
+    loading_log("Loading picture: spawn reply sent",why,0);
+}
+/* Release check, run every frame from the client update (always, including
+ * the menu's connect dialog, where the shell's screen draw does not run) and
+ * from the screen draw. */
+static void hold_tick(void){
+    U8 *screens;
+    if(!hold_reply)return;
+    screens=art_shell?(U8 *)get32(art_shell+SHELL_SCREENS):0;
+    if(screens&&(I32)get32(screens+4)!=0)hold_release(" (picture replaced)");
+    else if(!art_active)hold_release(" (picture closed)");
+    else if(art_due())hold_release(" (minimum reached)");
+    else if((U32)(GetTickCount()-hold_since)>=HOLD_CAP_MS)hold_release(" (safety cap)");
+}
+/* Replaces the client update's call 0x13876 -> 0x13bb0 (thiscall, one
+ * stack argument, ret 4) in client.exe: runs every client frame. */
+typedef U32 (THISCALL *ClientFrameFn)(void *,U32);
+U32 THISCALL kpc_client_frame(void *client,U32 argument){
+    hold_tick();
+    return ((ClientFrameFn)(g_loading_client+0x13bb0u))(client,argument);
+}
+/* Replaces 0xbeadc (call 0xbf300): the client's 0x17 reply. */
+void THISCALL kpc_spawn_reply(void *self){
+    if(!hold_reply&&hold_wanted()){
+        hold_self=self;hold_reply=1;hold_initvars=0;hold_since=GetTickCount();holds++;
+        loading_log("Loading picture: spawn reply held until the minimum time has passed",0,0);
+        return;
+    }
+    ((ReplyFn)shell_rva(g_shell_layout->spawn_reply))(self);
+}
+/* Replaces 0xbeae3 (call 0xbf400): INITVARS follows the held reply. */
+void THISCALL kpc_spawn_initvars(void *self){
+    if(hold_reply&&self==hold_self){hold_initvars=1;return;}
+    ((ReplyFn)shell_rva(g_shell_layout->spawn_initvars))(self);
+}
 /* Replaces the 0x69 handler's close (0xcbba6). ECX = screen manager. */
 void THISCALL kpc_close_on_entry(void *screens){
     if(art_active&&(I32)get32((U8 *)screens+4)==0&&!art_due()){close_pending=1;return;}
@@ -101,6 +175,7 @@ void THISCALL kpc_close_on_entry(void *screens){
 /* Replaces the per-frame screen draw (0xcdb92). Closes a deferred picture
  * once its minimum time has passed; otherwise draws as before. */
 void THISCALL kpc_draw_screen(void *screens,U32 argument){
+    hold_tick();
     if(close_pending){
         if((I32)get32((U8 *)screens+4)!=0){close_pending=0;art_active=0;}
         else if(art_due()){
@@ -112,3 +187,4 @@ void THISCALL kpc_draw_screen(void *screens,U32 argument){
     ((DrawFn)shell_rva(g_shell_layout->screen_draw))(screens,argument);
 }
 U32 kpc_loading_shown(void){return art_shown;}
+U32 kpc_loading_holds(void){return holds;}

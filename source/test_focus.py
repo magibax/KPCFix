@@ -64,8 +64,40 @@ session(rig, 3); assert focus(rig, calls, True) == []
 session(rig, 4); assert focus(rig, calls, False) == []
 session(rig, 4); assert focus(rig, calls, True) == [('pause', SOUND)]
 session(rig, 2); assert focus(rig, calls, False) == [('resume', SOUND)]
+# Resync on regain (ResyncAudioOnFocus=1): the per-frame sound update call
+# 0x13bcd runs PauseAll + ResumeAll once, 300 ms after a skipped restore, then
+# the original update; otherwise only the update.
+code = bytes(rig.u.mem_read(CLIENT + 0x13bcd, 5))
+assert code[0] == 0xe8 and (CLIENT + 0x13bcd + 5 + struct.unpack('<i', code[1:])[0]) & 0xffffffff == rig.dllbase + syms['_kpc_sound_update']
+assert b'Focus regain: remote multiplayer sounds re-synchronised' in bytes(rig.logs)
+for address, name in ((0x74c90, 'pauseall'), (0x74ce0, 'resumeall'), (0x73bb0, 'update')):
+    def run(u, at, size, user, name=name):
+        calls.append((name, u.reg_read(x.UC_X86_REG_ECX)))
+        sp = u.reg_read(x.UC_X86_REG_ESP)
+        u.reg_write(x.UC_X86_REG_EAX, 0); u.reg_write(x.UC_X86_REG_ESP, sp + 4); u.reg_write(x.UC_X86_REG_EIP, read(u, sp))
+    rig.u.hook_add(uc.UC_HOOK_CODE, run, begin=CLIENT + address, end=CLIENT + address)
+def update(rig, calls):
+    calls.clear(); rig.invoke_address(rig.dllbase + syms['_kpc_sound_update'], (), this=SOUND); return list(calls)
+session(rig, 2)
+assert update(rig, calls) == [('update', SOUND)]                       # nothing pending
+rig.tick = 50000; focus(rig, calls, True); focus(rig, calls, False)    # skipped pair -> resync due at ~50300
+rig.tick = 50100; assert update(rig, calls) == [('update', SOUND)]     # too early
+rig.tick = 50400
+assert update(rig, calls) == [('pauseall', SOUND), ('resumeall', SOUND), ('update', SOUND)]
+assert update(rig, calls) == [('update', SOUND)]                       # once only
+assert b'Focus regained: server-owned sounds re-synchronised to real time.' in bytes(rig.logs)
+# Left multiplayer before it was due: no resync.
+rig.tick = 60000; focus(rig, calls, True); focus(rig, calls, False)
+session(rig, 4); rig.tick = 61000; assert update(rig, calls) == [('update', SOUND)]
+# A stock (unskipped) restore schedules nothing.
+session(rig, 4); focus(rig, calls, True); focus(rig, calls, False); rig.tick = 70000
+assert update(rig, calls) == [('update', SOUND)]
+# ResyncAudioOnFocus=0: the update call stays original.
+rigr = Rig(settings={'Multiplayer.ResyncAudioOnFocus': 0}); rigr.factory(); assert not rigr.messages
+assert bytes(rigr.u.mem_read(CLIENT + 0x13bcd, 5)) == bytes(rigr.initial_client[0x13bcd:0x13bd2])
+assert b'Focus regain' not in bytes(rigr.logs)
 # Disabled: original calls stay in place.
 rig0 = Rig(settings={'Multiplayer.KeepAudioOnFocusLoss': 0}); rig0.factory(); assert not rig0.messages
-for site in (0x6d5c, 0x6cdb):
+for site in (0x6d5c, 0x6cdb, 0x13bcd):
     assert bytes(rig0.u.mem_read(CLIENT + site, 5)) == bytes(rig0.initial_client[site:site + 5])
-print(args.fixtures.name, 'passed focus loss: remote multiplayer skip, single player/hosting/menus stock, balanced pair, disabled')
+print(args.fixtures.name, 'passed focus loss: remote multiplayer skip, single player/hosting/menus stock, balanced pair, resync on regain, disabled')

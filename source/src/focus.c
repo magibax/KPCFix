@@ -19,10 +19,26 @@
  *    server's removal cuts it.
  * In remote multiplayer the pause and its matching resume are skipped (the
  * flag keeps the pair balanced even if the mode changes while away).
- * Single player, a hosting client and menus keep the stock behaviour. */
+ * Single player, a hosting client and menus keep the stock behaviour.
+ *
+ * Resync on focus regain ([Multiplayer] ResyncAudioOnFocus, default 1).
+ * Streamed narration is fed by the main thread, which the window procedure
+ * blocks while it tears the renderer down on focus loss (0x53980) and
+ * restarts it on regain (0x534f0): the stream starves and ends up behind the
+ * server by about the stall. Each instance's remaining time (+0x28) keeps
+ * counting in real time (AIL_ms_count) because the pause was skipped, and the
+ * engine's sample start 0x70db0 places a sound at duration - remaining
+ * (AIL_set_sample_ms_position / 3D offset / stream byte offset). So
+ * RESYNC_DELAY_MS after regain, once, the per-frame sound update call
+ * (0x13bcd -> 0x73bb0, thiscall ECX = cm+0x284) first runs the engine's own
+ * PauseAll 0x74c90 and ResumeAll 0x74ce0: every instance is stopped with its
+ * remaining time kept (0x70a30 / 0x70a60), and the update that follows
+ * restarts each one at its real-time position. */
 U8 *g_focus_client;
-U32 g_focus_enabled;
-static U32 skipped;
+U32 g_focus_enabled,g_focus_resync;
+void (*g_focus_log)(const char *);
+static U32 skipped,resync_pending,resync_due,resyncs;
+#define RESYNC_DELAY_MS 300u
 
 #define CM_GLOBAL 0xaacd0u
 #define CM_SESSION 0x1004u
@@ -47,6 +63,24 @@ U32 __attribute__((thiscall)) kpc_focus_release(void *sound){
     return ((SoundFn)(g_focus_client+0x74b90u))(sound);
 }
 U32 __attribute__((thiscall)) kpc_focus_restore(void *sound){
-    if(skipped){skipped=0;return 1;}
+    if(skipped){
+        skipped=0;
+        if(g_focus_resync){resync_pending=1;resync_due=GetTickCount()+RESYNC_DELAY_MS;}
+        return 1;
+    }
     return ((SoundFn)(g_focus_client+0x74c10u))(sound);
 }
+/* Replaces the per-frame sound update call at 0x13bcd. */
+U32 __attribute__((thiscall)) kpc_sound_update(void *sound){
+    if(resync_pending&&(I32)(GetTickCount()-resync_due)>=0){
+        resync_pending=0;
+        if(kpc_remote_multiplayer()){
+            ((SoundFn)(g_focus_client+0x74c90u))(sound);
+            ((SoundFn)(g_focus_client+0x74ce0u))(sound);
+            resyncs++;
+            if(g_focus_log)g_focus_log("Focus regained: server-owned sounds re-synchronised to real time.\r\n");
+        }
+    }
+    return ((SoundFn)(g_focus_client+0x73bb0u))(sound);
+}
+U32 kpc_focus_resyncs(void){return resyncs;}

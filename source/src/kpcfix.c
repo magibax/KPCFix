@@ -103,6 +103,7 @@ static void log_text(const char *text){
     DWORD done;
     if(log_handle!=INVALID_HANDLE_VALUE)WriteFile(log_handle,text,text_length(text),&done,NULL);
 }
+static void kpc_log_text(const char *text){log_text(text);}
 static void log_hex(U32 value){
     char out[11];U32 i;static const char digits[]="0123456789abcdef";
     out[0]='0';out[1]='x';for(i=0;i<8;i++)out[i+2]=digits[(value>>(28-4*i))&15];out[10]=0;log_text(out);
@@ -533,7 +534,13 @@ static int queue_loading(Edit edits[48],U32 *count,U8 *base){
     near_call(before,base+L->close_call,base+L->screen_close);near_call(after,base+L->close_call,kpc_close_on_entry);
     if(!add_edit(edits,count,base+L->close_call,before,after,5))return 0;
     near_call(before,base+L->draw_call,base+L->screen_draw);near_call(after,base+L->draw_call,kpc_draw_screen);
-    return add_edit(edits,count,base+L->draw_call,before,after,5);
+    if(!add_edit(edits,count,base+L->draw_call,before,after,5))return 0;
+    if(!g_loading_hold)return 1;
+    if(!L->spawn_reply_call){g_loading_hold=0;log_text("Loading picture spawn hold: not verified for this cshell edition; stock spawn timing retained.\r\n");return 1;}
+    near_call(before,base+L->spawn_reply_call,base+L->spawn_reply);near_call(after,base+L->spawn_reply_call,kpc_spawn_reply);
+    if(!add_edit(edits,count,base+L->spawn_reply_call,before,after,5))return 0;
+    near_call(before,base+L->initvars_call,base+L->spawn_initvars);near_call(after,base+L->initvars_call,kpc_spawn_initvars);
+    return add_edit(edits,count,base+L->initvars_call,before,after,5);
 }
 static int patch_shell(HMODULE module){
     WCHAR path[PATH_CAP];U8 digest[32],movement_call[7],guard_call[5];
@@ -567,6 +574,7 @@ static int patch_shell(HMODULE module){
         else log_text("Server timeout: not verified for this cshell edition; stock 120 s retained.\r\n");
     }
     if(g_loading_enabled){log_text("Campaign loading art: original R?M? pictures in multiplayer campaign loads, minimum ms=");log_hex(g_loading_min_ms);log_text(".\r\n");}
+    if(g_loading_enabled&&g_loading_hold)log_text("Loading picture spawn hold: the player enters the world when the picture's minimum time has passed.\r\n");
     log_text("Ground contact: V5 applied in memory.\r\n");
     kpc_status|=GROUND_READY|GROUND_RUNTIME;
     log_text("Sensitivity range: percent of original=");log_hex(sensitivity_range_percent);
@@ -661,8 +669,12 @@ static int install_game_fixes(void){
     }
     g_min_step_seconds=(float)min_step_ms*0.001f;
     g_focus_enabled=GetPrivateProfileIntW(L"Multiplayer",L"KeepAudioOnFocusLoss",1,ini_path)!=0;
+    g_focus_resync=g_focus_enabled&&GetPrivateProfileIntW(L"Multiplayer",L"ResyncAudioOnFocus",1,ini_path)!=0;
+    g_focus_log=kpc_log_text;
     g_loading_enabled=GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingArt",1,ini_path)!=0;
     g_loading_min_ms=GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingMinimumMs",5000,ini_path);
+    g_loading_hold=g_loading_enabled&&GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingHoldSpawn",1,ini_path)!=0;
+    g_loading_log=kpc_log_text;
     if(g_loading_min_ms>30000){
         report_error("[Multiplayer] CampaignLoadingMinimumMs must be an integer from 0 to 30000. No client changes were applied.");return 0;
     }
@@ -733,6 +745,21 @@ static int install_game_fixes(void){
                 report_error("The original focus-change sound calls differ. No client edits were applied.");return 0;
             }
         }
+        if(g_focus_resync){
+            near_call(before,base+0x13bcd,base+0x73bb0);near_call(replacement,base+0x13bcd,kpc_sound_update);
+            if(!add_edit(edits,&count,base+0x13bcd,before,replacement,5)){
+                report_error("The original per-frame sound update call differs. No client edits were applied.");return 0;
+            }
+        }
+    }
+    if(g_loading_hold){
+        /* Spawn hold release tick: the client update's per-frame call. */
+        U8 before[5];
+        near_call(before,base+0x13876,base+0x13bb0);near_call(replacement,base+0x13876,kpc_client_frame);
+        if(!add_edit(edits,&count,base+0x13876,before,replacement,5)){
+            report_error("The original client update call differs. No client edits were applied.");return 0;
+        }
+        g_loading_client=base;
     }
     if(g_net_timeout_enabled){
         static const U8 before[14]={0x8b,0x4e,0x30,0xd9,0x46,0x74,0xd8,0x59,0x4c,0xdf,0xe0,0xf6,0xc4,0x41};
@@ -766,6 +793,7 @@ static int install_game_fixes(void){
     log_text("Timing V3: clock guard and 8 independent carries applied in memory.\r\n");
     if(min_step_ms){log_text("LocalServerMinStepMs=");log_hex(min_step_ms);log_text(": EXPERIMENTAL minimum local-server step; shorter frames are carried, not simulated.\r\n");}
     if(g_focus_enabled)log_text("Focus loss: remote multiplayer keeps server-owned sounds running (single player and menus stock).\r\n");
+    if(g_focus_resync)log_text("Focus regain: remote multiplayer sounds re-synchronised to real time 300 ms after the window returns.\r\n");
     if(g_net_timeout_enabled){log_text("Server timeout: in-world multiplayer connection seconds=");log_hex((U32)g_net_timeout_seconds);log_text(" (stock 120 s elsewhere).\r\n");}
     log_text(input_clock_enabled?"Input clock v2: timeGetTime plus delayed/zero interval guards; no global clock hook.\r\n":"InputClock=0: original input clocks and intervals retained; Timing V3/Ground V5 remain enabled.\r\n");
     if(GetModuleHandleExW(0,L"cshell.dll",&loaded)){

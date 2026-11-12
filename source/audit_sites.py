@@ -24,6 +24,8 @@ def main():
     if REGION in ('Europe','USA'):
         # Campaign loading art call redirects (Europe/USA shell profile only).
         detours.extend(((0xcbba6,5),(0xcdb92,5)))
+        # Spawn hold: the 0x17 handler reply calls (loading.c).
+        detours.extend(((0xbeadc,5),(0xbeae3,5)))
     asm=subprocess.check_output(['objdump','-dw','-Mintel',str(path)],text=True)
     boundaries=set()
     transfers=[]

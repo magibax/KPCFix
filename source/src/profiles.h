@@ -15,6 +15,7 @@ static const ShellProfile shell_profiles[]={
             .preload_slot = 0xff73c, .preload_world = 0xcd360, .load_background = 0xad7b0, .screen_show = 0xad1b0,
             .screen_close = 0xad3c0, .close_call = 0xcbba6, .screen_draw = 0xad380, .draw_call = 0xcdb92,
             .render_frame = 0xcd990, .multiplayer_test = 0xcab80, .client_shell_global = 0x1c8de8,
+            .spawn_reply_call = 0xbeadc, .spawn_reply = 0xbf300, .initvars_call = 0xbeae3, .spawn_initvars = 0xbf400,
             .hud_sites = {0x9f95b, 0x9fa12, 0xa0540, 0xb27cb, 0xb28e7, 0xb2ac5, 0xb2ca0, 0xb2ef4, 0xb3110, 0xb349f, 0xe2e6b, 0xe2f42, 0xa1977},
             .panel_position = 0xa0110,
             .panel_number = 0xa06e0,

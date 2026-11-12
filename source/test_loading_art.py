@@ -136,8 +136,77 @@ rig3.invoke_address(rig3.dllbase + syms['_kpc_preload_world'], (world(rig3, 'wor
 log3.clear(); rig3.invoke_address(rig3.dllbase + syms['_kpc_close_on_entry'], (), this=SCREENS)
 assert log3 == [('close', SCREENS)], log3
 
+# 11. Spawn hold: the 0x17 handler's reply calls go through the hooks; while
+#     the picture is up and under its minimum both replies wait, then are sent
+#     in order from the draw hook (minimum reached / replaced / safety cap).
+rig = Rig(); rig.factory(); assert not rig.messages, rig.messages
+u = rig.u; dll = rig.dllbase; log = install_stubs(rig, multiplayer=True)
+for site, name in ((0xbeadc, '_kpc_spawn_reply'), (0xbeae3, '_kpc_spawn_initvars')):
+    code = bytes(u.mem_read(base + site, 5))
+    assert code[0] == 0xe8 and (base + site + 5 + struct.unpack('<i', code[1:])[0]) & 0xffffffff == dll + syms[name], name
+assert b'Loading picture spawn hold: the player enters the world' in bytes(rig.logs)
+def reply_stub(address, tag):
+    def run(uu, at, size, user):
+        log.append((tag, uu.reg_read(x.UC_X86_REG_ECX))); sp = uu.reg_read(x.UC_X86_REG_ESP)
+        uu.reg_write(x.UC_X86_REG_ESP, sp + 4); uu.reg_write(x.UC_X86_REG_EIP, read(uu, sp))
+    u.hook_add(uc.UC_HOOK_CODE, run, begin=address, end=address)
+reply_stub(base + 0xbf300, 'reply'); reply_stub(base + 0xbf400, 'initvars')
+P = 0x5a8000
+preload, reply, initvars, draw = (dll + syms[n] for n in ('_kpc_preload_world', '_kpc_spawn_reply', '_kpc_spawn_initvars', '_kpc_draw_screen'))
+def answer():
+    rig.invoke_address(reply, (), this=P); rig.invoke_address(initvars, (), this=P)
+setup_shell(u); rig.tick = 400000
+rig.invoke_address(preload, (world(rig, 'worlds\\realm1\\R1M1A'),), this=SHELL)
+assert b'Loading world: worlds\\realm1\\R1M1A (picture shown)' in bytes(rig.logs)
+log.clear(); rig.tick = 401500; answer(); assert log == [], log           # fast load: held
+assert b'spawn reply held' in bytes(rig.logs)
+rig.tick = 403000; rig.invoke_address(draw, (7,), this=SCREENS); assert log == [('draw', SCREENS, 7)], log
+log.clear(); rig.tick = 405000; rig.invoke_address(draw, (7,), this=SCREENS)
+assert log == [('reply', P), ('initvars', P), ('draw', SCREENS, 7)], log  # sent at the minimum, in order
+assert b'spawn reply sent (minimum reached)' in bytes(rig.logs)
+# Slow load (reply after the minimum): sent at once.
+setup_shell(u); rig.tick = 500000; rig.invoke_address(preload, (world(rig, 'worlds\\realm1\\R1M1B'),), this=SHELL)
+log.clear(); rig.tick = 506000; answer(); assert log == [('reply', P), ('initvars', P)], log
+# Another screen replaces the picture: released on the next frame.
+setup_shell(u); rig.tick = 600000; rig.invoke_address(preload, (world(rig, 'worlds\\realm2\\R2M0'),), this=SHELL)
+log.clear(); rig.tick = 600500; answer(); assert log == []
+u.mem_write(SCREENS + 4, pack(2)); rig.invoke_address(draw, (1,), this=SCREENS)
+assert log[:2] == [('reply', P), ('initvars', P)], log
+# First connect from the menu: the connect dialog never reaches the shell's
+# screen draw, so the client update's per-frame call (client.exe 0x13876 ->
+# 0x13bb0) releases the hold on its own (the 2026-11-12 hang).
+CLIENT = 0x1ca0000
+code = bytes(u.mem_read(CLIENT + 0x13876, 5))
+assert code[0] == 0xe8 and (CLIENT + 0x13876 + 5 + struct.unpack('<i', code[1:])[0]) & 0xffffffff == dll + syms['_kpc_client_frame']
+def update_stub(uu, at, size, user):
+    log.append(('update', uu.reg_read(x.UC_X86_REG_ECX), read(uu, uu.reg_read(x.UC_X86_REG_ESP) + 4))); sp = uu.reg_read(x.UC_X86_REG_ESP)
+    uu.reg_write(x.UC_X86_REG_ESP, sp + 8); uu.reg_write(x.UC_X86_REG_EIP, read(uu, sp))
+u.hook_add(uc.UC_HOOK_CODE, update_stub, begin=CLIENT + 0x13bb0, end=CLIENT + 0x13bb0)
+frame = dll + syms['_kpc_client_frame']; CM = 0x5a9000
+setup_shell(u, state=5); rig.tick = 650000; rig.invoke_address(preload, (world(rig, 'WORLDS\\REALM1\\R1M2B.DAT'),), this=SHELL)
+log.clear(); rig.tick = 650200; answer(); assert log == [], log
+rig.tick = 652000; rig.invoke_address(frame, (0x33,), this=CM); assert log == [('update', CM, 0x33)], log
+log.clear(); rig.tick = 655000; rig.invoke_address(frame, (0x33,), this=CM)
+assert log == [('reply', P), ('initvars', P), ('update', CM, 0x33)], log
+log.clear(); rig.invoke_address(frame, (0x34,), this=CM); assert log == [('update', CM, 0x34)], log
+# Deathmatch world: never held.
+setup_shell(u); rig.invoke_address(preload, (world(rig, 'worlds\\deathmatch\\PM01'),), this=SHELL)
+assert b'Loading world: worlds\\deathmatch\\PM01 (stock: not a campaign world)' in bytes(rig.logs)
+log.clear(); answer(); assert log == [('reply', P), ('initvars', P)], log
+# A new load drops a stale hold (nothing sent for the old world).
+setup_shell(u); rig.tick = 700000; rig.invoke_address(preload, (world(rig, 'worlds\\realm3\\R3M0'),), this=SHELL)
+log.clear(); rig.tick = 700100; answer(); assert log == []
+rig.invoke_address(preload, (world(rig, 'worlds\\realm3\\R3M1A'),), this=SHELL)
+log.clear(); rig.tick = 709000; rig.invoke_address(draw, (2,), this=SCREENS); assert ('reply', P) not in log, log
+# Hold disabled: the two calls stay original.
+rig5 = Rig(settings={'Multiplayer.CampaignLoadingHoldSpawn': 0}); rig5.factory(); assert not rig5.messages
+for site in (0xbeadc, 0xbeae3):
+    assert bytes(rig5.u.mem_read(base + site, 5)) == bytes(rig5.initial_shell[site:site + 5])
+assert bytes(rig5.u.mem_read(0x1ca0000 + 0x13876, 5)) == bytes(rig5.initial_client[0x13876:0x1387b])
+assert b'spawn hold' not in bytes(rig5.logs)
+
 # 10. An out-of-range minimum is refused before any edit.
 rig4 = Rig(settings={'Multiplayer.CampaignLoadingMinimumMs': 30001}); rig4.factory()
 assert any('CampaignLoadingMinimumMs' in m for m in rig4.messages), rig4.messages
 assert read(rig4.u, base + 0xff73c) == base + 0xcd360
-print(args.fixtures.name, 'passed campaign loading art: slot/calls, picture swap, 5 s minimum, slow load, replaced screen, deathmatch, single player, disabled, limits')
+print(args.fixtures.name, 'passed campaign loading art: slot/calls, picture swap, 5 s minimum, slow load, replaced screen, deathmatch, single player, disabled, spawn hold, limits')
