@@ -237,7 +237,8 @@ def coop_scenario():
         0xc269b:(6,'8b88d0010000'),0xc2a75:(6,'8b90d0010000'),0xb8ad8:(6,'8b88d0010000'),
         0x2e205:(5,'e8f6060c00'),0x2ffea:(5,'e811e90b00'),0x3005a:(5,'e8a1e80b00'),
         0xf3c08:(6,'39b8f0010000'),0xcc145:(5,'e836000000'),0x30c9e:(5,'e8ed800c00'),
-        0xfdfdb:(6,'ff90f0000000'),0xc8348:(6,'8b88d0010000'),0x409bb:(5,'e870380800'),0xb676f:(5,'e8cccc0300')}
+        0xfdfdb:(6,'ff90f0000000'),0xc8348:(6,'8b88d0010000'),0x409bb:(5,'e870380800'),0xb676f:(5,'e8cccc0300'),
+        0xc2c9c:(5,'e87fcc0200'),0xc2c56:(5,'e8f5cc0200')}
  music_flag='--no-music' not in sys.argv
  intro_flag='--intro' in sys.argv
  trace_timing='--trace-timing' in sys.argv
@@ -492,6 +493,38 @@ def coop_scenario():
   assert 'inventory add item=Key id=36 players=2' in text and 'found the key (everyone has it)' in text,text[-400:]
   gave.clear();call_regs(target[0xb676f],[0x19,1,1],{UC_X86_REG_ECX:pa},12)
   assert gave==[(pa,0x19,1,1),(pb,0x19,1,1)] and b''.join(log).decode('latin1').count('everyone has it')==1,gave
+  # Ammo: the amount the picker received (dd190 before/after) goes to every other player.
+  counts={}
+  def dd190():
+   sp=u.reg_read(UC_X86_REG_ESP);u.reg_write(UC_X86_REG_EAX,counts.get((u.reg_read(UC_X86_REG_ECX),read(sp+4)),0))
+   u.reg_write(UC_X86_REG_ESP,sp+8);u.reg_write(UC_X86_REG_EIP,read(sp))
+  inva=strings+0x1300;invb=strings+0x1340;write(pa+0x54,inva);write(pb+0x54,invb)
+  def cc180_ammo():
+   sp=u.reg_read(UC_X86_REG_ESP);counts[(inva,0x11)]=counts.get((inva,0x11),0)+30
+   u.reg_write(UC_X86_REG_ESP,sp+8);u.reg_write(UC_X86_REG_EIP,read(sp))
+  stubs[obj+0xdd190]=dd190;stubs[obj+0xcc180]=cc180_ammo
+  ammo=strings+0x1380;dfna=strings+0x13c0;write(ammo+0x54,dfna);write(dfna,0x11)
+  gave.clear();call_regs(target[0xcc145],[pa],{UC_X86_REG_ECX:ammo},4)
+  assert gave==[(pb,0x11,30,1)],gave
+  gave.clear();call_regs(target[0xcc145],[pa],{UC_X86_REG_ECX:ammo},4)   # every pickup is shared
+  assert gave==[(pb,0x11,30,1)],gave
+  assert 'shared ammo=MagmaAmmo amount=30 to 1 other player(s)' in b''.join(log).decode('latin1')
+  del stubs[obj+0xdd190];stubs[obj+0xcc180]=cc180
+  # Cutscene camera: every player's server view position follows the camera.
+  views=[]
+  def ef920():
+   sp=u.reg_read(UC_X86_REG_ESP);views.append(('set',u.reg_read(UC_X86_REG_ECX),read(sp+4)))
+   u.reg_write(UC_X86_REG_ESP,sp+8);u.reg_write(UC_X86_REG_EIP,read(sp))
+  def ef950():
+   sp=u.reg_read(UC_X86_REG_ESP);views.append(('reset',u.reg_read(UC_X86_REG_ECX)))
+   u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+  stubs[obj+0xef920]=ef920;stubs[obj+0xef950]=ef950
+  call_regs(target[0xc2c9c],[0x7777],{UC_X86_REG_ECX:pa},4)
+  assert views==[('set',pa,0x7777),('set',pb,0x7777)],views
+  views.clear();call_regs(target[0xc2c56],[],{UC_X86_REG_ECX:pa},0)
+  assert views==[('reset',pa),('reset',pb)],views
+  del stubs[obj+0xef920];del stubs[obj+0xef950]
+  print('PASS co-op ammo shared by received amount; cutscene view position for every player')
   write(manager+4,0)
   del stubs[obj+0xcc180];del stubs[obj+0xf3440];del stubs[obj+0xee7d0]
   # Secret found: the message goes to every session member (cdecl, caller pops).

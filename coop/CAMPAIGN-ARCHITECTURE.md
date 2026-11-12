@@ -208,7 +208,9 @@ settle" covered exactly that gap and is to be replaced.
 Fallback (heuristic, documented as such): the first `MID_PLAYER_UPDATE 0x11` (sent at about
 15 Hz by `0xc8650`) arriving at least RTT + 200 ms after `0x69`.
 
-## 6. 15-second hold, freeze and music (M3 design)
+## 6. 15-second hold, freeze and music (M3 design, not implemented)
+
+> **Status (2026-11-12): never built; superseded.** No 15-second countdown exists in any build. The shipped flow is the client spawn hold behind the loading picture (client `CampaignLoadingHoldSpawn`) and an intro that starts with the last spawn (`CoopIntroSettleMs`, campaign default 0). The freeze evidence below is still the planned way to stop the world running behind the loading picture (playtest item 9 in [the handoff](NEXT-SESSION-HANDOFF.md)): pause the server while members are loading, without the countdown.
 
 **Freeze: the server pause flag [C].**
 * `g_pServerDE` `+0x2c` GetServerFlags and `+0x30` SetServerFlags (cdecl). Bit 0 sets mgr

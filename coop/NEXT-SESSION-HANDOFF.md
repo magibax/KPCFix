@@ -16,7 +16,7 @@ two-PC tested.
 
 | # | Report | Cause | Status |
 | --- | --- | --- | --- |
-| 1 | Player 2 teleported in front of the camera when the host took an armour piece | `ee900` (IsPlayer) takes a *pointer* to the HOBJECT; the activator hook stored the pointer, so it never matched and every personal `player` command went to the first player (log: `-> first player` everywhere) | **fixed** (dereference; pickups also set the activator) |
+| 1 | Player 2 teleported in front of the camera when the host took an armour piece; again with the demon gauntlets | `ee900` (IsPlayer) takes a *pointer* to the HOBJECT; the activator hook stored the pointer, so it never matched and every personal `player` command went to the first player (log: `-> first player` everywhere). The second report was still on the old DLL `9ff661bf` | **fixed** in `9e7103e` (cutscene, camera and invulnerability for everyone; teleport/animate/lookat only for the picker) |
 | 2 | Unsheathe sound plays at the touch, not near the end of the cutscene | armour touch `c8340`: multiplayer sets the give flag `0x1013e1b8` to 1 (`c8348`), single player uses ReallyGiveArmor (false) and leaves it to the script's `giveitem` | **fixed** (`c8348` gate reads 0 with CoopScriptEvents; armour shared only when actually given at the touch) |
 | 3 | Non-hosts start level-ending sequences (R1M1A victory) | walk-in `CTriggerCommand1` → `r1m1a_victory.scr` → `trigger_generic CExitTrigger0`; only the exit itself was host-gated, so the cutscene played and then the exit was refused | **fixed** for `CTriggerCommand` (`CoopHostSequences`): the trigger stays armed for the host. Switches/levers (`CSwitch` `44dd6`) and other command-list owners are not gated yet |
 | 4 | After a refused non-host mirror click the host's click did nothing | mirror = `CModelDeco` use command `trigger_generic Gubba`; the deco marks itself used (`+0x1a1`) before the exit refusal | **fixed** (deco re-armed when its exit is refused) |
@@ -26,11 +26,17 @@ two-PC tested.
 | 8 | Items/ammo/armour lost on world change | multiplayer respawns with a fresh inventory; needs a per-member snapshot at world-loading and re-give on spawn (player inventory layout not mapped yet) | open |
 | 9 | World active behind the loading picture (pickup sounds, enemies) | the server simulates as soon as the world is loaded; needs the world held (e.g. `coop_server_frame` skipping simulation, but not networking) until every member has spawned | open, design needed |
 | 10 | Secrets/collectables HUD shows the deathmatch player list | client HUD chooses by game type; needs a client patch plus the server's secret/collectable counts | open |
-| 11 | Golden mirror invisible in the R1M1B lever cutscene | unknown (camera-view visibility of a WorldModel/deco on clients) | open |
+| 11 | Golden mirror invisible in the R1M1B lever cutscene | `camera_path` moves only the first player's server view position (`c2c9c` → `ef920`), so other clients are not sent what the camera sees | **fixed (probable cause)**: view position applied to every player |
 | 12 | Breakables missing on one client until minimise/restore (doorway in R1M1A) | unknown, client side (object creation during the spawn hold?) | open |
 | 13 | Chat typing triggers bound keys (`I` invulnerability) | client: open item 1 below | open |
-| 14 | Ammo too scarce for several players | proposal: scale ammo pickups (`CoopAmmoScale`) in the pickup hook | open, needs a decision |
-| 15 | Keep audio when minimised, always | client `KeepAudioOnFocusLoss=1` already the default, but only in remote multiplayer; single player/hosting keep the stock pause | needs a decision |
+| 14 | Ammo: pickups for everyone, consumption personal | — | **fixed**: received amount shared per pickup |
+| 15 | Keep audio when minimised, always; option in the Audio menu (spare space) | client `KeepAudioOnFocusLoss=1` is the default but only for remote multiplayer | open: client follow-up (all modes + Audio-menu checkbox) |
+| 16 | Lobby: random deathmatch map with its own spawn points | — | **fixed**: launcher `-Map random` → PM01–PM10, `CoopLobbyWorld`; stock spawns in deathmatch worlds |
+| 17 | Spawns trapped in the ground (R1M3A stone staircase near the fat lady) | not in the logs yet (that run did not reach R1M3A). R1M3A uses the single-player start plus spawn spread for later players, so the spread's checked spot is the first suspect | needs the log of a run with the trap (`spawn-spread` lines) |
+| 18 | Server prints `Missing sound file "monsters/aclown/aclowntaunt.wav"` | stock data bug: PSYCHO.REZ references the file but does not ship it | no action (harmless) |
+| 19 | Breakables (windows, boxes) throw no shards in multiplayer | `CWindow` (`shard_size`, `0x47xxx`) has no game-type gate on the server; shards are probably a client effect decision (cshell `GibDetail` / debris FX) | open: client |
+| 20 | Per-player cheats "gimmie gimmie gimmie" and "next armor" | — | **fixed**: chat `!gimmie` / `!nextarmor`, need `kpc_cheats 1` |
+| 21 | Disconnect button in the in-game menu | client cshell menu: a new main-menu entry between View and Quit | open: client follow-up |
 * **Builds in the working tree:** server `server-tools/KPCServerTools.dll` (build with
   `C:\KPCTest\pass2\build-coop.sh`, byte-identical across rebuilds) and client
   `dinput.dll` (`C:\KPCTest\clientbuild\build-coop.sh`). Hashes: `SHA256SUMS`,

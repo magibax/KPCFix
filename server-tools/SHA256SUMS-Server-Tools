@@ -1,8 +1,8 @@
 06f847a723699feec90e8a9949c0a468c4f61b38658ebd8ecca70ebef102dfaa  ./Check-KPCServerVersion.ps1
 879b2f91b70ae000fe3857c1b98371b5c94ca08d0c2a762f5657e8e041a64f22  ./KPC-Server-Launcher.cmd
-7a2c77d8001e8845c2a5546b27a53d2cbd4a53add8b6cad1a554aa8b72515268  ./KPC-Server-Launcher.ps1
-8ec0a10f3297d81d5b168a55b2f83793aaf63c9f8f9a78c8321b0763a1c92593  ./KPCServerTools-default.ini
-c258eec0e4e74263ebbde8700a04b3549e268b33a8e7e82bf67e1e26bad2ae29  ./KPCServerTools.dll
+d3cb3891ebd70fe72b82b1dc75670ac1b98ceae5770d3b26f86a1e04f4c64046  ./KPC-Server-Launcher.ps1
+d8260cf286fed07728a273ba03897f13c8607c9b3d80026e029cff33aecc4240  ./KPCServerTools-default.ini
+035f23a22c8880e44cd1195dd9afc8f6c6a4a5069cbdde7e70182ad5a9641b8b  ./KPCServerTools.dll
 45c1ffbaa3016c0e52a1ba111d945c18589161d7467c815a4b69d0b2f09228b8  ./legacy-object-patches.json
 111bd19eff641ab11fd75afbeec380a96e822ac3153344271456fa7629c496d7  ./LICENSE-Server-Tools.txt
 52e752d2c4efb4eabec10e92a0705d027fbe576df9d7a350d1e5d4602a23ce5c  ./maps.json
@@ -26,12 +26,12 @@ f62824bb4422e17181bfe844927f8941e6566fcaed6518333c7b911d6b334c01  ./server-tools
 79b09ee669305099369940b08c61e09c3655451b25f91245d6d2ecd19bd79fe7  ./server-tools-source/src/coop_session.h
 39afd4c55b12d27511160869d327498e62fa9b338c9a9dff566c1852e976344e  ./server-tools-source/src/coop_spawn.h
 40ada31f2ea350d01f08090273044bea0c7f60ba133bed5467bbef92c9e2d2eb  ./server-tools-source/src/coop_volume_probe.h
-7aad1272f43af2356b1b5fa9b0e14a443a70f7544f3588d5e32a486db8389789  ./server-tools-source/src/proxy.c
+a89ff6175894282d5efbd89456bf7306ec3ef0bd79c63947daad9327ca86b6f5  ./server-tools-source/src/proxy.c
 9fbd81ac7c300839273cbfc24041be2979c6a5c89e5b2e19909b62c3695883aa  ./server-tools-source/src/sha256.c
 604cf174402ff39bd43bb360a428e1cff3f201458dca5a31ce5543485a551b7e  ./server-tools-source/src/sha256.h
 fc9fa8882bd17af9c612f9e3e1c0ba76b34f8f41f898f63293c14ae382879ecb  ./server-tools-source/src/winmini.h
 bd2f4a5034be6e2874f56a06e3307190ac85355f79a665e6b6a177310cef18e4  ./server-tools-source/tests/check_live.py
-09809541039a99c0dbf7dade62c317cb40d091f356d5ef43fd815a625ff52867  ./server-tools-source/tests/check_proxy.py
+5ad59d7b06660f547c3d407db252a1868106bc0fa65c124fab7d937c4daf50e1  ./server-tools-source/tests/check_proxy.py
 b8672e7a6217b66c2c1dcbdd3cf1d179d7eb4638d91f50b8a1f4f5c5fcc1c24e  ./server-tools-source/tests/harness.ld
 9dbf1b0e18216bb09f513d82f5186d9e4ee408d05a0227d7d12db17d25891a63  ./server-tools-source/tests/harness.S
 1acb65877cb4a0f0a1464df2e067b419d131e95c472400b09d68c77dba16754d  ./server-tools-source/tests/run_checks.py
@@ -47,8 +47,8 @@ ffbd4970392b26f2074247794ce0b7d1bf758050c51b0079e6f12316a41dbc63  ./server-tools
 0ef264f0483b5fa02fbc75625fa7631cb6792667da6e228f0fd7b7bb7f61579e  ./server-tools-source/tests/test_coop_session.c
 ab2186f1887ffcc21b75d27dcdfe7f15c02ce7edee05c1ef07e4088b90178d76  ./server-tools-source/tests/test_coop_spawn.c
 aad614cd06b12ab7a05789abe00592aa3e53706cbb6508899ad20771ac481829  ./server-tools-source/tests/test_coop_volume_probe.c
-c100f40dc0c40a4dbc9b240f6974d976cb3e9b6f8fd49dd90d1d211a4eaa14eb  ./SERVER_TOOLS_BUILD.json
+bdc66850f3cfdb45cafb5f0e799b7292a8c325d5396db41b8c6e6a3d94ad3dcf  ./SERVER_TOOLS_BUILD.json
 b2393a94e71e83afa788f9b3f1b6312a642822c272e8ceb6412ed3946f69da75  ./SERVER_TOOLS_SUPPORTED_BUILDS.json
 42bbd9037525c229741b156d7d7868cceb7f44a54c8539f0b9077c61c5a900be  ./Setup-KPCServerTools.cmd
 80153a696b38917895b044cb9064b1cfe197c6164e2a731d0f98c7fff2b6925d  ./Setup-KPCServerTools.ps1
-eed2a2e0df371517299e09de7f5490481cf3a3c5649371172e2ae2e9e3627183  ./Start-KPC-Selected-Server.ps1
+387c0cb33f1db677b159519f321bf31602d3df1c343ceb8b7e70044acaadc388  ./Start-KPC-Selected-Server.ps1

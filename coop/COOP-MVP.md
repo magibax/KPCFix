@@ -43,7 +43,7 @@ original bytes, and fail closed when the bytes differ.
 | `!campaign water\|earth\|air\|fire\|nightmare` (or `1`–`5`) | host, lobby | Starts at that realm's first world now and carries on to the end of the game. `from <realm>` is an alias |
 | `!campaign` | anyone | Shows the selection and help. Any other input gets the help reply |
 | `!difficulty lullaby\|daydream\|sleepless\|coldsweat\|nightmare` (or `0`–`4`, `easy`/`normal`/`hard`) | host, lobby | Difficulty from the next world loaded. `!difficulty` alone shows it. Alias `!skill` |
-| `!abort` | host, any state | Resets everything back to the lobby: everyone goes to R1M2B (or `CoopLobbyWorld`), readiness is cleared, the selection returns to full. During a world change it waits for that world to load. In the lobby it resets in place |
+| `!abort` | host, any state | Resets everything back to the lobby: everyone goes back to the lobby world (`CoopLobbyWorld`, the random deathmatch map), readiness is cleared, the selection returns to full. During a world change it waits for that world to load. In the lobby it resets in place |
 | `!ready` / `!unready`, `!start` | members / host | The older start: everyone ready, host starts the current selection |
 | `!next` | host, in play | Forces the next world (debugging; exits are host-only anyway) |
 | `!coop` / `!status`, `!help`, `!leave` / `!join` | anyone / member | Status line, command list, sit out / rejoin |
@@ -67,7 +67,7 @@ its broadcast; no new network messages. Replies are at most 111 bytes.
   R?M0 intros end with `trigger_generic CExitTrigger0`) pass. Leaving the last world of
   the selection completes it and returns to the lobby. **Live:** natural exits,
   scripted intro exits.
-* **Lobby world:** R1M2B unless `CoopLobbyWorld` is set.
+* **Lobby world:** a random deathmatch map (PM01–PM10) picked by the launcher on every co-op start and written to `CoopLobbyWorld`; players spawn at its own multiplayer starts. The DLL default without the key is R1M2B.
 * **Membership:** keyed by the engine's client handle; disconnects are detected from
   the engine's player list; an empty session returns to a new lobby.
 

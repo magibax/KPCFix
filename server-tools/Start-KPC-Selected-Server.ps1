@@ -1,11 +1,17 @@
 param(
  [Parameter(Mandatory=$true)][string]$Map,
  [ValidateSet('Enabled','Disabled')][string]$Cheats='Disabled',
- # EXPERIMENTAL co-op MVP (feature branch DLL only): R1M2B -> R1M2C -> R1M3A route.
+ # EXPERIMENTAL co-op (feature branch DLL only). With -Coop, -Map random picks the
+ # lobby from the shipped deathmatch maps (PM01-PM10); an explicit world is used as is.
  [switch]$Coop
 )
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
+if ($Coop -and $Map -eq 'random') {
+ # Co-op lobby: a random shipped deathmatch map; players use its own multiplayer starts.
+ $Map = 'worlds\deathmatch\PM{0:D2}' -f (Get-Random -Minimum 1 -Maximum 11)
+ Write-Host "[KPCFix Co-op] Lobby map (random deathmatch): $Map"
+}
 if ($Map -notmatch '^worlds\\(deathmatch\\PM(0[1-9]|10)|realm[0-5]\\(R[1-5]M[0-4][ABC]?|TUTORIAL))$') { throw 'Invalid map path.' }
 $Exe = @('dedicated.exe','DEDICA~1.EXE') | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $Exe) { throw 'Dedicated EXE missing: put these files in the installed game folder.' }
@@ -14,9 +20,6 @@ $GameProfile = Assert-KPCGameVersion
 Assert-KPCServerVersion $Exe $GameProfile
 foreach ($Required in @('kpc-gui-server.cfg','kpc-gui-maps.txt','KPCServerTools.ini')) {
  if (-not (Test-Path -LiteralPath $Required)) { throw "Missing $Required; run Setup-KPCServerTools.cmd first." }
-}
-if ($Coop) {
- if ($Map -ne 'worlds\realm1\R1M2B') { throw 'The co-op lobby starts at worlds\realm1\R1M2B.' }
 }
 # Initial policy is configuration only; game binaries are never rewritten at launch.
 $iniPath=Join-Path $PSScriptRoot 'KPCServerTools.ini'
@@ -50,6 +53,17 @@ if($ini -match '(?im)^[ \t]*CoopSession[ \t]*=') {
  }else{
   $tail=if($ini.Length -gt 0 -and -not ($ini.EndsWith("`n") -or $ini.EndsWith("`r"))){$nl}else{''}
   $ini=$ini+$tail+'[Coop]'+$nl+'CoopSession=1'+$nl
+ }
+}
+# Co-op: the lobby world (after completion or !abort) is the map this run starts on.
+if($Coop){
+ $lobbyLine='CoopLobbyWorld='+$Map
+ if($ini -match '(?im)^[ \t]*CoopLobbyWorld[ \t]*=') {
+  $ini=[regex]::Replace($ini,'(?im)^[ \t]*CoopLobbyWorld[ \t]*=[^\r\n]*',{param($m) $lobbyLine})
+ }else{
+  $coopHeader=[regex]::Match($ini,'(?im)^[ \t]*\[Coop\][ \t]*(?:\r\n|\n|\r|$)')
+  $separator=if($coopHeader.Value.EndsWith("`n") -or $coopHeader.Value.EndsWith("`r")){''}else{$nl}
+  $ini=$ini.Insert($coopHeader.Index+$coopHeader.Length,$separator+$lobbyLine+$nl)
  }
 }
 [IO.File]::WriteAllText($iniPath,$ini,$iniEncoding)
@@ -103,7 +117,8 @@ if ($Coop) {
  # whatever was last picked for deathmatch, while the MVP route needs R1M2B,
  # R1M2C and R1M3A in the native maplist (campaign worlds missing from it are
  # written into the next slot in memory by the server DLL).
- Set-Content -LiteralPath 'kpc-coop-maps.txt' -Value @('worlds\realm1\R1M2B','worlds\realm1\R1M2C','worlds\realm1\R1M3A') -Encoding ASCII
+ $coopMaps=@($Map)+@(@('worlds\realm1\R1M2B','worlds\realm1\R1M2C','worlds\realm1\R1M3A') | Where-Object { $_ -ne $Map })
+ Set-Content -LiteralPath 'kpc-coop-maps.txt' -Value $coopMaps -Encoding ASCII
  $coopCfg = @(Get-Content -LiteralPath $ServerCfg)
  $coopCfg += '// KPCFix co-op: lobby/MVP route map list'
  $coopCfg += '"maplist" "kpc-coop-maps.txt"'

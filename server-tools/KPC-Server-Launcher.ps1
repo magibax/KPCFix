@@ -64,18 +64,15 @@ $cheats.Checked=$false
 $cheats.Location=New-Object Drawing.Point(16,351)
 $cheats.Size=New-Object Drawing.Size(370,26)
 $form.Controls.Add($cheats)
-# EXPERIMENTAL co-op MVP: fixed R1M2B -> R1M2C -> R1M3A route, max 3 players, chat lobby.
+# EXPERIMENTAL co-op: random deathmatch lobby, campaign chosen in chat, max 3 players.
 $coop=New-Object Windows.Forms.CheckBox
-$coop.Text='EXPERIMENTAL co-op session: R1M2B -> R1M2C -> R1M3A, max 3, chat lobby (!ready / !start)'
+$coop.Text='EXPERIMENTAL co-op session: random deathmatch lobby, max 3, host types !campaign in chat'
 $coop.Checked=$false
 $coop.Location=New-Object Drawing.Point(16,408)
 $coop.Size=New-Object Drawing.Size(588,26)
 $form.Controls.Add($coop)
-$coopIndex=-1
-for($k=0;$k -lt $maps.Count;$k++){ if($maps[$k].Path -eq 'worlds\realm1\R1M2B'){ $coopIndex=$k } }
-if($coopIndex -lt 0){ throw 'Map catalog lacks worlds\realm1\R1M2B.' }
 $coop.add_CheckedChanged({
- if($coop.Checked){ $map.SelectedIndex=$coopIndex; $map.Enabled=$false; if($players.Value -gt 3){ $players.Value=3 } }
+ if($coop.Checked){ $map.Enabled=$false; if($players.Value -gt 3){ $players.Value=3 } }
  else { $map.Enabled=$true }
 })
 $hint=New-Object Windows.Forms.Label; $hint.Text='Live console: kpc_cheats 0 / 1'; $hint.Location=New-Object Drawing.Point(16,382); $hint.Size=New-Object Drawing.Size(330,20); $form.Controls.Add($hint)
@@ -93,7 +90,6 @@ $button.add_Click({
   $running=Get-Process -Name @('dedicated','DEDICA~1') -ErrorAction SilentlyContinue
   if($running){throw 'A dedicated server is already running. Close it before starting another server with this launcher.'}
   $chosen=$script:visible[$map.SelectedIndex]
-  if($coop.Checked -and $chosen.Path -ne 'worlds\realm1\R1M2B'){throw 'Co-op starts at Realm 1 / R1M2B.'}
   $config=Get-Content (Join-Path $PSScriptRoot 'server-template.cfg') -Raw
   $config=[regex]::Replace($config,'(?m)^"hostname".*$',{param($m) '"hostname" "'+$name.Text+'"'})
   $config=[regex]::Replace($config,'(?m)^"port".*$',('"port" "'+$port.Value+'"'))
@@ -115,12 +111,13 @@ $button.add_Click({
    $config=[regex]::Replace($config,'(?m)^"keepitems".*$','"keepitems" "1"')
    $mapLines=@('worlds\realm1\R1M2B','worlds\realm1\R1M2C','worlds\realm1\R1M3A')
   }
+  $startMap=if($coop.Checked){'random'}else{$chosen.Path}
   Set-Content (Join-Path $PSScriptRoot 'kpc-gui-server.cfg') $config -Encoding ASCII
   Set-Content (Join-Path $PSScriptRoot 'kpc-gui-maps.txt') $mapLines -Encoding ASCII
   $worker=Join-Path $PSScriptRoot 'Start-KPC-Selected-Server.ps1'
   $cheatMode=if($cheats.Checked){'Enabled'}else{'Disabled'}
   $coopArg=if($coop.Checked){' -Coop'}else{''}
-  Start-Process powershell.exe -WorkingDirectory $PSScriptRoot -ArgumentList ('-NoLogo -NoProfile -NoExit -ExecutionPolicy Bypass -File "'+$worker+'" -Map "'+$chosen.Path+'" -Cheats '+$cheatMode+$coopArg)
+  Start-Process powershell.exe -WorkingDirectory $PSScriptRoot -ArgumentList ('-NoLogo -NoProfile -NoExit -ExecutionPolicy Bypass -File "'+$worker+'" -Map "'+$startMap+'" -Cheats '+$cheatMode+$coopArg)
  } catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message,'KPCFix server launcher') | Out-Null }
 })
 [Windows.Forms.Application]::Run($form)
