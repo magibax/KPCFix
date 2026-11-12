@@ -1,8 +1,8 @@
 {
   "output": "dinput.dll",
   "platform": "windows",
-  "sha256": "16988484e4ff6b4a3452b31411588bb980045db29fa57e14254919c6f4b0932e",
-  "bytes": 57344,
+  "sha256": "2ab53bd78df3d3e77f8e75c5ef755d7d2edec258c9d5f198091079a6f14b43ae",
+  "bytes": 57856,
   "exports": [
     "DirectInputCreateA",
     "DirectInputCreateW",
@@ -17,8 +17,8 @@
   "elf_to_coff": [
     {
       "object": "kpcfix.obj",
-      "dir32": 857,
-      "rel32": 184
+      "dir32": 866,
+      "rel32": 185
     },
     {
       "object": "sha256.obj",
@@ -52,7 +52,7 @@
     },
     {
       "object": "console.obj",
-      "dir32": 16,
+      "dir32": 27,
       "rel32": 5
     },
     {

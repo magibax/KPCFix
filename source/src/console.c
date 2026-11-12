@@ -1,6 +1,43 @@
 #include "winmini.h"
 #include "console.h"
 #include "shell_layout.h"
+#include "focus.h"
+
+/* Window-shard diagnostic ([Multiplayer] LogWindowBreaks, default 1).
+ * Playtest: windows throw no shards in multiplayer. cshell 703813a4: the
+ * server's CWindow break (object.lto 0x483cc) first clears the window's
+ * FLAG_VISIBLE (0x483fd..0x48413), then sends message 0x39 (object, effect
+ * type 0x4b, shatter vectors, shard_size...) to every client. The shell's
+ * OnMessage case 0x39 (0xcb194) passes it to the effect registry (0x80020,
+ * table 0x201bf94c); type 0x4b is the window-shard manager 0x2019e6c0 whose
+ * handler (vtable 0xfe184 -> 0x5bd30, thiscall, ret 0xc) builds the shards
+ * from the window's world-model polygons. No game-type test is on that path;
+ * its only early exit is a null window object ("Tried to break a window that
+ * is not in the PVS!", 0x5bdaf, on-screen debug text only). The handler is
+ * wrapped to log, for the first breaks of a session, whether the window
+ * object was present, so the next playtest shows which case it is. */
+U32 g_window_watch;
+U8 *g_window_shell;
+static U32 window_breaks,window_missing;
+typedef void (__attribute__((thiscall)) *WindowFn)(void *,void *,U32,U32);
+static void watch_decimal(char *b,U32 *at,U32 n){
+    char t[11];U32 k=0;do{t[k++]=(char)('0'+n%10u);n/=10u;}while(n);while(k)b[(*at)++]=t[--k];
+}
+void __attribute__((thiscall)) kpc_window_break(void *manager,void *object,U32 type,U32 message){
+    U32 present=object&&*(const U32 *)object;
+    window_breaks++;if(!present)window_missing++;
+    if(g_focus_log&&window_breaks<=32){
+        char line[96];U32 at=0;const char *p="Window break message ";
+        while(*p)line[at++]=*p++;
+        watch_decimal(line,&at,window_breaks);
+        p=present?": window object present, shards built.\r\n":": window object MISSING on this client (no shards; \"not in the PVS\").\r\n";
+        while(*p&&at<sizeof line-1)line[at++]=*p++;
+        line[at]=0;g_focus_log(line);
+    }
+    ((WindowFn)(g_window_shell+g_shell_layout->window_break))(manager,object,type,message);
+}
+U32 kpc_window_breaks(void){return window_breaks;}
+U32 kpc_window_missing(void){return window_missing;}
 
 /* Console toggle key character ([KPCFix] ConsoleKeyFix, default 1).
  *

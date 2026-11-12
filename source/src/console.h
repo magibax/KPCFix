@@ -12,4 +12,9 @@ U32 CDECL kpc_console_char_drop(void);
 void kpc_input_state_entry(void);
 U32 CDECL kpc_input_enabled(U32 state);
 U32 kpc_blocked_input_frames(void);
+extern U32 g_window_watch;
+extern U8 *g_window_shell;
+void __attribute__((thiscall)) kpc_window_break(void *,void *,U32,U32);
+U32 kpc_window_breaks(void);
+U32 kpc_window_missing(void);
 #endif

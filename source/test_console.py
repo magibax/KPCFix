@@ -81,4 +81,24 @@ assert bytes(rigc.u.mem_read(CLIENT + 0x23c84, 6)) == bytes.fromhex('8b881410000
 rig0 = Rig(settings={'ConsoleKeyFix': 0}); rig0.factory(); assert not rig0.messages
 assert bytes(rig0.u.mem_read(CLIENT + 0x6dc9, 5)) == bytes(rig0.initial_client[0x6dc9:0x6dce])
 assert bytes(rig0.u.mem_read(CLIENT + 0x700a, 5)) == bytes.fromhex('83f8607445')
-print(args.fixtures.name, 'passed console key: toggle character dropped within 250 ms, later characters kept, chat typing drops actions and clears the command state, disabled')
+# Window-shard diagnostic (LogWindowBreaks): the shard manager's handler slot
+# (cshell vtable 0xfe184 -> 0x5bd30, thiscall, ret 0xc) logs whether the
+# window object reached this client, then runs the original handler.
+assert read(rig.u, SHELLBASE + 0xfe184) == rig.dllbase + syms['_kpc_window_break']
+handled = []
+def window_handler(u, at, size, user):
+    sp = u.reg_read(x.UC_X86_REG_ESP)
+    handled.append((u.reg_read(x.UC_X86_REG_ECX),) + tuple(read(u, sp + 4 + 4 * i) for i in range(3)))
+    u.reg_write(x.UC_X86_REG_EIP, read(u, sp)); u.reg_write(x.UC_X86_REG_ESP, sp + 16)
+rig.u.hook_add(uc.UC_HOOK_CODE, window_handler, begin=SHELLBASE + 0x5bd30, end=SHELLBASE + 0x5bd30)
+REF, MANAGER = 0x5b9000, SHELLBASE + 0x19e6c0
+rig.u.mem_write(REF, pack(0x1234))
+rig.invoke_address(rig.dllbase + syms['_kpc_window_break'], (REF, 0x4b, 0x777), this=MANAGER)
+rig.u.mem_write(REF, pack(0))
+rig.invoke_address(rig.dllbase + syms['_kpc_window_break'], (REF, 0x4b, 0x777), this=MANAGER)
+assert handled == [(MANAGER, REF, 0x4b, 0x777)] * 2, handled
+assert b'Window break message 1: window object present' in bytes(rig.logs)
+assert b'Window break message 2: window object MISSING' in bytes(rig.logs)
+rigw = Rig(settings={'Multiplayer.LogWindowBreaks': 0}); rigw.factory(); assert not rigw.messages
+assert read(rigw.u, SHELLBASE + 0xfe184) == SHELLBASE + 0x5bd30
+print(args.fixtures.name, 'passed console key: toggle character dropped within 250 ms, later characters kept, chat typing drops actions and clears the command state, window-break log, disabled')

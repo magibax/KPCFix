@@ -550,6 +550,15 @@ static int queue_chat_actions(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     g_command_shell=base;
     return add_edit(edits,count,base+L->command_slot,before,after,4);
 }
+/* Window-shard diagnostic: the shard manager's handler slot (console.c). */
+static int queue_window_watch(Edit edits[EDIT_CAP],U32 *count,U8 *base){
+    const ShellLayout *L=g_shell_layout;U8 before[4],after[4];
+    if(!g_window_watch)return 1;
+    if(!L->window_break_slot){g_window_watch=0;return 1;}
+    g_window_shell=base;
+    store32(before,(U32)(base+L->window_break));store32(after,(U32)kpc_window_break);
+    return add_edit(edits,count,base+L->window_break_slot,before,after,4);
+}
 /* Keep running on focus loss: the OnEvent 4/3 music calls (focus.c). */
 static int queue_focus_music(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     const ShellLayout *L=g_shell_layout;U8 before[5],after[5];
@@ -623,7 +632,7 @@ static int patch_shell(HMODULE module){
         report_error("Unexpected movement dispatch in cshell.dll.");goto done;
     }
     if(!queue_sensitivity(edits,&count,base)||!queue_hud(edits,&count,base)||!queue_ui(edits,&count,base)||
-       !queue_loading(edits,&count,base)||!queue_chat(edits,&count,base)||!queue_chat_actions(edits,&count,base)||!queue_focus_music(edits,&count,base)||!queue_camera(edits,&count,base)||!commit_edits(edits,count)){
+       !queue_loading(edits,&count,base)||!queue_chat(edits,&count,base)||!queue_chat_actions(edits,&count,base)||!queue_focus_music(edits,&count,base)||!queue_window_watch(edits,&count,base)||!queue_camera(edits,&count,base)||!commit_edits(edits,count)){
         report_error("UI/HUD/sensitivity/movement instructions differ or their memory update failed. No changes in this cshell transaction were retained.");goto done;
     }
     g_hud_shell=base;
@@ -736,6 +745,7 @@ static int install_game_fixes(void){
     g_focus_default=GetPrivateProfileIntW(L"Multiplayer",L"KeepAudioOnFocusLoss",1,ini_path)!=0;
     g_console_key_fix=GetPrivateProfileIntW(L"KPCFix",L"ConsoleKeyFix",1,ini_path)!=0;
     g_chat_blocks_actions=GetPrivateProfileIntW(L"Multiplayer",L"ChatBlocksActions",1,ini_path)!=0;
+    g_window_watch=GetPrivateProfileIntW(L"Multiplayer",L"LogWindowBreaks",1,ini_path)!=0;
     g_camera_smooth=GetPrivateProfileIntW(L"Multiplayer",L"SmoothCutsceneCamera",1,ini_path)!=0;
     g_focus_resync=g_focus_enabled&&GetPrivateProfileIntW(L"Multiplayer",L"ResyncAudioOnFocus",1,ini_path)!=0;
     g_focus_log=kpc_log_text;
