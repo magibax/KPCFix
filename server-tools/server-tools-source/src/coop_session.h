@@ -216,6 +216,7 @@ static void coop_session_enable_campaign(CoopSession *s){
 static void coop_selection_text(const CoopSession *s,char *out,unsigned int *n){
  if(!s->campaign){coop_append(out,n,"MVP route R1M2B>R1M2C>R1M3A");return;}
  if(s->sel_mode==COOP_SEL_FULL)coop_append(out,n,"full campaign");
+ else if(s->sel_mode==COOP_SEL_WORLD){coop_append(out,n,"from ");coop_append(out,n,coop_route_label(s,0));}
  else{coop_append(out,n,s->sel_mode==COOP_SEL_FROM?"from ":"realm ");coop_append(out,n,coop_realm_name(s->sel_realm));}
  coop_append(out,n," (");coop_append(out,n,coop_route_label(s,0));coop_append(out,n,"..");
  coop_append(out,n,coop_route_label(s,s->route_len-1u));coop_append(out,n,", ");
@@ -495,6 +496,39 @@ static void coop_abort_change(CoopSession *s,unsigned int now,CoopResult *r){
  coop_session_lobby_reset(s);
  coop_begin_change(s,COOP_TARGET_LOBBY,now,r,"Host aborted");
 }
+/* !changelevel <world> (host, campaign mode): every player goes to that
+ * WORLDORDER world, from the lobby or during play. The campaign then carries
+ * on from there (the selection becomes "from <world>" to the end), so natural
+ * exits lead to its successor; !abort returns to the lobby and the default
+ * selection. The change is the same server-side world change as an exit
+ * (loading picture, spawn hold, !abort during the load). */
+static void coop_session_changelevel(CoopSession *s,int me,const char *arg,unsigned int now,CoopResult *r){
+ int g;unsigned int m=0,present=coop_present_count(s),k;
+ char why[COOP_MSG_MAX];
+ if(!s->campaign){coop_result(r,COOP_ACT_REPLY,"[Co-op] !changelevel needs CoopCampaign=1");return;}
+ while(*arg==' '||*arg=='\t')arg++;
+ if(!*arg){coop_result(r,COOP_ACT_REPLY,"[Co-op] Use: !changelevel <world>, e.g. !changelevel R1M2A or worlds\\realm1\\R1M2A (host)");return;}
+ g=coop_campaign_find(arg);
+ if(g<0){coop_result(r,COOP_ACT_REPLY,"[Co-op] Unknown world. Use a campaign world R1M0..R5M1B: !changelevel R1M2A or worlds\\realm1\\R1M2A");return;}
+ if(me<0||me!=s->host){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can change the level");return;}
+ if(s->phase==COOP_PHASE_TRANSITION||s->phase==COOP_PHASE_WORLD_LOADING){coop_result(r,COOP_ACT_REPLY,"[Co-op] A world change is already in progress");return;}
+ if(s->phase==COOP_PHASE_LOBBY&&present<s->min_players){
+  r->action=COOP_ACT_REPLY;r->msg[0]=0;
+  coop_append(r->msg,&m,"[Co-op] Need ");coop_append_uint(r->msg,&m,s->min_players);
+  coop_append(r->msg,&m," players to start, ");coop_append_uint(r->msg,&m,present);coop_append(r->msg,&m," here");
+  return;
+ }
+ if(!coop_session_select(s,COOP_SEL_WORLD,(unsigned int)g)){coop_result(r,COOP_ACT_REPLY,"[Co-op] Campaign selection failed");return;}
+ s->seq++;
+ if(s->phase==COOP_PHASE_LOBBY){
+  for(k=0;k<COOP_SESSION_MAX_MEMBERS;k++)s->m[k].ready=0;
+  s->started=1;s->start_pending=1;
+ }else s->start_pending=0;
+ s->lobby_pending=0;s->abort_after_load=0;
+ why[0]=0;coop_append(why,&m,"Host changed level (campaign continues from ");
+ coop_append(why,&m,coop_route_label(s,0));coop_append(why,&m,")");
+ coop_begin_change(s,0,now,r,why);
+}
 /* Chat command from a known member. Text is untrusted. */
 static void coop_session_command(CoopSession *s,unsigned int client,const char *text,
   unsigned int now,CoopResult *r){
@@ -505,6 +539,12 @@ static void coop_session_command(CoopSession *s,unsigned int client,const char *
  while(i<len&&(text[i]==' '||text[i]=='\t'))i++;
  if(i>=len||text[i]!='!')return;
  i++;
+ /* !changelevel takes a world path (backslashes, dots): parsed on its own. */
+ {
+  static const char kw[]="changelevel";unsigned int k;
+  for(k=0;kw[k]&&i+k<len&&coop_lower(text[i+k])==kw[k];k++){}
+  if(!kw[k]&&(i+k==len||text[i+k]==' '||text[i+k]=='\t')){coop_session_changelevel(s,me,text+i+k,now,r);return;}
+ }
  while(i<len&&n<sizeof(cmd)-1){
   char c=coop_lower(text[i]);
   if(!((c>='a'&&c<='z')||(c>='0'&&c<='9')))break;
@@ -555,7 +595,7 @@ static void coop_session_command(CoopSession *s,unsigned int client,const char *
  }
  if(COOP_IS("help")){
   coop_result(r,COOP_ACT_REPLY,s->campaign?
-   "[Co-op] !ready !unready !leave !join !coop !start !abort !next !difficulty !campaign full|water|earth|air|fire|nightmare":
+   "[Co-op] !coop !abort !next !difficulty !campaign full|water|earth|air|fire|nightmare !changelevel !kill !class":
    "[Co-op] kpc-coop/1: !ready !unready !leave !join !start !next !abort !difficulty (host) !coop");
   return;
  }

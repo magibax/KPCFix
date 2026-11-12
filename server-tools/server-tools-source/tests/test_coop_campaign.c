@@ -259,7 +259,49 @@ static void test_host_sequences_and_exit_names(void){
  assert(!coop_session_sequence_by(&s,-1,2000+COOP_HOST_SEQ_REPLY_MS,&x)&&x.action==COOP_ACT_ANNOUNCE);
  assert(s.rejected_sequences==3u&&strlen(x.msg)<COOP_MSG_MAX);
 }
+/* !changelevel <world>: host only, campaign worlds by label or path, from the
+ * lobby or during play; the campaign carries on from that world. */
+static void test_changelevel(void){
+ CoopSession s;CoopResult x;
+ assert(coop_campaign_find("R1M2A")==3&&coop_campaign_find("r1m2a")==3&&coop_campaign_find(" R1M2A ")==3);
+ assert(coop_campaign_find("worlds\\realm1\\R1M2A")==3&&coop_campaign_find("worlds/realm1/r1m2a.dat")==3);
+ assert(coop_campaign_find("realm1\\R1M2A")==3&&coop_campaign_find(".\\worlds\\realm1\\R1M2A")==3);
+ assert(coop_campaign_find("R1M0")==0&&coop_campaign_find("R5M1B")==47&&coop_campaign_find("realm4/r4m1a")==36);
+ assert(coop_campaign_find("R1M2D")<0&&coop_campaign_find("PM01")<0&&coop_campaign_find("worlds\\deathmatch\\PM01")<0);
+ assert(coop_campaign_find("realm2/r1m2a")<0&&coop_campaign_find("R1M2A x")<0&&coop_campaign_find("")<0&&coop_campaign_find(0)<0);
+ /* Lobby: the host jumps straight in (no !ready); the route continues from there. */
+ lobby(&s);
+ cmd(&s,B,"!changelevel R1M2A");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Only the host")&&s.phase==COOP_PHASE_LOBBY);
+ cmd(&s,A,"!changelevel");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Use: !changelevel"));
+ cmd(&s,A,"!changelevel R9M9Z");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Unknown world")&&s.phase==COOP_PHASE_LOBBY);
+ cmd(&s,A,"!ChangeLevel worlds\\realm1\\R1M2A");
+ assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==0&&strstr(r.msg,"-> R1M2A")&&strlen(r.msg)<COOP_MSG_MAX);
+ assert(s.started&&s.start_pending&&s.sel_mode==COOP_SEL_WORLD&&!strcmp(coop_route_label(&s,0),"R1M2A")&&s.route_len==45);
+ assert(!strcmp(coop_target_world(&s,0),"realm1/r1m2a"));
+ cmd(&s,A,"!changelevel R1M3A");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"already in progress"));
+ load(&s,"worlds\\realm1\\R1M2A",1000);assert(s.phase==COOP_PHASE_INTRO_PENDING&&s.route_pos==0);
+ spawn(&s,A,"Alice",1100);assert(s.phase==COOP_PHASE_GAMEPLAY);
+ /* A natural exit leads to the WORLDORDER successor. */
+ coop_session_exit(&s,"worlds/realm1/r1m2b",1200,&x);assert(x.action==COOP_ACT_CHANGE_WORLD&&x.target_pos==1&&strstr(x.msg,"R1M2B"));
+ load(&s,"worlds\\realm1\\R1M2B",1300);spawn(&s,A,"Alice",1400);
+ /* During play: to another realm, the campaign then continues from there. */
+ cmd(&s,A,"!changelevel r4m1a");assert(r.action==COOP_ACT_CHANGE_WORLD&&strstr(r.msg,"-> R4M1A")&&!s.start_pending);
+ {char sel[COOP_MSG_MAX];unsigned int n=0;sel[0]=0;coop_selection_text(&s,sel,&n);assert(strstr(sel,"from R4M1A (R4M1A..R5M1B, 12 worlds)"));}
+ load(&s,"worlds\\realm4\\R4M1A",1500);spawn(&s,A,"Alice",1600);assert(s.phase==COOP_PHASE_GAMEPLAY&&s.route_pos==0);
+ coop_session_exit(&s,"worlds/realm4/r4m1b",1700,&x);assert(x.action==COOP_ACT_CHANGE_WORLD&&x.target_pos==1);
+ load(&s,"worlds\\realm4\\R4M1B",1800);spawn(&s,A,"Alice",1900);
+ /* !abort: back to the lobby and the default selection. */
+ cmd(&s,A,"!abort");assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&s.sel_mode==COOP_SEL_FULL);
+ load(&s,"worlds\\realm1\\R1M2B",2000);assert(s.phase==COOP_PHASE_LOBBY&&!s.started);
+ /* Below the minimum player count in the lobby: refused. */
+ coop_session_init(&s,2,3);coop_session_enable_campaign(&s);spawn(&s,A,"Alice",0);
+ cmd(&s,A,"!changelevel R1M2A");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Need 2 players")&&s.phase==COOP_PHASE_LOBBY);
+ /* MVP route (CoopCampaign=0): not available. */
+ coop_session_init(&s,1,3);spawn(&s,A,"Alice",0);
+ cmd(&s,A,"!changelevel R1M2A");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"needs CoopCampaign=1"));
+}
 int main(void){
+ test_changelevel();
  test_difficulty_and_host_exits();
  test_host_sequences_and_exit_names();
  test_abort_any_state();

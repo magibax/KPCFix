@@ -65,7 +65,9 @@ static const CoopWorld coop_mvp_worlds[]={
 };
 #define COOP_MVP_LEN 3u
 
-typedef enum {COOP_SEL_MVP=0,COOP_SEL_FULL=1,COOP_SEL_FROM=2,COOP_SEL_REALM=3} CoopSelMode;
+/* COOP_SEL_WORLD: host !changelevel, from one world (sel_realm = its table
+ * index) to the end of the campaign along WORLDORDER. */
+typedef enum {COOP_SEL_MVP=0,COOP_SEL_FULL=1,COOP_SEL_FROM=2,COOP_SEL_REALM=3,COOP_SEL_WORLD=4} CoopSelMode;
 
 /* Realm names as the shipped data uses them (WORLDORDER.TXT, QUESTNAMES.TXT
  * comments), the KISS character of each realm (confirmed from the in-game
@@ -93,6 +95,7 @@ static const char *coop_realm_name(unsigned int realm){
 static int coop_campaign_slice(unsigned int mode,unsigned int realm,unsigned int *first,unsigned int *len){
  unsigned int i,a=COOP_CAMPAIGN_LEN,b=0;
  if(mode==COOP_SEL_FULL){*first=0;*len=COOP_CAMPAIGN_LEN;return 1;}
+ if(mode==COOP_SEL_WORLD){if(realm>=COOP_CAMPAIGN_LEN)return 0;*first=realm;*len=COOP_CAMPAIGN_LEN-realm;return 1;}
  if((mode!=COOP_SEL_FROM&&mode!=COOP_SEL_REALM)||realm<1u||realm>COOP_REALMS)return 0;
  for(i=0;i<COOP_CAMPAIGN_LEN;i++)if(coop_campaign_worlds[i].realm==realm){if(a==COOP_CAMPAIGN_LEN)a=i;b=i;}
  if(a==COOP_CAMPAIGN_LEN)return 0;
@@ -139,5 +142,37 @@ static int coop_is_exit_name(const char *label,const char *name){
  if(!k)return 0;
  for(i=0;i<COOP_EXIT_NAMES;i++)if(coop_ieq(coop_exit_names[i][0],label))return coop_ieq(coop_exit_names[i][1],n);
  return 0;
+}
+/* !changelevel argument -> campaign table index, or -1. Accepted, case-
+ * insensitively: the label ("R1M2A"), the WORLDORDER path with or without
+ * "worlds\" and ".dat" ("realm1/r1m2a", "worlds\realm1\R1M2A.dat"). Blanks
+ * around the argument are ignored; anything else is unknown. */
+static int coop_campaign_find(const char *arg){
+ char w[72];unsigned int i,n=0,start=0,k,tail;
+ if(!arg)return -1;
+ for(i=0;arg[i]==' '||arg[i]=='\t';i++){}
+ for(;arg[i]&&arg[i]!=' '&&arg[i]!='\t';i++){
+  char c=arg[i];
+  if(n+1>=sizeof w||(unsigned char)c<33||(unsigned char)c>126)return -1;
+  if(c>='A'&&c<='Z')c=(char)(c+32);
+  w[n++]=c=='\\'?'/':c;
+ }
+ for(;arg[i]==' '||arg[i]=='\t';i++){}
+ if(arg[i]||!n)return -1;
+ w[n]=0;
+ if(n>=4&&w[n-4]=='.'&&w[n-3]=='d'&&w[n-2]=='a'&&w[n-1]=='t'){n-=4;w[n]=0;}
+ if(n>=2&&w[0]=='.'&&w[1]=='/')start=2;
+ if(n-start>7&&w[start]=='w'&&w[start+1]=='o'&&w[start+2]=='r'&&w[start+3]=='l'&&w[start+4]=='d'&&w[start+5]=='s'&&w[start+6]=='/')start+=7;
+ for(k=0;k<COOP_CAMPAIGN_LEN;k++){
+  const char *path=coop_campaign_worlds[k].world,*label=coop_campaign_worlds[k].label;
+  for(i=0;path[i]&&path[i]==w[start+i];i++){}
+  if(!path[i]&&!w[start+i])return (int)k;
+  for(i=0,tail=1;label[i]||w[start+i];i++){
+   char c=label[i]>='A'&&label[i]<='Z'?(char)(label[i]+32):label[i];
+   if(c!=w[start+i]){tail=0;break;}
+  }
+  if(tail)return (int)k;
+ }
+ return -1;
 }
 #endif
