@@ -53,7 +53,9 @@ Record findings in the playtest table of `coop/NEXT-SESSION-HANDOFF.md`. Items, 
    `CoopHostSequences` (row 3, `9e7103e`) keeps every `CTriggerCommand` armed for the host only.
    Only triggers that lead to a level change (exit, victory/ending script → `trigger_generic CExitTrigger*`)
    should be host-gated. Restrict the gate to triggers whose command list (or the script it starts)
-   reaches an exit, and let every player fire the rest. Test with R4M1A and the R1M1A victory trigger.
+   reaches an exit, and let every player fire the rest. `proxy.c` already has `coop_commands_reach_exit`
+   (~line 1428) and `coop_script_reaches_exit` (~1416); check why the gate doesn't use them for this
+   trigger. Test with R4M1A and the R1M1A victory trigger.
 2. **Cheats from the client's keybinds** (the user wants keybinds, not chat). The stock client already
    sends them: `GimmieGimmieGimmie` (action 98, cshell `0xc4c90`) and `NextArmor` (100, `0xc4120`) send
    message `0x3b` with cheat id `0x2f` / `0x39` (+ byte 1) through cshell `0xc3680`. Make Server Tools
@@ -90,6 +92,19 @@ Record findings in the playtest table of `coop/NEXT-SESSION-HANDOFF.md`. Items, 
    weapons and full ammo of every type; needs `kpc_cheats 1`. Reuse the `!gimmie`/`!nextarmor` code
    (`COOP_GIMMIE_AMMO`, ids 3–14 weapons, `0x27`–`0x2c` armour; ammo needs the gauntlets) with maximum
    ammo instead of 50.
+9. **`!changelevel <world>`, host only** (for example `!changelevel R1M2A`): changes every player to that
+   campaign world from chat, in the lobby or during a campaign. Reuse the existing server-side world change
+   (`coop_session.h` ~line 420, "Begin a server-side world change to route[target]") and the code that
+   writes a world missing from the native 50-entry maplist into a free slot. Use the same loading
+   picture / spawn hold / `!abort` handling as a natural exit.
+   - **Accepted names:** match case-insensitively against the campaign table (`coop_campaign.h`);
+     accept `R1M2A` and `worlds\realm1\R1M2A`.
+   - **Errors:** reject unknown names with a chat reply listing the format; refuse from non-hosts
+     ("Only the host…", like the exits).
+   - **After the jump:** decide with the user whether the campaign carries on from there along
+     WORLDORDER (natural exits lead to that world's successor), or whether it is a one-off.
+     Carrying on is the likely expectation.
+   - **Persistence:** item 4's snapshot must be taken as for any world change.
 
 After building, run the unit tests and matrix, install per `UPGRADE-TEST-INSTALL.md` (Server Tools
 setup refuses the previous branch proxy: move `server.dll` aside and rerun), and give the user
