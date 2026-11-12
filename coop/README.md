@@ -1,5 +1,11 @@
 # Co-op campaign — research and roadmap
 
+> **Current state (2026-11-12):** development continues on branch `coop/mvp-lobby`. For
+> what works and how, read [COOP-MVP.md](COOP-MVP.md); for the latest builds, installs,
+> playtest triage and the next test plan, read [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md);
+> for settings, [CONFIGURATION.md](CONFIGURATION.md). The research ledger below is the
+> 2026-11-11 spawn and collision research and is kept as history.
+
 Status: three-player R1M2B separation **live-tested successfully**; general fail-closed spawn allocator implemented and tested as a standalone policy (**not yet connected to game physics**). The map-specific prototype stays off by default. Continue experimental co-op development on `feature/coop-campaign`. Since the 2026-11-11 release-isolation remediation, `main` has the stable Server Tools R3 implementation only; experimental sources, tests and diagnostics remain on this feature branch.
 
 

@@ -46,7 +46,15 @@ original bytes, and fail closed when the bytes differ.
 | `!abort` | host, any state | Resets everything back to the lobby: everyone goes back to the lobby world (`CoopLobbyWorld`, the random deathmatch map), readiness is cleared, the selection returns to full. During a world change it waits for that world to load. In the lobby it resets in place |
 | `!ready` / `!unready`, `!start` | members / host | The older start: everyone ready, host starts the current selection |
 | `!next` | host, in play | Forces the next world (debugging; exits are host-only anyway) |
+| `!changelevel <world>` | host, lobby or play (campaign mode) | Everyone goes to that WORLDORDER world (`R1M2A` or `worlds\realm1\R1M2A`, any case), and the campaign carries on from there (natural exits lead to its successor). Unknown names get the format; others get "Only the host" |
+| `!kill` | anyone | Kills the player who typed it (normal death and respawn) |
+| `!class` / `!class starbearer\|beastking\|celestial\|demon` | anyone, `kpc_cheats 1` | Next or named player class; weapons, armour and ammo are kept |
+| `!all` | anyone, `kpc_cheats 1` | Every armour piece, every weapon, full ammo, for the typer only |
+| `!gimmie`, `!nextarmor` | anyone, `kpc_cheats 1` | 50 of each ammo + the next missing weapon / the next missing armour piece, for the typer only |
 | `!coop` / `!status`, `!help`, `!leave` / `!join` | anyone / member | Status line, command list, sit out / rejoin |
+
+The stock cheat **keys** GimmieGimmieGimmie, NextArmor and CyclePlayerClass (bind them in
+Setup > Controls) also work per player with `kpc_cheats 1` (`CoopCheatKeys`).
 
 Commands are read from the game's own chat relay (object `0xfeec4`) and answered with
 its broadcast; no new network messages. Replies are at most 111 bytes.
@@ -131,7 +139,11 @@ its broadcast; no new network messages. Replies are at most 111 bytes.
   every client (`c58c0`, message `0x3d`), so every player sees every scripted camera.
   With `invulnerable true` going to everyone, all players are protected while one plays.
 * **Monster spawners** (`CoopSpawners=1`): stock multiplayer forces them off
-  (`0x93c5d`). **Live:** R1M3A `spawn6`.
+  (`0x93c5d`). **Live:** R1M3A `spawn6`. A spawner only spawns while its reference
+  object is within `ActiveRadius`; activation makes that the first player in the list
+  (`d54c8`), so a room set off by another player stayed empty (R4M1A). With
+  `CoopSpawnerNearest=1` the per-frame position read (`0xd51fb`) uses the nearest live
+  player instead.
 * **Enemy health bars** (`CoopHealthBars=1`): the single-player bar manager
   (gate `0xf8fe0`), broadcast at most 10 Hz. **Live.**
 * **Difficulty** (`!difficulty`, or `CoopSkill`): written to `0x15b678` before each
@@ -155,6 +167,31 @@ its broadcast; no new network messages. Replies are at most 111 bytes.
   damage from another player (hook on its teamplay test `0xf3c08`, jump to `f3f1e`).
   Self-damage and monster damage are unchanged. A co-op death would otherwise cost the
   victim every weapon and armour piece.
+
+## Personal inventory, respawning pickups, cheats
+
+Built 2026-11-12 (`7dbba5eb`), emulator and native-smoke tested, not yet two-PC tested.
+
+* **Persistence** (`CoopKeepInventory=1`, `CoopKeepOnDeath=1`): each member's weapons
+  (2–14), armour pieces (`player+0x260` bits), shards (`0x1e`), ammo (`0x11`–`0x14`)
+  and class (`player+0x264`) are saved every second while alive and right before every
+  world change, keyed by the member (`coop_inventory.h`). 400 ms after a spawn the
+  class is applied and whatever is missing is given with `f3440` (armour first: it
+  raises the ammo cap; weapons need the gauntlets and the player's class, so a weapon
+  from another class is given with the class set to it for the call).
+* **Respawning pickups** (`CoopItemRespawnSec=15`): campaign worlds author
+  `Respawn=false`. At the pickup's hide call (`0xcc29e`) a weapon, ammo, shard, health
+  or power-up gets the stock deathmatch respawn (`+0xb4`, `+0xb8`); the respawn
+  (`0xcbfff` → `cc080`) waits while a player stands on the spot. Armour pieces,
+  pamphlets, keys, tickets and the ultimate weapon never respawn.
+* **Cheat keys** (`CoopCheatKeys=1`): the client sends cheat message `0x3b`; the server
+  handler `fb910` refused GimmieGimmieGimmie `0x2f`, CyclePlayerClass `0x31` and
+  NextArmor `0x39` in multiplayer (flag 2 of table `0x1016d8a0`). Around that call the
+  three entries are allowed and routed to Server Tools handlers that check
+  `kpc_cheats`, act on the sender only and announce it.
+* **Powerup effect** (`CoopPowerupResend=1`): `player powerup` broadcasts message
+  `0x39` (activator, effect `0x35`) once; it is sent again to the other members 400 ms
+  later, in case their client did not yet have the just-teleported activator.
 
 ## Timing
 
@@ -195,17 +232,21 @@ then one line per session event: `[KPCFix Co-op] g=<generation> e=<epoch>
 seq=<n> <PHASE> <event> <detail>`. Useful events: `change`, `world-loaded`,
 `intro-armed`/`intro-start`/`intro-finished`, `spawn`, `spawn-start`, `exit-seen`,
 `exit`/`exit-refused`, `script-event player … -> players=N`, `item shared item=…`,
-`secret`, `script …` (with `TraceScripts=1`). `KPCFix.log` (client) prints one
+`secret`, `script …` (with `TraceScripts=1`), `spawner reference moved…`,
+`inventory-saved`/`inventory-restored`, `item-respawn …`, `cheat …`, `powerup …`. `KPCFix.log` (client) prints one
 `Loading world: …` line per load and the hold/release lines.
 
 ## Known limitations
 
 * Spawn spread does not check doors/moving models or live actors.
-* Menu items not done yet: an Audio-menu checkbox for `KeepAudioOnFocusLoss`, and
-  a "connected" indicator plus a Disconnect button in the Escape menu (the Audio
-  screen is `cshell 0x7360`, 8 fixed widgets).
+* Menu items not done yet: a "connected" indicator and a Disconnect button in the
+  Escape menu. The Audio-menu checkbox for `KeepAudioOnFocusLoss` exists; its state
+  display and position are being fixed (prompt A).
 * Stock clients (without KPCFix) see no loading picture and are not held.
-* No world maps between stages; no saves or persistence between sessions.
+* No world maps between stages; no saves. Inventory persists within one server run
+  only (lost when a player disconnects or the server restarts).
+* Only the host can start level-ending `CTriggerCommand` sequences; switches/levers
+  that end a level are not gated yet.
 * The `CheatScripts`-gated Nightmare loadout is not forced.
 * Worlds after R1M3A have been played only partly in co-op: report anything that
   differs from single player with the server log.

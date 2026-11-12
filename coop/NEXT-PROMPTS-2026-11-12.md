@@ -8,6 +8,9 @@ expected bytes; every change gets tests (client: `source/test_*.py` + `audit_sit
 `suite-coop.sh`; server: `unit-coop.sh`, `matrix-coop.sh`). Install for testing per
 [UPGRADE-TEST-INSTALL.md](UPGRADE-TEST-INSTALL.md). Commit on the branch; don't push.
 
+**Status:** Prompt B is done (`f37135a`, Server Tools `7dbba5eb`, installed; results go in the
+handoff's test plan). Prompt A runs in worktree branch `claude/zealous-cori-401c64`.
+
 ---
 
 ## Prompt A: client (cshell Audio checkbox)

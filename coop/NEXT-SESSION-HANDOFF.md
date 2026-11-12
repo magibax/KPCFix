@@ -1,18 +1,105 @@
-# Co-op next-session handoff (2026-11-12, whole-campaign pass)
+# Co-op handoff: next sweep = two-PC test results (2026-11-12)
 
 How everything works: [COOP-MVP.md](COOP-MVP.md). Settings: [CONFIGURATION.md](CONFIGURATION.md).
-Older evidence: [archive/COOP-MVP-EVIDENCE-2026-11-12.md](archive/COOP-MVP-EVIDENCE-2026-11-12.md).
+Project rules and tooling: [CLAUDE.md](../CLAUDE.md). Older evidence:
+[archive/COOP-MVP-EVIDENCE-2026-11-12.md](archive/COOP-MVP-EVIDENCE-2026-11-12.md).
+
+**The next session starts from the user's two-PC test report.** Fill in the "Result"
+column of [Test plan and results](#test-plan-and-results) (or paste the report in chat),
+read the logs listed under [Logs to collect](#logs-to-collect), then for each failure
+follow [If a test fails](#if-a-test-fails) and update the triage table (move confirmed
+items to "Live-confirmed").
 
 ## Where things stand
 
-* **Branch:** `coop/mvp-lobby`. `main` is untouched. The whole-campaign pass is commit
-  `6d59bfe`; the playtest fixes below are in the working tree on top of it.
+* **Branch:** `coop/mvp-lobby` (local commits since `6966363` are not pushed; `main`
+  untouched).
+  * `f37135a` Server Tools: spawner radius from the nearest player, cheat keybinds,
+    inventory persistence, pickup respawn, powerup re-send, `!kill` `!all` `!class`
+    `!changelevel` (prompt B of [NEXT-PROMPTS-2026-11-12.md](NEXT-PROMPTS-2026-11-12.md)).
+  * `d00dee5` and the following docs commit: findings, install, this handoff, `CLAUDE.md`.
+  * Prompt A (client: Audio checkbox state and position) runs in its own session on
+    worktree branch `claude/zealous-cori-401c64` (`.claude/worktrees/zealous-cori-401c64`),
+    started at `6966363`. Not merged here. Its build needs a new laptop package. Both
+    branches edit this file: expect a small merge conflict.
+* **Installed** (desktop `C:\Games\Psycho` = game client + host + dedicated server;
+  `C:\KPCTest\smoke1\Psycho` = disposable smoke server):
+
+  | Part | Hash | Commit | Backup of what it replaced |
+  | --- | --- | --- | --- |
+  | Server Tools `server.dll` | `7dbba5eb` | `f37135a` | `C:\KPCTest\backup\games-psycho-20261112-before-7dbba5eb` (previous `035f23a2` files; the moved proxy as `server.dll.active-moved`); smoke1: `C:\KPCTest\backup\smoke1-20261112-before-7dbba5eb` |
+  | Client `dinput.dll` | `2ab53bd7` | `2b50501` | `C:\KPCTest\backup\games-psycho-20261112-before-2ab53bd7` |
+
+  The laptop needs only the client: package `C:\KPCTest\pkg-client-2ab53bd7` (unchanged by
+  `7dbba5eb`; Server Tools runs only on the hosting PC).
+* **Tests passed** for `7dbba5eb`: server unit tests 26/26 (64/32-bit), emulator matrix
+  48 modes, `check_live.py` (both modes), native smoke Coop/Normal/PassThrough on `smoke1`
+  (`C:\KPCTest\smoke-7dbba5eb-*.json`). Client (unchanged): suite 20/20, `audit_sites.py`.
+* **Decisions waiting for the user:** keep or drop chat `!gimmie` / `!nextarmor` now
+  that the keybinds work; is `CoopKeepOnDeath=1` (items kept after a death) the wanted
+  default; should `!class` need `kpc_cheats 1` (it does now).
+
+## Test plan and results
+
+Server: `Start-KPC-Selected-Server.ps1 -Map "worlds\realm1\R1M2B" -Cheats Enabled -Coop`
+(`[Coop] CoopCampaign=1`, `CoopIntro=1`, `TraceScripts=1`). Host = the first player in
+(`*` in `!coop`). Server console `kpc_cheats 1` unless a step says otherwise. Result:
+PASS / FAIL / not run, plus what was seen.
+
+| # | Row | Do | Expected | Log marker (`KPCServerTools.log`) | Result |
+| --- | --- | --- | --- | --- | --- |
+| T1 | — | Connect from the server browser | no water sound behind "Connecting" | — | |
+| T2 | — | Host `!difficulty coldsweat`, then `!campaign water` | R1M0 intro starts without a pause | `intro-start` | |
+| T3 | 1, 3 | R1M1A: non-host walks into the exit and the victory trigger; non-host takes the gauntlets | exit and victory refused ("Only the host"), host can start both; gauntlets sequence moves only the picker; both get the gauntlets | `exit-refused`, `sequence-refused`, `-> activator` | |
+| T4 | — | Shoot each other | no damage | — | |
+| T5 | 14 | One player picks up a weapon, a pamphlet, ammo; find a secret | the other gets weapon/pamphlet and the ammo amount; both see the secret message | `shared item=`, `shared ammo=`, `secret found` | |
+| T6 | 22 | Host `!changelevel R4M1A`; the non-host walks alone into a spawner room while the host stays back | monsters spawn | `spawner reference moved to the nearest player` | |
+| T7 | 20, 23 | Each player presses GimmieGimmieGimmie, NextArmor, CyclePlayerClass (bind them in Setup > Controls) | only the presser gets items / changes class; chat `<name> used ... (key)` | `cheat [Co-op] ... (key)` | |
+| T8 | 20 | `kpc_cheats 0`, press the keys and type `!all` | "Cheats are disabled", nothing changes | — | |
+| T9 | 23 | With weapons and ammo: `!class demon`, then the cycle key 4 times | same weapons, armour, ammo afterwards; model changes | `is now Demon` | |
+| T10 | 8 | Collect weapons, armour pieces, shards, ammo; host takes the exit | all back about 0.5 s after spawning in the next world (both players) | `inventory-saved`, `inventory-restored ... gives=` | |
+| T11 | 8 | Host `!abort`, then `!campaign water` | items kept in the lobby and in R1M0 | `inventory-restored` | |
+| T12 | 26, 8 | `!kill` | normal death and respawn; items back | `used !kill`, `inventory-restored` | |
+| T13 | 27 | `!all` | all armour, weapons, full ammo, only for the typer | `used !all` | |
+| T14 | 24 | Take a weapon, ammo and an armour shard; then stand on a taken spot | each returns after 15 s; waits while someone stands on it; armour pieces, pamphlets, keys never return | `item-respawn scheduled/waiting/respawned` | |
+| T15 | 25 | One player takes an armour piece, the other watches the cutscene | watcher sees the powerup glow/animation | `powerup effect 0x35 re-sent to 1 observer(s)` | |
+| T16 | 28 | Non-host `!changelevel R1M2A`; host `!changelevel worlds\realm1\R1M2A` from the lobby and again during play; `!changelevel R9M9Z` | refused / loading picture, everyone arrives / "Unknown world"; the next natural exit goes to R1M2B | `change [Co-op] Host changed level` | |
+| T17 | 7 | R1M2A belt lift | lift goes down, the exit at (1504,−208,−2944) is reachable and changes to R1M2B | `exit-seen` | |
+| T18 | 19 | Break a window as the non-host | shards visible on both PCs | client `KPCFix.log` window-break line (`LogWindowBreaks=1`) | |
+| T19 | 15 | Setup > Audio checkbox (needs the prompt A client) | lit = on, placed in the gap above Enable Sound FX | — | |
+| T20 | — | R2M2A garage; any cutscene camera | Ballbuster clears the door; camera not choppy | — | |
+
+Anything else seen (crashes, wrong player affected, sounds behind the loading picture,
+players stuck in the floor (row 17)): add a line under the table with the world and time.
+
+## Logs to collect
+
+* Desktop: `C:\Games\Psycho\KPCServerTools.log` (server) and `C:\Games\Psycho\KPCFix.log` (client).
+* Laptop: `KPCFix.log` in its game folder.
+* Note the time of each failure; with `[Coop] TraceTiming=1` co-op lines carry `t=<ms>`.
+
+## If a test fails
+
+* **T6 spawner:** no `spawner reference moved` line → the reference was not a player
+  (sender of message `0x27`, `d501a`) or only one player was in the list. Check the
+  `TraceScripts` lines for the `CTriggerCommand` play, then the spawner's `+0x170`.
+* **T7/T8 keys:** nothing at all → the client never sent `0x3b` (keybind missing in the
+  client config) or the hook `0xfead7` is off (`effective CoopCheatKeys=1` line).
+* **T10–T12 persistence:** no `inventory-saved` → the snapshot saw the player as dead
+  (`vtable+0x60`) or not in the live list; `inventory-restored ... gives=0` with items
+  missing → `f3440` refused them (class or gauntlets rule, `f3467`–`f349b`).
+* **T14 respawn:** `scheduled` but never `respawned` → the item update stops for hidden
+  items or `+0x81` was cleared; never `scheduled` → the item already had `Respawn` set
+  or has an expiry (`+0xe4`).
+* **T15 powerup:** re-sent but still invisible → the client effect `0x35` handler
+  (cshell SFX table `0x201bf94c`) probably plays only for the local player; then the fix
+  belongs in the client.
+* **T16 changelevel:** a "maplist" error → `coop_prepare_maplist` could not write the slot.
 
 ## Playtest 2026-11-12 (two PCs, whole campaign): triage
 
-Evidence: `C:\Games\Psycho\KPCServerTools.log` (session from R1M0 to R1M2A), object.lto
-static analysis. Status: **fixed** = in the working tree, unit and emulator tested, not yet
-two-PC tested.
+Evidence: `C:\Games\Psycho\KPCServerTools.log` (R1M0 to R1M2A, R4M1A, R3M0), object.lto
+static analysis. **fixed** = committed, unit and emulator tested, not yet two-PC tested.
 
 | # | Report | Cause | Status |
 | --- | --- | --- | --- |
@@ -43,33 +130,17 @@ two-PC tested.
 | 25 | Powerup animation only seen by the picker since row 1 | `player powerup` (`f6ff0`) is not per client: it broadcasts `0x39` (activator object, effect `0x35`) to every client; `player animate` is a server-side animation of the activator's model. Probable cause: an observer's client drops the effect when it does not hold the just-teleported activator object yet | **probable fix** (`CoopPowerupResend`): the effect is re-sent to every other member 400 ms later. Needs the two-PC test; if still invisible, check the client SFX handler for effect `0x35` (cshell table `0x201bf94c`) for a local-player test |
 | 26 | `!kill` | — | **added**: damage entry `vtable+0x50` with the damage-brush record (`2f1c0` layout), damager = the player itself (passes `CoopFriendlyFire`), kill-invulnerable set |
 | 27 | Chat "everything" cheat | — | **added**: `!all` (`kpc_cheats 1`): every armour piece, every weapon, 1000 of each ammo (capped by `f3440`) |
-| 28 | Host `!changelevel <world>` | — | **added** (`coop_session_changelevel`, `coop_campaign_find`): campaign mode, host only, `R1M2A` or `worlds
-ealm1\R1M2A`; from the lobby or during play; same world change as an exit; the selection becomes "from <world>" so natural exits continue along WORLDORDER (decision: carries on, not a one-off); `!abort` returns to the lobby and the full selection |
-* **Builds in the working tree:** server `server-tools/KPCServerTools.dll` (build with
-  `C:\KPCTest\pass2\build-coop.sh`, byte-identical across rebuilds) and client
-  `dinput.dll` (`C:\KPCTest\clientbuild\build-coop.sh`). Hashes: `SHA256SUMS`,
-  `server-tools/SHA256SUMS-Server-Tools`.
-* **Installed** in `C:\Games\Psycho` (desktop, host and server) and
-  `C:\KPCTest\smoke1\Psycho` (disposable test server): see the latest backup folder
-  in `C:\KPCTest\backup\` for what each install replaced. The laptop installs from
-  `C:\KPCTest\pkg-client-*` or GitHub. How to upgrade:
-  [UPGRADE-TEST-INSTALL.md](UPGRADE-TEST-INSTALL.md).
-* **Current install (2026-11-12, commit `f37135a`):** `C:\Games\Psycho` has client
-  `dinput.dll` `2ab53bd7` (unchanged) and Server Tools `7dbba5eb`; backup
-  `C:\KPCTestackup\games-psycho-20261112-before-7dbba5eb` (holds the previous
-  `035f23a2` files and the moved `server.dll` as `server.dll.active-moved`). `smoke1` has
-  `7dbba5eb` too (backup `C:\KPCTestackup\smoke1-20261112-before-7dbba5eb`). Laptop
-  package (client only, unchanged): `C:\KPCTest\pkg-client-2ab53bd7`.
+| 28 | Host `!changelevel <world>` | — | **added** (`coop_session_changelevel`, `coop_campaign_find`): campaign mode, host only, `R1M2A` or `worlds\realm1\R1M2A`; from the lobby or during play; same world change as an exit; the selection becomes "from <world>" so natural exits continue along WORLDORDER (decision: carries on, not a one-off); `!abort` returns to the lobby and the full selection |
 
 ## Live-confirmed (two PCs)
 
 R1M2B lobby, `!campaign` start, loading picture and spawn hold (players enter alive),
 R1M0 and R1M1A intros, single-player start in R1M1A, gauntlets pickup present,
 gauntlets equip sequence, the R1M1A lever (door, camera, Headless), natural exits,
-music, health bars, monster spawners. Single player: `LocalServerMinStepMs=16` fixes
-the R2M2A Ballbuster above 60 FPS.
+music, health bars, monster spawners (host-triggered). Single player:
+`LocalServerMinStepMs=16` fixes the R2M2A Ballbuster above 60 FPS.
 
-## Built and tested, waiting for a two-PC test
+## Built earlier, still waiting for a two-PC test
 
 | Item | Setting / command |
 | --- | --- |
@@ -85,74 +156,26 @@ the R2M2A Ballbuster above 60 FPS.
 | Client: chat messages 8 s | `ChatMessageSeconds=8` |
 | Client: `LocalServerMinStepMs` default 16; VSync at refresh rate, no 60 cap (`DDrawCompat-CLIENT.ini`) | defaults |
 
-Tests (Server Tools `7dbba5eb`): server unit tests 26/26 (64- and 32-bit, new `test_coop_inventory.c`),
-emulator matrix 48 modes (new: spawner reference, pickup respawn, cheat keys, `!kill`/`!class`/`!all`,
-inventory restore, powerup re-send, `!changelevel`), `check_live.py` both modes, native server
-smoke (Coop/Normal/PassThrough) on `smoke1`, client suite 20/20, `audit_sites.py` (client cshell session: chat command bits, keep running on focus loss + Audio checkbox, window-break log).
-
-## Two-PC test (next)
-
-Both PCs on the current client; server started with
-`Start-KPC-Selected-Server.ps1 -Map "worlds\realm1\R1M2B" -Cheats Enabled -Coop`
-(`[Coop] CoopCampaign=1`, `CoopIntro=1`, `TraceScripts=1`).
-
-1. Connect from the browser: no water sound behind "Connecting".
-2. Host `!difficulty coldsweat`, then `!campaign water`: R1M0 intro starts with no pause.
-3. R1M1A: the non-host walks into the exit (refused, "Only the host"); the gauntlets
-   sequence moves only the player who triggered it; both get the gauntlets; shoot each
-   other (no damage).
-4. Pick up a weapon or pamphlet with one player: the other gets it (`item shared` in
-   the log); find a secret (both see the message).
-5. R2M2A garage: the Ballbuster clears the door and shoots the car.
-6. Watch a cutscene camera: report if it looks choppy (62.5 Hz server updates).
-
-Server Tools `7dbba5eb` (rows 8, 20, 22–28). Host = the first player in (marked `*` in `!coop`):
-
-7. **Spawner room (row 22):** host `!changelevel R4M1A`. The non-host walks into the
-   head-spawn room alone while the host stays at the start: Headless spawn. Log:
-   `spawner reference moved to the nearest player`.
-8. **Exits still host-only:** in R1M1A the non-host walks into the victory trigger:
-   refused ("Only the host"); the host can still start it.
-9. **Cheat keys (rows 20, 23):** server console `kpc_cheats 1`. Each player binds and
-   presses GimmieGimmieGimmie, NextArmor and CyclePlayerClass: only the presser gets
-   the items or changes class; chat `... used ... (key)`. With `kpc_cheats 0`: "Cheats
-   are disabled" and nothing changes. `!class demon` / `!class` also work.
-10. **Class keeps items (row 23):** with weapons and ammo, cycle the class 4 times: still
-    the same weapons, armour and ammo.
-11. **Persistence (row 8):** collect weapons, armour, shards and ammo, then take the exit:
-    everything is back about half a second after spawning in the next world (log
-    `inventory-saved` / `inventory-restored`). Same after `!abort` into the lobby and a
-    new `!campaign`, and after `!kill`.
-12. **Pickup respawn (row 24):** pick up a weapon, ammo and an armour shard: each
-    comes back after 15 s. Stand on the spot: it waits until you step off.
-    Armour pieces, pamphlets and keys do not come back.
-13. **Powerup (row 25):** one player takes an armour piece while the other watches the
-    cutscene: does the watcher see the powerup glow/animation? (log `powerup effect
-    0x35 re-sent to 1 observer(s)`).
-14. **`!kill` (row 26):** dies, normal respawn; items back (with `CoopKeepOnDeath=1`).
-15. **`!all` (row 27):** with `kpc_cheats 1`: all armour, weapons, full ammo, only for the typer.
-16. **`!changelevel` (row 28):** non-host `!changelevel R1M2A` is refused; host
-    `!changelevel worlds\realm1\R1M2A` from the lobby and again during play: the loading
-    picture shows, everyone arrives, and the next natural exit goes to R1M2B.
-
-Send `KPCServerTools.log` and both `KPCFix.log`.
-
 ## Open items (in order)
 
-1. ~~**Chat key capture**~~: fixed (row 13).
-2. **Smooth cutscene cameras** (client): interpolate the server's camera samples
+1. Act on the two-PC results above.
+2. **World held behind the loading picture** (row 9): no simulation until every member
+   has spawned.
+3. **Only the host skips cutscenes** (row 6): find the client message → `endingscript` path.
+4. **Collectables HUD in co-op** (row 10) and the **Disconnect menu item** (row 21).
+5. **Smooth cutscene cameras** (client): interpolate the server's camera samples
    (`0x3d` sub 5 from `c58c0`) between frames.
-3. ~~Audio menu option for `KeepAudioOnFocusLoss`~~: done (row 15).
-4. **Collision-checked spawn allocator** (`coop/GENERAL-ALLOCATOR.md`).
-5. **Protected waiting state** for a player between client enter (`0xfdfb0`) and spawn
-   (`0xfec56`): removes the death sound behind the loading picture.
+6. **Switches/levers host gate** (row 3: `CSwitch` `44dd6` and other command-list owners).
+7. **Collision-checked spawn allocator** (`coop/GENERAL-ALLOCATOR.md`) and a
+   **protected waiting state** between client enter (`0xfdfb0`) and spawn (`0xfec56`).
 
 ## Tooling
 
 * Installing a new build on the test PCs: [UPGRADE-TEST-INSTALL.md](UPGRADE-TEST-INSTALL.md).
-* `C:\KPCTest\pass2\`: `build-coop.sh <dir>`, `unit-coop.sh`, `matrix-coop.sh <dir>`.
+* `C:\KPCTest\pass2\`: `build-coop.sh <dir>`, `unit-coop.sh`, `matrix-coop.sh <dir>` (48 runs).
 * `C:\KPCTest\clientbuild\`: `build-coop.sh <dir>`, `suite-coop.sh`.
 * `coop/tools/Invoke-CoopServerSmoke.ps1` (native server smoke; never on a folder with
   a running server).
 * RE: `C:\KPCTest\re-venv` (capstone, pefile), `C:\KPCTest\re` (original binaries),
-  `C:\KPCTest\scratch-*` notes. Docker Desktop must be running for builds.
+  `C:\KPCTest\scratch-*` notes, `C:\KPCTest\scratch-campaign\objects.json` (every
+  world's objects and properties). Docker Desktop must be running for builds.
