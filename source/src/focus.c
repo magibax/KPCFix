@@ -57,8 +57,28 @@ int kpc_remote_multiplayer(void){
     mode=*(const U32 *)(session+SESSION_MODE);
     return mode!=4u&&mode!=5u&&*(const U32 *)(session+SESSION_LOCAL_SERVER)==0;
 }
+/* In-game toggle: the console variable KeepAudioOnFocusLoss (type
+ * "KeepAudioOnFocusLoss 0" or "1" in the console). It is created with the INI
+ * value the first time the window loses focus (the console exists by then)
+ * through the console's own lookup 0x1b010 and setter 0x1abd0 on its table
+ * 0xab3d8, the same calls the InputRate lock uses; its float value is at
+ * variable+0x18 (as read by the window procedure, 0x6fa5). */
+typedef void *(CDECL *CvarLookup)(void *,const char *);
+typedef U32 (CDECL *CvarSet)(void *,const char *,const char *,U32,U32,U32,U32);
+static const char cvar_name[]="KeepAudioOnFocusLoss";
+static int focus_keep_audio(void){
+    U8 *var;
+    if(!g_focus_client)return 1;
+    var=(U8 *)((CvarLookup)(g_focus_client+0x1b010u))(g_focus_client+0xab3d8u,cvar_name);
+    if(!var){
+        ((CvarSet)(g_focus_client+0x1abd0u))(g_focus_client+0xab3d8u,cvar_name,"1",0,0,0,0);
+        var=(U8 *)((CvarLookup)(g_focus_client+0x1b010u))(g_focus_client+0xab3d8u,cvar_name);
+        if(!var)return 1;
+    }
+    return *(const float *)(var+0x18)!=0.0f;
+}
 U32 __attribute__((thiscall)) kpc_focus_release(void *sound){
-    if(g_focus_enabled&&kpc_remote_multiplayer()){skipped=1;return 1;}
+    if(g_focus_enabled&&kpc_remote_multiplayer()&&focus_keep_audio()){skipped=1;return 1;}
     skipped=0;
     return ((SoundFn)(g_focus_client+0x74b90u))(sound);
 }

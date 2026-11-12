@@ -47,9 +47,27 @@ for site, name in ((0x6d5c, '_kpc_focus_release'), (0x6cdb, '_kpc_focus_restore'
     assert code[0] == 0xe8 and (CLIENT + site + 5 + struct.unpack('<i', code[1:])[0]) & 0xffffffff == rig.dllbase + syms[name]
 assert b'Focus loss: remote multiplayer keeps server-owned sounds running' in bytes(rig.logs)
 calls = stubs(rig)
+# Console variable KeepAudioOnFocusLoss: lookup 0x1b010 / setter 0x1abd0
+# (cdecl, recording stubs); created with "1" on first use, value at +0x18.
+CVAR = 0x5c3000; cvar = {'exists': False, 'sets': []}
+def cvar_lookup(u, at, size, user):
+    sp = u.reg_read(x.UC_X86_REG_ESP); assert rig.cstr(read(u, sp + 8)) == 'KeepAudioOnFocusLoss'
+    u.reg_write(x.UC_X86_REG_EAX, CVAR if cvar['exists'] else 0); u.reg_write(x.UC_X86_REG_EIP, read(u, sp)); u.reg_write(x.UC_X86_REG_ESP, sp + 4)
+def cvar_set(u, at, size, user):
+    sp = u.reg_read(x.UC_X86_REG_ESP); cvar['sets'].append((rig.cstr(read(u, sp + 8)), rig.cstr(read(u, sp + 12))))
+    cvar['exists'] = True; u.mem_write(CVAR + 0x18, struct.pack('<f', 1.0))
+    u.reg_write(x.UC_X86_REG_EAX, 1); u.reg_write(x.UC_X86_REG_EIP, read(u, sp)); u.reg_write(x.UC_X86_REG_ESP, sp + 4)
+rig.u.hook_add(uc.UC_HOOK_CODE, cvar_lookup, begin=CLIENT + 0x1b010, end=CLIENT + 0x1b010)
+rig.u.hook_add(uc.UC_HOOK_CODE, cvar_set, begin=CLIENT + 0x1abd0, end=CLIENT + 0x1abd0)
 # Remote multiplayer (mode 2, no local server): neither pause nor resume.
 session(rig, 2)
 assert focus(rig, calls, True) == [] and focus(rig, calls, False) == []
+assert cvar['sets'] == [('KeepAudioOnFocusLoss', '1')], cvar                     # created once with the default
+# "KeepAudioOnFocusLoss 0" typed in the console: stock pause and resume again.
+rig.u.mem_write(CVAR + 0x18, struct.pack('<f', 0.0))
+assert focus(rig, calls, True) == [('pause', SOUND)] and focus(rig, calls, False) == [('resume', SOUND)]
+rig.u.mem_write(CVAR + 0x18, struct.pack('<f', 1.0))
+assert focus(rig, calls, True) == [] and focus(rig, calls, False) == [] and len(cvar['sets']) == 1
 # Single player / hosting (local server present): stock pause and resume.
 session(rig, 2, local_server=0x1234)
 assert focus(rig, calls, True) == [('pause', SOUND)] and focus(rig, calls, False) == [('resume', SOUND)]

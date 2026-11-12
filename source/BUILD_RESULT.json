@@ -1,8 +1,8 @@
 {
   "output": "dinput.dll",
   "platform": "windows",
-  "sha256": "0215f16dda48b95f635c1c17c10d9e192671c321a2d103b09456454f0412037d",
-  "bytes": 50688,
+  "sha256": "d0ab43f9d6e5455bd55c1b4167a3b8be44b19a636c0364b648d34a026de89706",
+  "bytes": 54272,
   "exports": [
     "DirectInputCreateA",
     "DirectInputCreateW",
@@ -17,8 +17,8 @@
   "elf_to_coff": [
     {
       "object": "kpcfix.obj",
-      "dir32": 784,
-      "rel32": 189
+      "dir32": 825,
+      "rel32": 182
     },
     {
       "object": "sha256.obj",
@@ -47,8 +47,18 @@
     },
     {
       "object": "loading.obj",
-      "dir32": 107,
-      "rel32": 8
+      "dir32": 111,
+      "rel32": 9
+    },
+    {
+      "object": "console.obj",
+      "dir32": 11,
+      "rel32": 4
+    },
+    {
+      "object": "camera.obj",
+      "dir32": 75,
+      "rel32": 2
     },
     {
       "object": "netwatch.obj",
@@ -62,7 +72,7 @@
     },
     {
       "object": "focus.obj",
-      "dir32": 22,
+      "dir32": 29,
       "rel32": 2
     },
     {

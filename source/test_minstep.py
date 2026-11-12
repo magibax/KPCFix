@@ -64,10 +64,14 @@ kind, _ = frame(rig, now - last, last=last); assert kind == 'simulate', kind
 assert frame(rig, 0.0) == ('skip', 100.0)                         # nothing to carry
 assert frame(rig, -0.001) == ('skip', 100.0)
 assert frame(rig, 0.25)[0] == 'simulate'                          # the stock 0.2 s maximum still applies after
-# Default: Timing V3 clock_v2 unchanged.
-rig0 = Rig(); rig0.factory(); assert not rig0.messages
+# 0: Timing V3 clock_v2 unchanged.
+rig0 = Rig(settings={'LocalServerMinStepMs': 0}); rig0.factory(); assert not rig0.messages
 assert bytes(rig0.u.mem_read(SLOT, 8)) == bytes([0xd9, 0x86, 0x14, 0x02, 0x00, 0x00, 0xd9, 0xe4])
 assert b'LocalServerMinStepMs' not in bytes(rig0.logs)
+# Default (key absent): 16 ms, the user-confirmed R2M2A Ballbuster fix above 60 FPS.
+rigd = Rig(); rigd.factory(); assert not rigd.messages
+assert bytes(rigd.u.mem_read(SLOT, 1)) == bytes([0xe9])
+assert b'LocalServerMinStepMs=0x00000010' in bytes(rigd.logs)
 rigb = Rig(settings={'LocalServerMinStepMs': 51}); rigb.factory()
 assert any('LocalServerMinStepMs' in m for m in rigb.messages), rigb.messages
-print(args.fixtures.name, 'passed minimum local-server step: simulate at/above minimum, skip and carry below, no carry for <=0, default clock_v2, limits')
+print(args.fixtures.name, 'passed minimum local-server step: simulate at/above minimum, skip and carry below, no carry for <=0, 0 keeps clock_v2, default 16, limits')

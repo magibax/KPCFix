@@ -19,6 +19,14 @@ typedef struct {
     U32 close_call, screen_draw, draw_call, render_frame, multiplayer_test;
     /* Spawn hold (loading.c): the 0x17 handler's reply calls; zero = off. */
     U32 spawn_reply_call, spawn_reply, initvars_call, spawn_initvars;
+    /* Chat/message lifetime: MOV [ESP+0x10], 3.0f in the message handler; zero = off. */
+    U32 chat_duration;
+    /* Chat typing (console.c): OnCommandOn vtable slot and original, chat
+     * editor offset in the shell and its "typing" byte; zero = off. */
+    U32 command_slot, command_on, chat_editor, chat_editing;
+    /* Smooth scripted cameras (camera.c): the sample store call, its target
+     * and the global holding the camera object; zero = off. */
+    U32 camera_set_call, camera_set, camera_global;
     /* Server-connection timeout (netwatch.c): global holding the client shell. */
     U32 client_shell_global;
 } ShellLayout;

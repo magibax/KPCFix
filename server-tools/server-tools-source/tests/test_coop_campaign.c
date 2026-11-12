@@ -55,23 +55,38 @@ static void test_selection_commands(void){
  CoopSession s;
  lobby(&s);
  assert(s.sel_mode==COOP_SEL_FULL&&s.route_len==48&&!strcmp(coop_route_label(&s,0),"R1M0"));
- cmd(&s,B,"!campaign");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"full campaign (R1M0..R5M1B, 48 worlds)"));
+ cmd(&s,B,"!campaign");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"full campaign (R1M0..R5M1B, 48 worlds)")&&strstr(r.msg,"!campaign full|water"));
  assert(strlen(r.msg)<COOP_MSG_MAX);
- cmd(&s,B,"!campaign realm fire");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Only the host"));
- cmd(&s,A,"!ready");cmd(&s,B,"!ready");assert(coop_ready_count(&s)==2);
- cmd(&s,A,"!campaign  from   Earth");
- assert(r.action==COOP_ACT_ANNOUNCE&&strstr(r.msg,"from Earth (R2M0..R5M1B, 36 worlds)")&&coop_ready_count(&s)==0);
- cmd(&s,A,"!campaign from 2");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Already selected"));
- cmd(&s,A,"!campaign realm demon");assert(strstr(r.msg,"realm Fire (R4M0..R4M4B, 11 worlds)"));
- cmd(&s,A,"!campaign realm nightmare");assert(strstr(r.msg,"realm Nightmare (R5M1A..R5M1B, 2 worlds)"));
- cmd(&s,A,"!campaign from narnia");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Usage"));
- cmd(&s,A,"!campaign sideways");assert(strstr(r.msg,"Usage"));
- cmd(&s,A,"!campaign from earth now");assert(r.action==COOP_ACT_NONE);        /* three words: not a command */
+ cmd(&s,B,"!campaign fire");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Only the host"));
+ /* Malformed or unknown words: the help reply, never silence or a change. */
+ cmd(&s,A,"!campaign earth realm fire");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Use: !campaign full")&&s.phase==COOP_PHASE_LOBBY);
+ cmd(&s,A,"!campaign narnia");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Use:"));
+ cmd(&s,A,"!campaign realm fire");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Use:"));    /* realm-only form removed */
+ cmd(&s,A,"!campaign from narnia");assert(strstr(r.msg,"Use:"));
+ cmd(&s,A,"!campaign earth, fire");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Use:"));
+ assert(strlen(r.msg)<COOP_MSG_MAX&&s.sel_mode==COOP_SEL_FULL);
  cmd(&s,A,"!ready now");assert(r.action==COOP_ACT_NONE&&coop_ready_count(&s)==0); /* arguments only for !campaign */
- cmd(&s,A,"!campaign full");assert(r.action==COOP_ACT_ANNOUNCE&&s.route_len==48);
- /* A joining member does not change the selection. */
- spawn(&s,0x300u,"Carol",10);assert(s.sel_mode==COOP_SEL_FULL);
- cmd(&s,A,"!help");assert(strstr(r.msg,"!campaign")&&strlen(r.msg)<COOP_MSG_MAX);
+ cmd(&s,A,"!help");assert(strstr(r.msg,"!campaign full|water")&&strlen(r.msg)<COOP_MSG_MAX);
+ /* Minimum players applies; readiness does not. */
+ {CoopSession one;coop_session_init(&one,2,3);coop_session_enable_campaign(&one);spawn(&one,A,"Alice",0);
+  cmd(&one,A,"!campaign earth");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Need 2 players")&&one.phase==COOP_PHASE_LOBBY&&!one.started);}
+ /* !campaign <realm> starts now from that realm's first world and carries on to the end. */
+ cmd(&s,A,"!ready");assert(coop_ready_count(&s)==1);
+ cmd(&s,A,"!campaign  Earth");
+ assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==0&&strstr(r.msg,"Host started from Earth (R2M0..R5M1B, 36 worlds) -> R2M0"));
+ assert(strlen(r.msg)<COOP_MSG_MAX&&s.started&&s.start_pending&&s.phase==COOP_PHASE_TRANSITION&&coop_ready_count(&s)==0);
+ assert(!strcmp(coop_target_world(&s,0),"realm2/r2m0"));
+ cmd(&s,A,"!campaign fire");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Already playing"));
+ /* Aliases and the full playthrough. */
+ {CoopSession t;lobby(&t);cmd(&t,A,"!campaign from 4");assert(r.action==COOP_ACT_CHANGE_WORLD&&strstr(r.msg,"from Fire (R4M0..R5M1B")&&strstr(r.msg,"-> R4M0"));}
+ {CoopSession t;lobby(&t);cmd(&t,A,"!campaign demon");assert(strstr(r.msg,"-> R4M0"));}
+ {CoopSession t;lobby(&t);cmd(&t,A,"!campaign nightmare");assert(strstr(r.msg,"from Nightmare (R5M1A..R5M1B, 2 worlds) -> R5M1A"));}
+ {CoopSession t;lobby(&t);cmd(&t,A,"!campaign water");assert(t.sel_mode==COOP_SEL_FULL&&strstr(r.msg,"full campaign (R1M0..R5M1B, 48 worlds) -> R1M0"));}
+ {CoopSession t;lobby(&t);cmd(&t,A,"!campaign full");assert(r.action==COOP_ACT_CHANGE_WORLD&&t.route_len==48&&strstr(r.msg,"-> R1M0"));
+  /* A joining member does not change the selection. */
+  spawn(&t,0x300u,"Carol",10);assert(t.sel_mode==COOP_SEL_FULL);}
+ /* !start still runs the current selection with everyone ready. */
+ {CoopSession t;lobby(&t);cmd(&t,A,"!ready");cmd(&t,B,"!ready");cmd(&t,A,"!start");assert(r.action==COOP_ACT_CHANGE_WORLD&&strstr(r.msg,"-> R1M0"));}
 }
 static void test_full_route_and_exits(void){
  CoopSession s;
@@ -115,7 +130,8 @@ static void test_full_route_and_exits(void){
 static void test_realm_completion_and_abort(void){
  CoopSession s;
  lobby(&s);
- cmd(&s,A,"!campaign realm water");
+ /* A one-realm slice (no longer a chat command) completes at the realm boundary. */
+ assert(coop_session_select(&s,COOP_SEL_REALM,1));
  cmd(&s,A,"!ready");cmd(&s,B,"!ready");cmd(&s,A,"!start");
  load(&s,"worlds\\realm1\\R1M0",2000);spawn(&s,A,"Alice",2100);spawn(&s,B,"Bob",2100);
  /* Jump to the realm's last world (R1M4C) and leave it toward R2M0. */
@@ -123,24 +139,30 @@ static void test_realm_completion_and_abort(void){
  coop_session_exit(&s,"worlds/realm2/r1m4c",9000,&r);assert(r.action!=COOP_ACT_CHANGE_WORLD);   /* not the successor */
  s.reject_reply_epoch=0;
  coop_session_exit(&s,"worlds/realm2/r2m0",9000,&r);
- assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&strstr(r.msg,"route complete -> lobby R1M0"));
- assert(s.completed==1&&s.lobby_pending);
- load(&s,"worlds\\realm1\\R1M0",10000);
+ assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&strstr(r.msg,"route complete -> lobby R1M2B"));
+ assert(s.completed==1&&s.lobby_pending&&!strcmp(coop_target_world(&s,COOP_TARGET_LOBBY),"realm1/r1m2b"));
+ load(&s,"worlds\\realm1\\R1M2B",10000);
  assert(s.phase==COOP_PHASE_LOBBY&&!s.started&&s.generation==2&&coop_present_count(&s)==2&&coop_ready_count(&s)==0);
  assert(s.sel_mode==COOP_SEL_REALM&&s.sel_realm==1);                          /* selection persists */
- /* Abort: host only, only in play. */
- cmd(&s,A,"!abort");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Nothing to end"));
- cmd(&s,A,"!ready");cmd(&s,B,"!ready");cmd(&s,A,"!start");
- load(&s,"worlds\\realm1\\R1M0",20000);spawn(&s,A,"Alice",20100);
+ /* Abort: host only; from the lobby world it resets the lobby in place. */
+ cmd(&s,A,"!ready");coop_session_select(&s,COOP_SEL_FROM,3);
+ cmd(&s,A,"!abort");assert(r.action==COOP_ACT_ANNOUNCE&&strstr(r.msg,"Lobby reset (R1M2B)"));
+ assert(coop_ready_count(&s)==0&&s.sel_mode==COOP_SEL_FULL&&s.phase==COOP_PHASE_LOBBY);
+ cmd(&s,A,"!campaign earth");assert(r.action==COOP_ACT_CHANGE_WORLD);
+ load(&s,"worlds\\realm2\\R2M0",20000);spawn(&s,A,"Alice",20100);
  cmd(&s,B,"!abort");assert(strstr(r.msg,"Only the host"));
+ cmd(&s,A,"!abort");assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&strstr(r.msg,"Host aborted -> lobby R1M2B"));
+ load(&s,"worlds\\realm1\\R1M2B",20500);assert(s.phase==COOP_PHASE_LOBBY);
+ cmd(&s,A,"!status");assert(strstr(r.msg,"LOBBY R1M2B"));
+ /* CoopLobbyWorld still overrides the default. */
+ cmd(&s,A,"!campaign full");load(&s,"worlds\\realm1\\R1M0",20600);spawn(&s,A,"Alice",20700);
  memcpy(s.lobby_world,"deathmatch/pm01",16);
  cmd(&s,A,"!abort");assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&strstr(r.msg,"lobby PM01"));
  assert(!strcmp(coop_target_world(&s,COOP_TARGET_LOBBY),"deathmatch/pm01"));
- load(&s,"worlds\\deathmatch\\PM01",21000);assert(s.phase==COOP_PHASE_LOBBY&&s.generation==3&&s.completed==1);
+ load(&s,"worlds\\deathmatch\\PM01",21000);assert(s.phase==COOP_PHASE_LOBBY&&s.completed==1);
  cmd(&s,A,"!status");assert(strstr(r.msg,"LOBBY PM01"));
  /* The final campaign world completes on any valid exit. */
- cmd(&s,A,"!campaign realm nightmare");cmd(&s,A,"!ready");cmd(&s,B,"!ready");cmd(&s,A,"!start");
- assert(strstr(r.msg,"-> R5M1A"));
+ cmd(&s,A,"!campaign nightmare");assert(strstr(r.msg,"-> R5M1A"));
  load(&s,"worlds\\realm5\\R5M1A",30000);spawn(&s,A,"Alice",30100);
  coop_session_exit(&s,"worlds/realm5/r5m1b",31000,&r);assert(r.target_pos==1);
  load(&s,"worlds\\realm5\\R5M1B",32000);spawn(&s,A,"Alice",32100);
@@ -150,17 +172,73 @@ static void test_test_start_and_legacy(void){
  CoopSession s;
  lobby(&s);s.test_label=coop_campaign_worlds[6].label;coop_resolve_test_start(&s);
  assert(s.start_pos==6);                                                      /* R1M3A in the full campaign */
- cmd(&s,A,"!campaign realm earth");assert(s.start_pos==0);                    /* not in the selection: start at R2M0 */
- cmd(&s,A,"!campaign from water");assert(s.start_pos==6);
- /* Legacy MVP route: unchanged commands and replies. */
+ cmd(&s,A,"!campaign earth");assert(s.start_pos==0&&strstr(r.msg,"-> R2M0"));  /* not in the selection: start at R2M0 */
+ lobby(&s);s.test_label=coop_campaign_worlds[6].label;
+ cmd(&s,A,"!campaign water");assert(s.start_pos==6&&strstr(r.msg,"-> R1M3A"));
+ /* Legacy MVP route: !campaign is off, !abort now works and returns to R1M2B. */
  coop_session_init(&s,1,3);spawn(&s,A,"Alice",0);
  assert(s.route_len==3&&!s.campaign);
- cmd(&s,A,"!campaign");assert(strstr(r.msg,"Campaign selection is off"));
- cmd(&s,A,"!campaign realm fire");assert(strstr(r.msg,"Campaign selection is off")&&s.route_len==3);
- cmd(&s,A,"!abort");assert(strstr(r.msg,"CoopCampaign=1"));
- cmd(&s,A,"!help");assert(!strstr(r.msg,"!campaign"));
+ cmd(&s,A,"!campaign");assert(strstr(r.msg,"needs CoopCampaign=1"));
+ cmd(&s,A,"!campaign fire");assert(strstr(r.msg,"needs CoopCampaign=1")&&s.route_len==3&&s.phase==COOP_PHASE_LOBBY);
+ cmd(&s,A,"!abort");assert(r.action==COOP_ACT_ANNOUNCE&&strstr(r.msg,"Lobby reset (R1M2B)")&&s.phase==COOP_PHASE_LOBBY); /* launcher-started lobby */
+ cmd(&s,A,"!ready");cmd(&s,A,"!start");assert(strstr(r.msg,"-> R1M2B"));
+ load(&s,"worlds\\realm1\\R1M2B",1000);spawn(&s,A,"Alice",1100);
+ cmd(&s,A,"!next");load(&s,"worlds\\realm1\\R1M2C",2000);spawn(&s,A,"Alice",2100);
+ cmd(&s,A,"!abort");assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&strstr(r.msg,"lobby R1M2B"));
+ load(&s,"worlds\\realm1\\R1M2B",3000);assert(s.phase==COOP_PHASE_LOBBY&&!s.started);
+ cmd(&s,A,"!help");assert(!strstr(r.msg,"!campaign")&&strstr(r.msg,"!abort"));
+}
+/* !abort resets everything back to the lobby from any state. */
+static void test_abort_any_state(void){
+ CoopSession s;
+ /* In play: back to R1M2B, readiness cleared, selection back to full. */
+ lobby(&s);cmd(&s,A,"!campaign fire");load(&s,"worlds\\realm4\\R4M0",1000);spawn(&s,A,"Alice",1100);
+ assert(s.sel_mode==COOP_SEL_FROM&&s.sel_realm==4);
+ cmd(&s,A,"!abort");assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&strstr(r.msg,"Host aborted -> lobby R1M2B"));
+ assert(s.sel_mode==COOP_SEL_FULL&&s.lobby_pending);
+ cmd(&s,A,"!abort");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Already returning"));
+ load(&s,"worlds\\realm1\\R1M2B",2000);assert(s.phase==COOP_PHASE_LOBBY&&!s.started);
+ {CoopResult a;coop_session_after_load(&s,2100,&a);assert(a.action==COOP_ACT_NONE);}
+ /* During a world change (here the !start load): deferred until it has loaded. */
+ lobby(&s);cmd(&s,A,"!campaign earth");assert(s.phase==COOP_PHASE_TRANSITION);
+ cmd(&s,B,"!abort");assert(strstr(r.msg,"Only the host"));
+ cmd(&s,A,"!abort");assert(r.action==COOP_ACT_ANNOUNCE&&strstr(r.msg,"once this world has loaded")&&s.abort_after_load);
+ load(&s,"worlds\\realm2\\R2M0",3000);
+ {CoopResult a;coop_session_after_load(&s,3100,&a);
+  assert(a.action==COOP_ACT_CHANGE_WORLD&&a.target_pos==COOP_TARGET_LOBBY&&strstr(a.msg,"lobby R1M2B")&&!s.abort_after_load);}
+ load(&s,"worlds\\realm1\\R1M2B",4000);assert(s.phase==COOP_PHASE_LOBBY&&!s.started&&s.sel_mode==COOP_SEL_FULL);
+ /* Nothing pending: after_load does nothing. */
+ {CoopResult a;coop_session_after_load(&s,4100,&a);assert(a.action==COOP_ACT_NONE);}
+ /* The campaign can start again straight away. */
+ cmd(&s,A,"!campaign water");assert(r.action==COOP_ACT_CHANGE_WORLD&&strstr(r.msg,"-> R1M0"));
+}
+/* !difficulty (host, lobby) and host-only exits during play. */
+static void test_difficulty_and_host_exits(void){
+ CoopSession s;CoopResult x;
+ lobby(&s);assert(s.skill==-1);
+ cmd(&s,B,"!difficulty");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"server default"));
+ cmd(&s,B,"!difficulty nightmare");assert(strstr(r.msg,"Only the host")&&s.skill==-1);
+ cmd(&s,A,"!difficulty  Cold Sweat");assert(r.action==COOP_ACT_ANNOUNCE&&strstr(r.msg,"Cold Sweat")&&s.skill==3);
+ cmd(&s,A,"!difficulty 0");assert(s.skill==0&&strstr(r.msg,"Lullaby"));
+ cmd(&s,A,"!skill hard");assert(s.skill==3);
+ cmd(&s,A,"!difficulty impossible");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Use:")&&s.skill==3);
+ cmd(&s,A,"!difficulty");assert(strstr(r.msg,"Cold Sweat")&&strlen(r.msg)<COOP_MSG_MAX);
+ cmd(&s,A,"!campaign water");load(&s,"worlds\\realm1\\R1M0",1000);spawn(&s,A,"Alice",1100);
+ cmd(&s,A,"!difficulty lullaby");assert(strstr(r.msg,"only be changed in the lobby")&&s.skill==3);
+ /* Exits: outside GAMEPLAY (intro running, R1M0's scripted exit) any activator passes on. */
+ s.phase=COOP_PHASE_INTRO_RUNNING;assert(coop_session_exit_by(&s,1,1,&x)&&x.action==COOP_ACT_NONE);
+ s.phase=COOP_PHASE_GAMEPLAY;
+ assert(coop_session_exit_by(&s,0,1,&x));                                  /* host (Alice) */
+ assert(coop_session_exit_by(&s,-1,0,&x));                                 /* a script/object */
+ assert(!coop_session_exit_by(&s,1,1,&x)&&x.action==COOP_ACT_ANNOUNCE&&strstr(x.msg,"Only the host"));
+ assert(!coop_session_exit_by(&s,1,1,&x)&&x.action==COOP_ACT_NONE);       /* replied once per world */
+ assert(!coop_session_exit_by(&s,-1,1,&x));                                /* a player outside the session */
+ /* Campaign default: the intro starts with the last spawn (no settle). */
+ assert(COOP_CAMPAIGN_SETTLE_MS==0u);
 }
 int main(void){
+ test_difficulty_and_host_exits();
+ test_abort_any_state();
  test_table();test_selection_commands();test_full_route_and_exits();test_realm_completion_and_abort();test_test_start_and_legacy();
  printf("PASS coop campaign graph: WORLDORDER table, selection commands, exits, realm completion, abort, lobby return, test start, legacy route\n");
  return 0;

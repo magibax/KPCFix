@@ -27,7 +27,9 @@
  * by the earlier build). A natural R1M2C -> R1M3A change is not yet observed. */
 #include "coop_campaign.h"
 #define COOP_INTRO_SETTLE_MS 3000u    /* default intro settle after the last participant spawned */
+#define COOP_CAMPAIGN_SETTLE_MS 0u    /* campaign default: KPCFix clients hold their spawn behind the picture, so the intro starts with the last spawn */
 #define COOP_TARGET_LOBBY 0xffffu   /* CoopResult.target_pos: return to the lobby world */
+#define COOP_DEFAULT_LOBBY "realm1/r1m2b" /* lobby world when CoopLobbyWorld is empty */
 #define COOP_TRANSITION_TIMEOUT_MS 30000u
 #define COOP_LOAD_GRACE_MS 90000u
 
@@ -83,6 +85,9 @@ typedef struct {
  unsigned int sel_mode,sel_realm;   /* host selection; kept until changed */
  const char *test_label;            /* CoopTestStartWorld label (test only) or 0 */
  unsigned int lobby_pending;        /* current transition returns to the lobby */
+ unsigned int abort_after_load;     /* !abort during a world change: back to the lobby once it has loaded */
+ int skill;                         /* difficulty written before each world load: 0-4, or -1 = unchanged */
+ unsigned int host_exit_epoch;      /* epoch+1 of the last "only the host" exit reply */
  unsigned int completed;            /* routes completed in this server run */
  char world_label[16];              /* loaded world, e.g. R1M2B */
  char lobby_world[COOP_WORLD_MAX];  /* normalised lobby world or empty = route start */
@@ -165,7 +170,9 @@ static const char *coop_route_label(const CoopSession *s,unsigned int pos){
 }
 /* World a CHANGE_WORLD result targets: a route world or the lobby world. */
 static const char *coop_target_world(const CoopSession *s,unsigned int target){
- if(target==COOP_TARGET_LOBBY)return s->lobby_world[0]?s->lobby_world:(s->route_len?s->route[0].world:"");
+ /* Lobby: CoopLobbyWorld, else always R1M2B (the co-op lobby world the
+  * launcher starts; it is in every maplist the launcher writes). */
+ if(target==COOP_TARGET_LOBBY)return s->lobby_world[0]?s->lobby_world:COOP_DEFAULT_LOBBY;
  return target<s->route_len?s->route[target].world:"";
 }
 /* Upper-case last path component without ".dat", bounded (e.g. R1M2B). */
@@ -236,6 +243,7 @@ static void coop_session_init(CoopSession *s,unsigned int min_players,unsigned i
  s->phase=COOP_PHASE_LOBBY;s->generation=1;s->host=-1;
  s->route=coop_mvp_worlds;s->route_len=COOP_MVP_LEN;s->sel_mode=COOP_SEL_MVP;
  s->intro_settle_ms=COOP_INTRO_SETTLE_MS;
+ s->skill=-1;
 }
 static int coop_find_client(const CoopSession *s,unsigned int client){
  unsigned int i;
@@ -419,6 +427,55 @@ static void coop_begin_change(CoopSession *s,unsigned int target,unsigned int no
  else coop_append(r->msg,&n,coop_route_label(s,target));
 }
 
+/* Difficulty names as the game's menu shows them (CoopSkill values 0-4). */
+static const char *const coop_skill_names[5]={"Lullaby","Daydream","Sleepless","Cold Sweat","Nightmare"};
+static int coop_skill_parse(const char *a,const char *b){
+ static const char *const keys[5]={"lullaby","daydream","sleepless","coldsweat","nightmare"};
+ char w[24];unsigned int i,n=0;
+ if(a[0]>='0'&&a[0]<='4'&&!a[1]&&!b[0])return a[0]-'0';
+ for(i=0;a[i]&&n<sizeof(w)-1;i++)w[n++]=a[i];
+ for(i=0;b[i]&&n<sizeof(w)-1;i++)w[n++]=b[i];          /* "cold sweat" */
+ w[n]=0;
+ for(i=0;i<5;i++)if(coop_word(w,keys[i]))return (int)i;
+ if(coop_word(w,"easy"))return 1;
+ if(coop_word(w,"normal")||coop_word(w,"medium"))return 2;
+ if(coop_word(w,"hard"))return 3;
+ return -1;
+}
+/* Exits during play belong to the host: a native exit (mirror, exit volume)
+ * set off by any other player is refused with a reply, once per world.
+ * Exits fired by a script or by a non-player object (an intro's own
+ * "trigger_generic CExitTrigger0") and every exit outside GAMEPLAY are left
+ * to coop_session_exit. member: session index of the activator or -1. */
+static int coop_session_exit_by(CoopSession *s,int member,int is_player,CoopResult *r){
+ coop_result(r,COOP_ACT_NONE,"");
+ if(s->phase!=COOP_PHASE_GAMEPLAY||!is_player)return 1;
+ if(member>=0&&member==s->host)return 1;
+ s->rejected_exits++;
+ if(s->host_exit_epoch!=s->epoch+1u){
+  s->host_exit_epoch=s->epoch+1u;
+  coop_result(r,COOP_ACT_ANNOUNCE,"[Co-op] Only the host (*) can take the exit");
+ }
+ return 0;
+}
+/* !abort: back to a fresh lobby. Readiness is cleared and the campaign
+ * selection returns to its default (full campaign). */
+static void coop_session_lobby_reset(CoopSession *s){
+ unsigned int i;
+ for(i=0;i<COOP_SESSION_MAX_MEMBERS;i++)s->m[i].ready=0;
+ if(s->campaign)coop_session_select(s,COOP_SEL_FULL,0);
+ s->seq++;
+}
+static int coop_in_lobby_world(const CoopSession *s){
+ char l[16];coop_world_label(coop_target_world(s,COOP_TARGET_LOBBY),l);
+ /* No world loaded through the session yet: the launcher started the lobby. */
+ return !s->world_label[0]||(l[0]&&coop_word(s->world_label,l));
+}
+static void coop_abort_change(CoopSession *s,unsigned int now,CoopResult *r){
+ s->start_pending=0;s->lobby_pending=1;s->abort_after_load=0;
+ coop_session_lobby_reset(s);
+ coop_begin_change(s,COOP_TARGET_LOBBY,now,r,"Host aborted");
+}
 /* Chat command from a known member. Text is untrusted. */
 static void coop_session_command(CoopSession *s,unsigned int client,const char *text,
   unsigned int now,CoopResult *r){
@@ -449,41 +506,78 @@ static void coop_session_command(CoopSession *s,unsigned int client,const char *
   argc++;
   while(i<len&&(text[i]==' '||text[i]=='\t'))i++;
  }
- if(!n||i!=len)return;                 /* anything else is not a command */
+ if(!n)return;
 #define COOP_IS(word) coop_word(cmd,word)
- if(argc&&!COOP_IS("campaign"))return; /* only !campaign takes arguments */
+ /* Anything else is not a command, except that a malformed !campaign gets
+  * the help reply instead of silence. */
+ if(i!=len&&!COOP_IS("campaign")&&!COOP_IS("difficulty")&&!COOP_IS("skill"))return;
+ if(argc&&!COOP_IS("campaign")&&!COOP_IS("difficulty")&&!COOP_IS("skill"))return; /* only these take arguments */
  if(COOP_IS("coop")||COOP_IS("status")){
   r->action=COOP_ACT_REPLY;coop_status(s,r->msg);return;
  }
+ if(COOP_IS("difficulty")||COOP_IS("skill")){
+  unsigned int m=0;int v;
+  if(!argc&&i==len){
+   r->action=COOP_ACT_REPLY;r->msg[0]=0;
+   coop_append(r->msg,&m,"[Co-op] Difficulty: ");
+   coop_append(r->msg,&m,s->skill>=0?coop_skill_names[s->skill]:"server default");
+   coop_append(r->msg,&m,". Host: !difficulty lullaby|daydream|sleepless|coldsweat|nightmare");
+   return;
+  }
+  v=i==len?coop_skill_parse(arg[0],argc>1?arg[1]:""):-1;
+  if(v<0){coop_result(r,COOP_ACT_REPLY,"[Co-op] Use: !difficulty lullaby|daydream|sleepless|coldsweat|nightmare (or 0-4)");return;}
+  if(me<0||me!=s->host){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can set the difficulty");return;}
+  if(s->phase!=COOP_PHASE_LOBBY){coop_result(r,COOP_ACT_REPLY,"[Co-op] Difficulty can only be changed in the lobby");return;}
+  s->skill=v;s->seq++;
+  r->action=COOP_ACT_ANNOUNCE;r->msg[0]=0;
+  coop_append(r->msg,&m,"[Co-op] Difficulty set to ");coop_append(r->msg,&m,coop_skill_names[v]);
+  coop_append(r->msg,&m," (applies from the next world)");
+  return;
+ }
  if(COOP_IS("help")){
   coop_result(r,COOP_ACT_REPLY,s->campaign?
-   "[Co-op] kpc-coop/1: !ready !unready !leave !join !coop !campaign [full|from <realm>|realm <realm>] !start !abort !next":
-   "[Co-op] kpc-coop/1: !ready !unready !leave !join !start(host) !next(host) !coop");
+   "[Co-op] !ready !unready !leave !join !coop !start !abort !next !difficulty !campaign full|water|earth|air|fire|nightmare":
+   "[Co-op] kpc-coop/1: !ready !unready !leave !join !start !next !abort !difficulty (host) !coop");
   return;
  }
  if(COOP_IS("campaign")){
-  unsigned int mode=COOP_SEL_FULL,realm=0,m=0;
-  if(!s->campaign){coop_result(r,COOP_ACT_REPLY,"[Co-op] Campaign selection is off (CoopCampaign=0): MVP route R1M2B>R1M2C>R1M3A");return;}
-  if(!argc){
+  /* !campaign full            full playthrough from R1M0, starts now
+   * !campaign <realm>         that realm's first world, continues to the end,
+   *                           starts now (realm: water earth air fire
+   *                           nightmare or 1-5; "from <realm>" is an alias)
+   * !campaign                 anyone: current selection and help
+   * Starting skips !ready; the minimum player count still applies. */
+  unsigned int mode=COOP_SEL_FULL,realm=0,m=0,present=coop_present_count(s);
+  if(!s->campaign){coop_result(r,COOP_ACT_REPLY,"[Co-op] !campaign needs CoopCampaign=1 (now: MVP route R1M2B>R1M2C>R1M3A)");return;}
+  if(!argc&&i==len){
    r->action=COOP_ACT_REPLY;r->msg[0]=0;
    coop_append(r->msg,&m,"[Co-op] Selected: ");coop_selection_text(s,r->msg,&m);
-   coop_append(r->msg,&m,". Realms: water earth air fire nightmare (1-5)");
+   coop_append(r->msg,&m,". Host: !campaign full|water|earth|air|fire|nightmare");
    return;
   }
-  if(me<0||me!=s->host){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can change the campaign");return;}
-  if(s->phase!=COOP_PHASE_LOBBY){coop_result(r,COOP_ACT_REPLY,"[Co-op] Campaign can only be changed in the lobby");return;}
-  if(argc==1&&coop_word(arg[0],"full"))mode=COOP_SEL_FULL;
-  else if(argc==2&&(coop_word(arg[0],"from")||coop_word(arg[0],"realm"))&&(realm=coop_realm_parse(arg[1]))!=0)
-   mode=coop_word(arg[0],"from")?COOP_SEL_FROM:COOP_SEL_REALM;
-  else{coop_result(r,COOP_ACT_REPLY,"[Co-op] Usage: !campaign full | from <realm> | realm <realm> (water earth air fire nightmare)");return;}
-  if(mode==s->sel_mode&&(mode==COOP_SEL_FULL||realm==s->sel_realm)){
-   r->action=COOP_ACT_REPLY;r->msg[0]=0;coop_append(r->msg,&m,"[Co-op] Already selected: ");coop_selection_text(s,r->msg,&m);return;
+  if(i==len&&argc==1&&coop_word(arg[0],"full"))mode=COOP_SEL_FULL;
+  else if(i==len&&argc==1&&(realm=coop_realm_parse(arg[0]))!=0)mode=COOP_SEL_FROM;
+  else if(i==len&&argc==2&&coop_word(arg[0],"from")&&(realm=coop_realm_parse(arg[1]))!=0)mode=COOP_SEL_FROM;
+  else{coop_result(r,COOP_ACT_REPLY,"[Co-op] Use: !campaign full, or !campaign water|earth|air|fire|nightmare to start at a realm");return;}
+  if(me<0||me!=s->host){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can start the campaign");return;}
+  if(s->phase!=COOP_PHASE_LOBBY){coop_result(r,COOP_ACT_REPLY,"[Co-op] Already playing; the host can !abort back to the lobby first");return;}
+  if(present<s->min_players){
+   r->action=COOP_ACT_REPLY;r->msg[0]=0;
+   coop_append(r->msg,&m,"[Co-op] Need ");coop_append_uint(r->msg,&m,s->min_players);
+   coop_append(r->msg,&m," players to start, ");coop_append_uint(r->msg,&m,present);coop_append(r->msg,&m," here");
+   return;
   }
-  coop_session_select(s,mode,realm);s->seq++;
-  /* Everybody confirms the new selection: readiness is cleared. */
+  /* Realm 1 from its first world is the full playthrough. */
+  if(mode==COOP_SEL_FROM&&realm==1u){mode=COOP_SEL_FULL;realm=0;}
+  if(!coop_session_select(s,mode,realm)){coop_result(r,COOP_ACT_REPLY,"[Co-op] Campaign selection failed");return;}
+  s->seq++;
   for(i=0;i<COOP_SESSION_MAX_MEMBERS;i++)s->m[i].ready=0;
-  r->action=COOP_ACT_ANNOUNCE;r->msg[0]=0;
-  coop_append(r->msg,&m,"[Co-op] Host selected ");coop_selection_text(s,r->msg,&m);coop_append(r->msg,&m,". Type !ready");
+  s->started=1;s->start_pending=1;s->lobby_pending=0;
+  {
+   char why[COOP_MSG_MAX];unsigned int w=0;why[0]=0;
+   coop_append(why,&w,"Host started ");coop_selection_text(s,why,&w);
+   coop_begin_change(s,s->start_pos<s->route_len?s->start_pos:0u,now,r,why);
+  }
   return;
  }
  if(me<0){
@@ -518,13 +612,25 @@ static void coop_session_command(CoopSession *s,unsigned int client,const char *
   return;
  }
  if(COOP_IS("abort")){
-  if(!s->campaign){coop_result(r,COOP_ACT_REPLY,"[Co-op] !abort needs CoopCampaign=1");return;}
-  if(me!=s->host){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can end the campaign");return;}
-  if(s->phase!=COOP_PHASE_GAMEPLAY&&s->phase!=COOP_PHASE_INTRO_PENDING&&s->phase!=COOP_PHASE_INTRO_RUNNING){
-   coop_result(r,COOP_ACT_REPLY,"[Co-op] Nothing to end (lobby or world change in progress)");return;
+  /* Host: reset everything back to the lobby from any state. */
+  if(me!=s->host){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can abort to the lobby");return;}
+  if(s->phase==COOP_PHASE_TRANSITION||s->phase==COOP_PHASE_WORLD_LOADING){
+   if(s->lobby_pending){coop_result(r,COOP_ACT_REPLY,"[Co-op] Already returning to the lobby");return;}
+   s->abort_after_load=1;s->seq++;
+   coop_result(r,COOP_ACT_ANNOUNCE,"[Co-op] Host aborted: back to the lobby once this world has loaded");
+   return;
   }
-  s->start_pending=0;s->lobby_pending=1;
-  coop_begin_change(s,COOP_TARGET_LOBBY,now,r,"Host ended the campaign");
+  if(s->phase==COOP_PHASE_LOBBY&&coop_in_lobby_world(s)){
+   unsigned int m=0;
+   s->started=0;s->start_pending=0;s->abort_after_load=0;
+   coop_session_lobby_reset(s);
+   r->action=COOP_ACT_ANNOUNCE;r->msg[0]=0;
+   {char l[16];coop_world_label(coop_target_world(s,COOP_TARGET_LOBBY),l);
+    coop_append(r->msg,&m,"[Co-op] Lobby reset (");coop_append(r->msg,&m,l);}
+   coop_append(r->msg,&m,s->campaign?"). Host: !campaign full|water|earth|air|fire|nightmare":"). Everyone !ready, host !start");
+   return;
+  }
+  coop_abort_change(s,now,r);
   return;
  }
  if(COOP_IS("next")){
@@ -635,6 +741,16 @@ static void coop_session_world_loaded(CoopSession *s,const char *world){
   s->phase=COOP_PHASE_LOBBY;
   for(idx=0;idx<(int)COOP_SESSION_MAX_MEMBERS;idx++)s->m[idx].ready=0;
  }
+}
+
+/* Called right after coop_session_world_loaded: a host !abort made during the
+ * change is carried out now (a CHANGE_WORLD back to the lobby). */
+static void coop_session_after_load(CoopSession *s,unsigned int now,CoopResult *r){
+ coop_result(r,COOP_ACT_NONE,"");
+ if(!s->abort_after_load)return;
+ s->abort_after_load=0;
+ if(s->phase==COOP_PHASE_LOBBY&&coop_in_lobby_world(s)){coop_session_lobby_reset(s);return;}
+ coop_abort_change(s,now,r);
 }
 
 /* ---------- synchronised original intro (CoopIntro) ----------

@@ -1,6 +1,7 @@
 #include "winmini.h"
 #include "shell_layout.h"
 #include "loading.h"
+#include "camera.h"
 
 /* Campaign loading art ([Multiplayer] CampaignLoadingArt, default 1).
  *
@@ -48,6 +49,18 @@ void (*g_loading_log)(const char *);
 static U32 art_active,art_since,close_pending,art_shown;
 static void *hold_self;static U8 *art_shell;static U32 hold_reply,hold_initvars,hold_since,holds;
 U8 *g_loading_client;
+/* The hold applies only to world changes after this connection has entered a
+ * world (0x69). On the first load from the server browser the menu's
+ * "Connecting..." dialog stays up and the new world's ambient sound is heard
+ * behind it for the whole hold, so the first entry is never held. A new
+ * connection is recognised at the client's "Got ID packet" print
+ * (client.exe 0x6986e -> console print 0x1c8d0). */
+U32 g_loading_entered,g_id_print_target;
+void kpc_new_connection_print(void);
+__asm__(".global kpc_new_connection_print\n"
+        "kpc_new_connection_print:\n"
+        " movl $0, g_loading_entered\n"
+        " jmp *g_id_print_target\n");
 #define HOLD_CAP_MS 30000u
 
 #define THISCALL __attribute__((thiscall))
@@ -122,7 +135,7 @@ void THISCALL kpc_preload_world(void *shell,const char *world){
 static int art_due(void){return (U32)(GetTickCount()-art_since)>=g_loading_min_ms;}
 static int hold_wanted(void){
     U8 *screens;
-    if(!g_loading_hold||!g_loading_client||!art_active||art_due()||!art_shell)return 0;
+    if(!g_loading_hold||!g_loading_client||!g_loading_entered||!art_active||art_due()||!art_shell)return 0;
     screens=(U8 *)get32(art_shell+SHELL_SCREENS);
     return screens&&(I32)get32(screens+4)==0;
 }
@@ -150,6 +163,7 @@ static void hold_tick(void){
 typedef U32 (THISCALL *ClientFrameFn)(void *,U32);
 U32 THISCALL kpc_client_frame(void *client,U32 argument){
     hold_tick();
+    kpc_camera_tick();
     return ((ClientFrameFn)(g_loading_client+0x13bb0u))(client,argument);
 }
 /* Replaces 0xbeadc (call 0xbf300): the client's 0x17 reply. */
@@ -168,6 +182,7 @@ void THISCALL kpc_spawn_initvars(void *self){
 }
 /* Replaces the 0x69 handler's close (0xcbba6). ECX = screen manager. */
 void THISCALL kpc_close_on_entry(void *screens){
+    g_loading_entered=1;
     if(art_active&&(I32)get32((U8 *)screens+4)==0&&!art_due()){close_pending=1;return;}
     art_active=0;close_pending=0;
     ((CloseFn)shell_rva(g_shell_layout->screen_close))(screens);

@@ -14,7 +14,7 @@ This is a design investigation, separate from the three-position R1M2B spawn tri
 
 - In the dedicated Windows trial, campaign world R1M2B loaded and three players could spawn at trial positions, but the normal introductory cinematic did not start and a known hallway transition did not advance the map.
 - The developer browser's client-hosted map load is a working intro comparison; **it does not establish** that dedicated-server multiplayer invokes the same script path.
-- R1M2B's `WorldProperties.starting_cinematic` references `CS2START.SCR`; existing world analysis indicates this is also associated with loading level scripts. `CExitTrigger0.NextWorld` and `WORLDORDER.TXT` identify R1M2C as the next world. Exit object flag `+0x152` is set for every exit in multiplayer, so it does not identify mirrors; see [COOP-MVP.md](COOP-MVP.md#exit-objects-and-the-meaning-of-0x152) for the three transition mechanisms.
+- R1M2B's `WorldProperties.starting_cinematic` references `CS2START.SCR`; existing world analysis indicates this is also associated with loading level scripts. `CExitTrigger0.NextWorld` and `WORLDORDER.TXT` identify R1M2C as the next world. Exit object flag `+0x152` is set for every exit in multiplayer, so it does not identify mirrors; see [COOP-MVP.md](archive/COOP-MVP-EVIDENCE-2026-11-12.md#exit-objects-and-the-meaning-of-0x152) for the three transition mechanisms.
 - The original 1.13 object module checks its game-type field at RVA `0x2d455` in the exit path. A nonzero value prevents the subsequent call at RVA `0x2d510`. The significance of the upstream trigger/activation path remains to be verified.
 - The current opt-in `[Coop] TraceCampaign=1` instrumentation in `server-tools/server-tools-source/src/proxy.c` observes the original startup lookup callsite at RVA `0x1045b1`, logging the path and whether the lookup returns an object, and observes entry into the mode-gated exit handler. It leaves native decisions intact. **A successful lookup does not prove dispatch, execution or completion of the cinematic.** Absence of an exit-handler trace does not prove that the exit handler is the failing component; the event may never have reached it.
 - The existing client-side `source/src/cinematic.c` handles fullscreen movie aspect ratio/blitting. It is not an implemented network synchronisation layer for the in-engine `starting_cinematic` script.
@@ -155,7 +155,7 @@ This work is **not** a prerequisite for leaving the existing read-only spawn dia
 ## Status update: original intro in co-op (R1M3A proof of concept)
 
 The open questions above are now answered for the intro path; see
-[COOP-MVP.md](COOP-MVP.md#c-synchronised-original-intro-r1m3a-proof-of-concept):
+[COOP-MVP.md](archive/COOP-MVP-EVIDENCE-2026-11-12.md#c-synchronised-original-intro-r1m3a-proof-of-concept):
 * the dedicated server **loads** the world's `starting_cinematic` script in multiplayer but
   never plays it (game-type gate at `0x104830`);
 * the original script player and the per-frame script clock are not gated;
@@ -175,7 +175,7 @@ rather than replaying scripts per client.
     than 100 Hz.
   * `CoopScriptClock` holds the script clock to wall time; user-confirmed on both
     clients (2026-11-11). See
-    [COOP-MVP.md](COOP-MVP.md#d-script-clock-cadence-narration-versus-subtitles).
+    [COOP-MVP.md](archive/COOP-MVP-EVIDENCE-2026-11-12.md#d-script-clock-cadence-narration-versus-subtitles).
 * **Update (2026-11-11, same desktop + laptop, DLL `e86bb352…`):** the user confirmed that the
   script cadence is fixed. Three effects of the script's *gameplay* actions remained, each with
   its own multiplayer cause, and one presentation request was added:
@@ -188,7 +188,7 @@ rather than replaying scripts per client.
   * the stock scoreboard should cover `!start` until the cinematic (`CoopStartScoreboard`).
 
   These are all fixed in DLL `1b8816cb…`, which awaits client validation. See
-  [COOP-MVP.md](COOP-MVP.md#e-narrator-cut-off-after-will-be-a-useful-ally-for-you-sound-timer)
+  [COOP-MVP.md](archive/COOP-MVP-EVIDENCE-2026-11-12.md#e-narrator-cut-off-after-will-be-a-useful-ally-for-you-sound-timer)
   sections E–H.
 * This confirms the classification above: `trigger_generic` (gameplay-authoritative) ran once
   on the server as intended. Its target simply did not exist in multiplayer.

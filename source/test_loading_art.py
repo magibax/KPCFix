@@ -155,6 +155,11 @@ P = 0x5a8000
 preload, reply, initvars, draw = (dll + syms[n] for n in ('_kpc_preload_world', '_kpc_spawn_reply', '_kpc_spawn_initvars', '_kpc_draw_screen'))
 def answer():
     rig.invoke_address(reply, (), this=P); rig.invoke_address(initvars, (), this=P)
+# The first load of a connection is never held (menu connect dialog): no 0x69 yet.
+setup_shell(u); rig.tick = 390000
+rig.invoke_address(preload, (world(rig, 'worlds\\realm1\\R1M2B'),), this=SHELL)
+log.clear(); rig.tick = 390100; answer(); assert log == [('reply', P), ('initvars', P)], log
+rig.invoke_address(close_hook, (), this=SCREENS)                 # 0x69: this connection is now in a world
 setup_shell(u); rig.tick = 400000
 rig.invoke_address(preload, (world(rig, 'worlds\\realm1\\R1M1A'),), this=SHELL)
 assert b'Loading world: worlds\\realm1\\R1M1A (picture shown)' in bytes(rig.logs)
@@ -172,6 +177,11 @@ setup_shell(u); rig.tick = 600000; rig.invoke_address(preload, (world(rig, 'worl
 log.clear(); rig.tick = 600500; answer(); assert log == []
 u.mem_write(SCREENS + 4, pack(2)); rig.invoke_address(draw, (1,), this=SCREENS)
 assert log[:2] == [('reply', P), ('initvars', P)], log
+# A new connection ("Got ID packet" print, client.exe 0x6986e) clears the
+# entered flag again; the call is forwarded to the original print.
+code = bytes(u.mem_read(0x1ca0000 + 0x6986e, 5))
+assert code[0] == 0xe8 and (0x1ca0000 + 0x6986e + 5 + struct.unpack('<i', code[1:])[0]) & 0xffffffff == dll + syms['_kpc_new_connection_print']
+assert read(u, dll + syms['_g_loading_entered']) == 1 and read(u, dll + syms['_g_id_print_target']) == 0x1ca0000 + 0x1c8d0
 # First connect from the menu: the connect dialog never reaches the shell's
 # screen draw, so the client update's per-frame call (client.exe 0x13876 ->
 # 0x13bb0) releases the hold on its own (the 2026-11-12 hang).
@@ -202,8 +212,20 @@ log.clear(); rig.tick = 709000; rig.invoke_address(draw, (2,), this=SCREENS); as
 rig5 = Rig(settings={'Multiplayer.CampaignLoadingHoldSpawn': 0}); rig5.factory(); assert not rig5.messages
 for site in (0xbeadc, 0xbeae3):
     assert bytes(rig5.u.mem_read(base + site, 5)) == bytes(rig5.initial_shell[site:site + 5])
-assert bytes(rig5.u.mem_read(0x1ca0000 + 0x13876, 5)) == bytes(rig5.initial_client[0x13876:0x1387b])
+# The per-frame client update hook is shared with camera smoothing: only with
+# both off does it keep its original bytes.
+rig6b = Rig(settings={'Multiplayer.CampaignLoadingHoldSpawn': 0, 'Multiplayer.SmoothCutsceneCamera': 0}); rig6b.factory(); assert not rig6b.messages
+assert bytes(rig6b.u.mem_read(0x1ca0000 + 0x13876, 5)) == bytes(rig6b.initial_client[0x13876:0x1387b])
 assert b'spawn hold' not in bytes(rig5.logs)
+
+# 12. Chat message time (ChatMessageSeconds, default 8): only the immediate of
+#     MOV [ESP+0x10], 3.0f at cshell 0xcb38d changes; 3 keeps the original.
+assert bytes(rig5.u.mem_read(base + 0xcb38d, 8)) == bytes.fromhex('c744241000000041')
+assert b'Chat message time: seconds=0x00000008' in bytes(rig5.logs)
+rig6 = Rig(settings={'Multiplayer.ChatMessageSeconds': 3}); rig6.factory(); assert not rig6.messages
+assert bytes(rig6.u.mem_read(base + 0xcb38d, 8)) == bytes(rig6.initial_shell[0xcb38d:0xcb395]) == bytes.fromhex('c744241000004040')
+rig7 = Rig(settings={'Multiplayer.ChatMessageSeconds': 61}); rig7.factory()
+assert any('ChatMessageSeconds' in m for m in rig7.messages), rig7.messages
 
 # 10. An out-of-range minimum is refused before any edit.
 rig4 = Rig(settings={'Multiplayer.CampaignLoadingMinimumMs': 30001}); rig4.factory()

@@ -16,11 +16,7 @@ foreach ($Required in @('kpc-gui-server.cfg','kpc-gui-maps.txt','KPCServerTools.
  if (-not (Test-Path -LiteralPath $Required)) { throw "Missing $Required; run Setup-KPCServerTools.cmd first." }
 }
 if ($Coop) {
- if ($Map -ne 'worlds\realm1\R1M2B') { throw 'The co-op MVP route starts at worlds\realm1\R1M2B.' }
- $route = @(Get-Content -LiteralPath 'kpc-gui-maps.txt' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
- foreach ($world in 'worlds\realm1\R1M2C','worlds\realm1\R1M3A') {
-  if ($route -notcontains $world) { throw "Co-op map list must contain $world." }
- }
+ if ($Map -ne 'worlds\realm1\R1M2B') { throw 'The co-op lobby starts at worlds\realm1\R1M2B.' }
 }
 # Initial policy is configuration only; game binaries are never rewritten at launch.
 $iniPath=Join-Path $PSScriptRoot 'KPCServerTools.ini'
@@ -95,8 +91,29 @@ public static class KPCConsoleStart {
 }
 '@
 Write-Host "[KPCFix Server Tools] Starting $Map; GameSpy reporting disabled."
-if ($Coop) { Write-Host '[KPCFix Co-op] EXPERIMENTAL co-op session: players type !ready, the host (*) types !start. See coop/COOP-MVP.md.' -ForegroundColor Yellow }
-$Server = Start-Process -FilePath (Join-Path $PSScriptRoot $Exe) -ArgumentList @('-nogamespy','-exec','kpc-gui-server.cfg') -NoNewWindow -PassThru
+if ($Coop) { Write-Host '[KPCFix Co-op] EXPERIMENTAL co-op session: host types !campaign full (or !campaign earth, ...) to start, or everyone !ready and the host !start. See coop/COOP-MVP.md.' -ForegroundColor Yellow }
+$ServerCfg = 'kpc-gui-server.cfg'
+if ($Coop) {
+ # Co-op: no start armour, so the realm armour pickups (R1M1A gauntlets, belt,
+ # ...) exist. In multiplayer an armour item hides itself when the server
+ # already hands that piece out at spawn (object.lto 0xc8520). The GUI's own
+ # config is left as it is; a co-op copy with the armour cvars appended (later
+ # lines win) is executed instead.
+ # The co-op map list is written here too: the GUI's kpc-gui-maps.txt holds
+ # whatever was last picked for deathmatch, while the MVP route needs R1M2B,
+ # R1M2C and R1M3A in the native maplist (campaign worlds missing from it are
+ # written into the next slot in memory by the server DLL).
+ Set-Content -LiteralPath 'kpc-coop-maps.txt' -Value @('worlds\realm1\R1M2B','worlds\realm1\R1M2C','worlds\realm1\R1M3A') -Encoding ASCII
+ $coopCfg = @(Get-Content -LiteralPath $ServerCfg)
+ $coopCfg += '// KPCFix co-op: lobby/MVP route map list'
+ $coopCfg += '"maplist" "kpc-coop-maps.txt"'
+ $coopCfg += '// KPCFix co-op: no start armour (realm armour pickups stay in the world)'
+ foreach ($piece in 'startgauntlets','startbelt','startboots','startshoulderplates','startbreastplate','startmask') { $coopCfg += ('"{0}" "0"' -f $piece) }
+ Set-Content -LiteralPath 'kpc-coop-server.cfg' -Value $coopCfg -Encoding ASCII
+ $ServerCfg = 'kpc-coop-server.cfg'
+ Write-Host '[KPCFix Co-op] Co-op map list (kpc-coop-maps.txt) and no start armour (kpc-coop-server.cfg).'
+}
+$Server = Start-Process -FilePath (Join-Path $PSScriptRoot $Exe) -ArgumentList @('-nogamespy','-exec',$ServerCfg) -NoNewWindow -PassThru
 # Queue console input after startup; this does not require the server window to have focus.
 Start-Sleep -Seconds 3
 $Server.Refresh()

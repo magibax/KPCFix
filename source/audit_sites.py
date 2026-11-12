@@ -26,6 +26,10 @@ def main():
         detours.extend(((0xcbba6,5),(0xcdb92,5)))
         # Spawn hold: the 0x17 handler reply calls (loading.c).
         detours.extend(((0xbeadc,5),(0xbeae3,5)))
+        # Chat message time: MOV [ESP+0x10], imm32 (immediate only).
+        detours.extend(((0xcb38d,8),))
+        # Smooth scripted cameras: sample store call.
+        detours.extend(((0xab104,5),))
     asm=subprocess.check_output(['objdump','-dw','-Mintel',str(path)],text=True)
     boundaries=set()
     transfers=[]

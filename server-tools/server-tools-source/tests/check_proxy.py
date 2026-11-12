@@ -107,10 +107,17 @@ def profile_int(a):
   return a[2]
  if key=='CoopCampaign':return int('--campaign' in sys.argv)
  if key=='CoopIntroSettleMs':return a[2]
- if key=='CoopIntroAll':return 0
+ if key=='CoopIntroAll':return 0 if '--no-intro-all' in sys.argv else a[2]
  if key=='CoopStartScoreboard':return 0 if '--no-start-scoreboard' in sys.argv else a[2]
  if key=='CoopSpawners':return 0 if '--no-spawners' in sys.argv else a[2]
  if key=='TraceSpawners':return int('--trace-spawners' in sys.argv)
+ if key=='CoopSinglePlayerStart':return 0 if '--no-sp-start' in sys.argv else a[2]
+ if key=='TraceScripts':return int('--trace-scripts' in sys.argv)
+ if key=='CoopScriptEvents':return 0 if '--no-script-events' in sys.argv else a[2]
+ if key=='CoopFriendlyFire':return int('--friendly-fire' in sys.argv)
+ if key=='CoopSharedItems':return 0 if '--no-shared-items' in sys.argv else a[2]
+ if key=='CoopSpawnSpread':return 0 if '--no-spawn-spread' in sys.argv else a[2]
+ if key=='CoopServerFrameMs':return 0 if '--no-server-frame' in sys.argv else a[2]
  if key=='CoopSkill':
   for x in sys.argv:
    if x.startswith('--skill='):return int(x.split('=',1)[1])&0xffffffff
@@ -222,7 +229,15 @@ def coop_scenario():
         0xfeec4:(6,'81c6e8010000'),0xf167a:(5,'e841faffff'),0x100744:(5,'e877feffff'),0xfde97:(5,'e824270000'),
         0x10494b:(5,'e80064fbff'),0xffbbf:(5,'e85c0b0000'),0xffba5:(5,'e8865afcff'),
         0xea6d2:(5,'e809e90000'),0xea7c3:(5,'e818e80000'),0xeaa10:(5,'e8cbe50000'),0xeab11:(5,'e8cae40000'),
-        0x93c5d:(2,'0c10'),0x93c65:(5,'e896530600')}
+        0x93c5d:(2,'0c10'),0x93c65:(5,'e896530600'),
+        0xf12be:(5,'e8adfdffff'),0xf15f2:(5,'e8a9f2ffff'),
+        0xc4238:(5,'e803110000'),0xb8677:(5,'e8c4cc0000'),0xc5358:(5,'e853020000'),
+        0xc53a3:(5,'e8c83b0300'),0xc53c0:(5,'e8ab3b0300'),0x44dd6:(5,'e855f40700'),
+        0xc1a89:(6,'8b88d0010000'),0xc1abe:(5,'e8dd320300'),0xc28a5:(6,'8b90d0010000'),
+        0xc269b:(6,'8b88d0010000'),0xc2a75:(6,'8b90d0010000'),0xb8ad8:(6,'8b88d0010000'),
+        0x2e205:(5,'e8f6060c00'),0x2ffea:(5,'e811e90b00'),0x3005a:(5,'e8a1e80b00'),
+        0xf3c08:(6,'39b8f0010000'),0xcc145:(5,'e836000000'),0x30c9e:(5,'e8ed800c00'),
+        0xfdfdb:(6,'ff90f0000000')}
  music_flag='--no-music' not in sys.argv
  intro_flag='--intro' in sys.argv
  trace_timing='--trace-timing' in sys.argv
@@ -233,6 +248,15 @@ def coop_scenario():
  for rva in (0xea6d2,0xea7c3,0xeaa10,0xeab11):hooked_optional[rva]=bars
  spawners='--no-spawners' not in sys.argv;trace_spawners='--trace-spawners' in sys.argv
  hooked_optional[0x93c65]=trace_spawners
+ sp_start='--no-sp-start' not in sys.argv;trace_scripts='--trace-scripts' in sys.argv
+ hooked_optional[0xf12be]=hooked_optional[0xf15f2]=hooked_optional[0xfdfdb]=sp_start
+ for rva in (0xc4238,0xb8677,0xc5358,0xc53a3,0xc53c0,0x44dd6):hooked_optional[rva]=trace_scripts
+ script_events='--no-script-events' not in sys.argv
+ for rva in (0xc1a89,0xc1abe,0xc28a5,0xc269b,0xc2a75,0xb8ad8,0x2e205,0x2ffea,0x3005a):hooked_optional[rva]=script_events
+ friendly_fire='--friendly-fire' in sys.argv
+ hooked_optional[0xf3c08]=not friendly_fire
+ shared_items='--no-shared-items' not in sys.argv
+ hooked_optional[0xcc145]=hooked_optional[0x30c9e]=shared_items
  # CMonsterSpawner forced MP-off (or al,0x10 at 93c5d): NOPs with CoopSpawners.
  assert bytes(u.mem_read(obj+0x93c5d,2))==(b'\x90\x90' if spawners else bytes.fromhex('0c10'))
  del sites[0x93c5d]
@@ -302,6 +326,192 @@ def coop_scenario():
  stubs[obj+0x100760]=thiscall_stub(ends,0)
  stubs[obj+0x1005c0]=thiscall_stub(nextlevels,0)
  stubs[obj+0xf10c0]=thiscall_stub(telefrag,12)
+ # CoopSinglePlayerStart (default 1): spawn path 1 skips the multiplayer start
+ # strategy f1070 (the engine's own single-player fallback runs); spawn path 2
+ # runs the start lookup f08a0 with game type 0, restored afterwards.
+ text=b''.join(log).decode('latin1')
+ assert ('effective CoopSinglePlayerStart=1' if sp_start else 'effective CoopSinglePlayerStart=0') in text
+ if sp_start:
+  seen=[]
+  def f08a0():
+   sp=u.reg_read(UC_X86_REG_ESP);seen.append((u.reg_read(UC_X86_REG_ECX),read(shell+0x1d0),cstr(read(sp+4))))
+   u.reg_write(UC_X86_REG_EAX,0x7171);u.reg_write(UC_X86_REG_ESP,sp+8);u.reg_write(UC_X86_REG_EIP,read(sp))
+  def f1070():
+   seen.append('f1070');sp=u.reg_read(UC_X86_REG_ESP)
+   u.reg_write(UC_X86_REG_EAX,0x99);u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+  stubs[obj+0xf08a0]=f08a0;stubs[obj+0xf1070]=f1070
+  u.mem_write(strings+0xf00,b'PlayerStart0\0')
+  call_regs(target[0xf15f2],[strings+0xf00],{UC_X86_REG_ECX:0x5555},4)
+  assert u.reg_read(UC_X86_REG_EAX)==0x7171 and seen==[(0x5555,0,'PlayerStart0')],seen
+  assert read(shell+0x1d0)==1,'game type restored'
+  call_regs(target[0xf12be],[],{UC_X86_REG_ECX:0x5555},0)
+  assert u.reg_read(UC_X86_REG_EAX)==0 and 'f1070' not in seen,seen
+  text=b''.join(log).decode('latin1')
+  assert 'spawn-start single-player start path=f15f2 name=PlayerStart0 found' in text and 'spawn-start single-player start path=f12be' in text
+  # Client enter: the original attach call runs, then the waiting player is
+  # moved to the single-player start (GetObjectPos/SetObjectPos on g_pServerDE).
+  de_calls=[];start=strings+0xf80;write(start+8,0x5717);pl=strings+0xfc0;write(pl+8,0xa1)
+  seen.clear()
+  def f08a0b():
+   sp=u.reg_read(UC_X86_REG_ESP);seen.append(read(shell+0x1d0));u.reg_write(UC_X86_REG_EAX,start)
+   u.reg_write(UC_X86_REG_ESP,sp+8);u.reg_write(UC_X86_REG_EIP,read(sp))
+  stubs[obj+0xf08a0]=f08a0b
+  def de_fn(name,setpos=False):
+   def run():
+    sp=u.reg_read(UC_X86_REG_ESP);a0,a1=read(sp+4),read(sp+8)
+    if name=='getpos':u.mem_write(a1,struct.pack('<3f',1.0,2.0,3.0))
+    de_calls.append((name,a0,struct.unpack('<3f',u.mem_read(a1,12)) if name=='setpos' else a1))
+    u.reg_write(UC_X86_REG_EIP,read(sp));u.reg_write(UC_X86_REG_ESP,sp+4)
+   return run
+  dev=base+0xb000;write(obj+0x16de80,dev)
+  for off,name in ((0xf0,'attach'),(0x1d0,'getpos'),(0x1e0,'setpos')):
+   code_at=strings+0x1200+off;stubs[code_at]=de_fn(name);write(dev+off,code_at)
+  call_regs(target[0xfdfdb],[0x111,pl],{},0)
+  assert de_calls[0]==('attach',0x111,pl),de_calls
+  assert de_calls[1][:2]==('getpos',0x5717) and de_calls[2]==('setpos',0xa1,(1.0,2.0,3.0)),de_calls
+  assert seen==[0] and read(shell+0x1d0)==1,'game type 0 during the lookup, restored'
+  assert 'enter player placed at the single-player start until it spawns' in b''.join(log).decode('latin1')
+  del stubs[obj+0xf08a0];del stubs[obj+0xf1070]
+  print('PASS co-op single-player start: f12be strategy skipped, f15f2 lookup with game type 0 and restored, waiting player placed on enter')
+ # CoopScriptEvents (default 1): the five game-type gates read 0, and the
+ # player event applies its command to every player in the engine list.
+ text=b''.join(log).decode('latin1')
+ assert ('effective CoopScriptEvents=1' if script_events else 'effective CoopScriptEvents=0') in text
+ if script_events:
+  for rva in (0xc1a89,0xc269b,0xb8ad8):
+   call_regs(target[rva],[],{UC_X86_REG_ECX:0x1234},0);assert u.reg_read(UC_X86_REG_ECX)==0,hex(rva)
+  for rva in (0xc28a5,0xc2a75):
+   call_regs(target[rva],[],{UC_X86_REG_EDX:0x1234},0);assert u.reg_read(UC_X86_REG_EDX)==0,hex(rva)
+  applied=[]
+  def to_player():
+   sp=u.reg_read(UC_X86_REG_ESP);h=read(read(sp+4));u.reg_write(UC_X86_REG_EAX,{0xa1:0x7a1,0xb2:0x7b2}.get(h,0))
+   u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+  def f4da0():
+   sp=u.reg_read(UC_X86_REG_ESP);applied.append((u.reg_read(UC_X86_REG_ECX),cstr(read(sp+4))));u.reg_write(UC_X86_REG_EAX,1)
+   u.reg_write(UC_X86_REG_ESP,sp+8);u.reg_write(UC_X86_REG_EIP,read(sp))
+  stubs[obj+0xee7d0]=to_player;stubs[obj+0xf4da0]=f4da0
+  node=manager+0x100;write(manager+4,node)
+  for i,h in enumerate((0xa1,0xc3,0xb2)):                       # 0xc3: a non-player object
+   write(node,h);write(node+4,node+8 if i<2 else 0);node+=8
+  u.mem_write(strings+0xf00,b'invulnerable true\0')
+  call_regs(target[0xc1abe],[strings+0xf00],{UC_X86_REG_ECX:0x7a1},4)
+  assert applied==[(0x7a1,'invulnerable true'),(0x7b2,'invulnerable true')],applied
+  # Personal commands (teleport, animate, lookat...): only the activator.
+  u.mem_write(strings+0xf40,b'teleport gauntletspot\0');applied.clear()
+  call_regs(target[0xc1abe],[strings+0xf40],{UC_X86_REG_ECX:0x7a1},4)
+  assert applied==[(0x7a1,'teleport gauntletspot')],applied        # no activator yet: first player
+  def is_player():
+   sp=u.reg_read(UC_X86_REG_ESP);u.reg_write(UC_X86_REG_EAX,1 if read(sp+4) in (0xa1,0xb2) else 0)
+   u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+  stubs[obj+0xee900]=is_player
+  for site in (0x2e205,0x2ffea,0x3005a):
+   call_regs(target[site],[0xc3],{},0);assert u.reg_read(UC_X86_REG_EAX)&0xff==0     # not a player: not recorded
+  call_regs(target[0x2ffea],[0xb2],{},0);assert u.reg_read(UC_X86_REG_EAX)&0xff==1   # Bob touched the trigger
+  applied.clear();call_regs(target[0xc1abe],[strings+0xf40],{UC_X86_REG_ECX:0x7a1},4)
+  assert applied==[(0x7b2,'teleport gauntletspot')],applied
+  u.mem_write(strings+0xf80,b'giveitem gauntlets\0');applied.clear()
+  call_regs(target[0xc1abe],[strings+0xf80],{UC_X86_REG_ECX:0x7a1},4)
+  assert applied==[(0x7a1,'giveitem gauntlets'),(0x7b2,'giveitem gauntlets')],applied
+  del stubs[obj+0xee900]
+  assert 'script-event player teleport gauntletspot -> activator, players=1' in b''.join(log).decode('latin1')
+  write(manager+4,0);applied.clear()                              # nobody in the list: the given player
+  call_regs(target[0xc1abe],[strings+0xf00],{UC_X86_REG_ECX:0x7a1},4);assert applied==[(0x7a1,'invulnerable true')],applied
+  del stubs[obj+0xee7d0];del stubs[obj+0xf4da0]
+  assert 'script-event player invulnerable true -> players=2' in b''.join(log).decode('latin1')
+  print('PASS co-op script events: five game-type gates open, shared commands to every player, personal commands to the activator')
+ # CoopFriendlyFire=0 (default): damage from another player is skipped
+ # (jump to f3f1e); self, monster and anonymous damage reach the stock
+ # teamplay test (cmp [shell+0x1f0],edi) unchanged.
+ assert ('effective CoopFriendlyFire=1' if friendly_fire else 'effective CoopFriendlyFire=0') in b''.join(log).decode('latin1')
+ if not friendly_fire:
+  skipped=[]
+  def ff_skip():
+   skipped.append(1);u.reg_write(UC_X86_REG_EIP,stop)
+  def to_player2():
+   sp=u.reg_read(UC_X86_REG_ESP);h=read(read(sp+4));u.reg_write(UC_X86_REG_EAX,0x7000 if h in (0xa1,0xb2) else 0)
+   u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+  stubs[obj+0xf3f1e]=ff_skip;stubs[obj+0xee7d0]=to_player2
+  me=strings+0xe00;rec=strings+0xe80;write(me+8,0xa1);write(shell+0x1f0,0)
+  def hit(damager):
+   skipped.clear();write(rec+0x20,damager)
+   call_regs(target[0xf3c08],[],{UC_X86_REG_ESI:me,UC_X86_REG_EBP:rec,UC_X86_REG_EAX:shell,UC_X86_REG_EDI:1},0)
+   assert u.reg_read(UC_X86_REG_ESI)==me and u.reg_read(UC_X86_REG_EBP)==rec and u.reg_read(UC_X86_REG_EDI)==1
+   return bool(skipped),(u.reg_read(UC_X86_REG_EFLAGS)>>6)&1
+  assert hit(0xb2)==(True,0)          # another player: no damage
+  assert hit(0xa1)==(False,0)         # self: stock path, teamplay 0 -> ZF clear
+  assert hit(0xc3)==(False,0)         # a monster
+  assert hit(0)==(False,0)            # no damager
+  write(shell+0x1f0,1);assert hit(0xa1)==(False,1);write(shell+0x1f0,0)   # stock compare replayed
+  del stubs[obj+0xf3f1e];del stubs[obj+0xee7d0]
+  print('PASS co-op friendly fire off: damage from another player skipped, self/monster damage unchanged')
+ # CoopSharedItems (default 1): after the toucher's own pickup (cc180), a
+ # progression item is given to every other player with f3440(id,1,1), once
+ # per item object; health/ammo/charms are not shared.
+ assert ('effective CoopSharedItems=1' if shared_items else 'effective CoopSharedItems=0') in b''.join(log).decode('latin1')
+ if shared_items:
+  picked=[];gave=[]
+  def cc180():
+   sp=u.reg_read(UC_X86_REG_ESP);picked.append((u.reg_read(UC_X86_REG_ECX),read(sp+4)))
+   u.reg_write(UC_X86_REG_ESP,sp+8);u.reg_write(UC_X86_REG_EIP,read(sp))
+  def f3440():
+   sp=u.reg_read(UC_X86_REG_ESP);gave.append((u.reg_read(UC_X86_REG_ECX),read(sp+4),read(sp+8),read(sp+12)));u.reg_write(UC_X86_REG_EAX,1)
+   u.reg_write(UC_X86_REG_ESP,sp+16);u.reg_write(UC_X86_REG_EIP,read(sp))
+  def to_player3():
+   sp=u.reg_read(UC_X86_REG_ESP);h=read(read(sp+4));u.reg_write(UC_X86_REG_EAX,{0xa1:pa,0xb2:pb}.get(h,0))
+   u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+  pa=strings+0xd00;pb=strings+0xd80;write(pa+8,0xa1);write(pb+8,0xb2)
+  stubs[obj+0xcc180]=cc180;stubs[obj+0xf3440]=f3440;stubs[obj+0xee7d0]=to_player3
+  node=manager+0x100;write(manager+4,node)
+  for i,h in enumerate((0xa1,0xb2)):
+   write(node,h);write(node+4,node+8 if i<1 else 0);node+=8
+  item=strings+0xc00;item2=strings+0xc80;dfn=strings+0xbc0;dfn2=strings+0xbe0
+  write(item+0x54,dfn);write(dfn,0x27);write(item2+0x54,dfn2);write(dfn2,0x17)
+  call_regs(target[0xcc145],[pa],{UC_X86_REG_ECX:item},4)
+  assert picked==[(item,pa)] and gave==[(pb,0x27,1,1)],(picked,gave)
+  call_regs(target[0xcc145],[pb],{UC_X86_REG_ECX:item},4)        # same item again: not shared twice
+  assert gave==[(pb,0x27,1,1)] and len(picked)==2,gave
+  call_regs(target[0xcc145],[pa],{UC_X86_REG_ECX:item2},4)       # health: not shared
+  assert gave==[(pb,0x27,1,1)] and len(picked)==3,gave
+  write(dfn,0x09);item3=strings+0xb00;write(item3+0x54,dfn)       # ZeroCannon
+  call_regs(target[0xcc145],[pb],{UC_X86_REG_ECX:item3},4)
+  assert gave[-1]==(pa,0x09,1,1),gave
+  text=b''.join(log).decode('latin1')
+  assert 'shared item=Gauntlets id=39 given to 1 other player(s)' in text and 'shared item=ZeroCannon id=9' in text,text[-400:]
+  write(manager+4,0)
+  del stubs[obj+0xcc180];del stubs[obj+0xf3440];del stubs[obj+0xee7d0]
+  # Secret found: the message goes to every session member (cdecl, caller pops).
+  msgs2=[]
+  def f8d90():
+   sp=u.reg_read(UC_X86_REG_ESP);msgs2.append(tuple(read(sp+4+4*k) for k in range(4)))
+   u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+  stubs[obj+0xf8d90]=f8d90
+  # No session member yet at this point of the scenario: the finder only.
+  call_regs(target[0x30c9e],[0x999,1,0x40400000,0x4444],{},0)
+  assert msgs2==[(0x999,1,0x40400000,0x4444)],msgs2
+  assert 'secret found; message sent to every player' in b''.join(log).decode('latin1')
+  del stubs[obj+0xf8d90]
+  print('PASS co-op shared items: weapons/armour/pamphlets/keys to every player once per item, health not shared')
+ if trace_scripts:
+  played=[]
+  def c5340():
+   sp=u.reg_read(UC_X86_REG_ESP);played.append(cstr(read(sp+4)));u.reg_write(UC_X86_REG_EAX,0)
+   u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+  def c55b0():
+   sp=u.reg_read(UC_X86_REG_ESP);u.reg_write(UC_X86_REG_EAX,1)
+   u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+  stubs[obj+0xc5340]=c5340;stubs[obj+0xc55b0]=c55b0
+  u.mem_write(strings+0xf00,b'mapdata\\realm1\\r1m1\\r1m1a\\r1m1a_bigdoor.scr\0')
+  call_regs(target[0xb8677],[strings+0xf00],{},0)
+  call_regs(target[0xc4238],[strings+0xf00],{},0)
+  call_regs(target[0xc5358],[strings+0xf00],{},0);assert u.reg_read(UC_X86_REG_EAX)&0xff==1
+  call_regs(target[0xc53a3],[0x1013df14,strings+0xf00],{},0)
+  assert played==['mapdata\\realm1\\r1m1\\r1m1a\\r1m1a_bigdoor.scr']*2,played
+  text=b''.join(log).decode('latin1')
+  for line in ('script scriptplay mapdata','script command-play mapdata','r1m1a_bigdoor.scr (already running)','r1m1a_bigdoor.scr (not loaded)'):
+   assert line in text,line
+  assert 'effective TraceScripts=1' in text
+  del stubs[obj+0xc5340];del stubs[obj+0xc55b0]
+  print('PASS co-op TraceScripts: scriptplay/command starts and refusals logged, calls forwarded')
  def player(i,client,hobj,name):
   at=players+i*0x400;write(at+8,hobj);write(at+0x120,client);u.mem_write(at+0x1e8,name.encode()+b'\0');return at
  alice=player(0,0x111,0xa1,'Alice');bob=player(1,0x222,0xb2,'Bob')
@@ -373,10 +583,12 @@ def coop_scenario():
   assert 'effective CoopStartScoreboard=0' in text,'campaign default: no start scoreboard'
   roster(0xa1);spawn(alice);roster(0xa1,0xb2);spawn(bob)
   assert any('full campaign (R1M0..R5M1B, 48 worlds)' in m for m in chat(bob,'!campaign'))
-  assert any('Only the host' in m for m in chat(bob,'!campaign realm fire'))
-  out=chat(alice,'!campaign from earth');assert any('Host selected from Earth (R2M0..R5M1B, 36 worlds)' in m for m in out),out
-  chat(alice,'!ready');chat(bob,'!ready');out=chat(alice,'!start')
-  assert any('Starting -> R2M0' in m for m in out),out
+  assert any('Only the host' in m for m in chat(bob,'!campaign fire'))
+  assert any('Use: !campaign full' in m for m in chat(alice,'!campaign earth realm fire')),'malformed: help, not silence'
+  assert changes()==0
+  # !campaign <realm> starts at once from that realm (no !ready needed).
+  out=chat(alice,'!campaign earth')
+  assert any('Host started from Earth (R2M0..R5M1B, 36 worlds) -> R2M0' in m for m in out),out
   if sb:frame(1100)
   assert changes()==1
   cur=read(obj+0x16da88);slot=cur+1 if cur+1<3 else 0
@@ -392,9 +604,9 @@ def coop_scenario():
   assert any('not the next world of the selected route' in m for m in said[n:]),said[n:]
   exit_trigger('worlds/realm2/r2m1a',activator=0xa1);assert changes()==2
   next_level();spawn(alice)
-  # Host abort returns everybody to the lobby world (CoopLobbyWorld or the route start).
+  # Host abort returns everybody to the lobby world (CoopLobbyWorld, else R1M2B).
   out=chat(alice,'!abort');lobby='--lobby=' in ' '.join(sys.argv)
-  assert any(('-> lobby PM01' if lobby else '-> lobby R2M0') in m for m in out),out
+  assert any(('-> lobby PM01' if lobby else 'Host aborted -> lobby R1M2B') in m for m in out),out
   assert changes()==3
   next_level()
   assert any('LOBBY' in m for m in chat(alice,'!coop')),'back in the lobby phase'
@@ -613,6 +825,31 @@ def coop_scenario():
   assert 'TraceTiming' not in text and all(l.startswith('[KPCFix Co-op] g=') for l in session_lines),session_lines[:3]
  assert sbm()==([(0x111,0x48),(0x222,0x48)] if sb else []),'no scoreboard on natural exits or worlds without an intro'
  if sb:assert 'scoreboard show client=273 msg=0x48 sent' in text and 'native pending NextLevel deferred' in text
+ # CoopSpawnSpread: a second player at a taken (non-R1M2B) start queries the
+ # engine (IntersectSegment g_pServerDE+0x90: floor and line rays) and the
+ # BSP; with no world loaded the body check is UNKNOWN, so it fails closed
+ # and the start is shared. Without the engine query it also shares.
+ text=b''.join(log).decode('latin1')
+ spread='--no-spawn-spread' not in sys.argv
+ assert ('effective CoopSpawnSpread=1' if spread else 'effective CoopSpawnSpread=0') in text
+ if spread and '--intermission' not in sys.argv:
+  rays=[]
+  def intersect():
+   sp=u.reg_read(UC_X86_REG_ESP);q,info=read(sp+4),read(sp+8)
+   fy=struct.unpack('<f',u.mem_read(q+4,4))[0];ty=struct.unpack('<f',u.mem_read(q+16,4))[0]
+   down=ty<fy-100;rays.append('floor' if down else 'line')
+   if down:u.mem_write(info,struct.pack('<3f',0,-302.0,0));u.mem_write(info+12,struct.pack('<3f',0,1.0,0))
+   u.reg_write(UC_X86_REG_EAX,1 if down else 0);u.reg_write(UC_X86_REG_EIP,read(sp));u.reg_write(UC_X86_REG_ESP,sp+4)
+  dev2=read(obj+0x16de80);old90=read(dev2+0x90);code90=strings+0x1400;stubs[code90]=intersect;write(dev2+0x90,code90)
+  zz=0xc4000000                                                 # z=-512: not the R1M2B anchor
+  n0=len(said);spawn(alice,z=zz);spawn(bob,z=zz)
+  text=b''.join(log).decode('latin1')
+  assert 'spawn-spread no candidate passed; start shared' in text,text[-500:]
+  assert rays and rays[0]=='floor' and 'line' in rays,rays
+  write(dev2+0x90,0);n1=text.count('spawn-spread')
+  spawn(bob,z=zz)                                               # respawn: previous reservation retried
+  write(dev2+0x90,old90);del stubs[code90]
+  print('PASS co-op spawn spread: taken start probed (floor, line, body), unknown body fails closed')
  print('PASS co-op session hooks:',len(said),'broadcasts,',len(ends),'native end-level requests,',len(nextlevels),'NextLevel calls, telefrag skipped')
 
 call(proxy+ps['_DllMain'],[proxy,1,0],True)
@@ -650,6 +887,39 @@ else:
  text=b''.join(log).decode('latin1')
  assert 'effective CoopSoundClock=1' in text and 'sound clock hook installed (server.dll 2a1fc -> 29f0b)' in text
  print('PASS co-op sound clock: 44.69 s narration timer expires after',wall,'ms of wall clock (stock 35750)')
+# CoopServerFrameMs (session, default 16): server.dll 235b0 (e8 aa 6a 00 00 ->
+# frame 2a05f, thiscall(flags, float time), ret 8). A call sooner than 16 ms
+# after the last simulated frame returns 1 without running; the next one runs.
+frame_site=bytes(u.mem_read(engine+0x235b0,5))
+frame_on=coop_session and '--off' not in sys.argv and '--no-server-frame' not in sys.argv
+if not frame_on:
+ assert frame_site==bytes.fromhex('e8aa6a0000'),frame_site.hex()
+else:
+ assert frame_site[0]==0xe8,frame_site.hex()
+ frame_target=(engine+0x235b0+5+struct.unpack('<i',frame_site[1:5])[0])&0xffffffff
+ assert proxy<=frame_target<proxy+0x100000
+ runs=[]
+ def server_frame():
+  sp=u.reg_read(UC_X86_REG_ESP);srv_=u.reg_read(UC_X86_REG_ECX)
+  t=struct.unpack('<f',struct.pack('<I',read(sp+8)))[0]+struct.unpack('<f',u.mem_read(srv_+0x1f8,4))[0]
+  runs.append((read(sp+4),round(t,4)));u.mem_write(srv_+0x218,struct.pack('<f',t))
+  u.reg_write(UC_X86_REG_EAX,1);u.reg_write(UC_X86_REG_ESP,sp+12);u.reg_write(UC_X86_REG_EIP,read(sp))
+ stubs[engine+0x2a05f]=server_frame
+ srv=scratch+0x95000;u.mem_write(srv+0x1f8,struct.pack('<f',0.0));u.mem_write(srv+0x218,struct.pack('<f',0.0))
+ f=lambda v:struct.unpack('<I',struct.pack('<f',v))[0]
+ res=[]
+ for t in (1.000,1.008,1.016,1.024,1.032,1.040,1.048,2.000,1.990):   # dedicated.exe calls about every 8 ms
+  call_regs(frame_target,[7,f(t)],{UC_X86_REG_ECX:srv},8);res.append(u.reg_read(UC_X86_REG_EAX))
+ assert all(r==1 for r in res),res
+ # First call runs (no previous frame), then every second 8 ms call; a long gap runs; time going back runs.
+ assert [t for _,t in runs]==[1.0,1.016,1.032,1.048,2.0,1.99],runs
+ assert all(fl==7 for fl,_ in runs),'flags forwarded'
+ del stubs[engine+0x2a05f]
+ text=b''.join(log).decode('latin1')
+ assert 'effective CoopServerFrameMs=16' in text and 'server frame hook installed (server.dll 235b0 -> 2a05f), minimum step ms=16' in text
+ print('PASS co-op server frame: 8 ms calls simulated as 16 ms frames, long gaps and time resets run at once')
+if coop_session and '--off' not in sys.argv and '--no-server-frame' in sys.argv:
+ text=b''.join(log).decode('latin1');assert 'effective CoopServerFrameMs=0' in text and 'server frame hook installed' not in text
 if coop_session and '--off' not in sys.argv and not sound_on and script_on:
  text=b''.join(log).decode('latin1');assert 'effective CoopSoundClock=0' in text and 'sound clock hook installed' not in text
 assert read(scratch+0x90010)==0x30080000 and setup_calls[0][0]==3

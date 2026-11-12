@@ -7,6 +7,8 @@
 #include "loading.h"
 #include "netwatch.h"
 #include "focus.h"
+#include "console.h"
+#include "camera.h"
 #define KPC_VERSION "KPCFix 1.13 for Windows"
 #define KPC_CLOCK_DEFAULT 1
 const ShellLayout *g_shell_layout;
@@ -525,6 +527,37 @@ static int queue_ui(Edit edits[48],U32 *count,U8 *base){
 /* Called after LoadLibrary returns, before its caller can use cshell exports. */
 /* Campaign loading art (loading.c): the PreLoadWorld vtable slot, the 0x69
  * close call and the per-frame screen draw call, all original values checked. */
+/* Chat and server message lifetime ([Multiplayer] ChatMessageSeconds).
+ * The shell's message handler (0xcb38d) starts every message's display time
+ * at 3.0 s unless the message carries its own (flag 2). The immediate of that
+ * MOV [ESP+0x10], imm32 is replaced; the instruction stays the same. */
+static U32 g_chat_seconds=8;
+static int queue_chat(Edit edits[48],U32 *count,U8 *base){
+    static const U8 before[8]={0xc7,0x44,0x24,0x10,0x00,0x00,0x40,0x40};
+    U8 after[8];float seconds=(float)g_chat_seconds;U32 bits;
+    if(g_chat_seconds==3)return 1;
+    if(!g_shell_layout->chat_duration){log_text("Chat message time: not verified for this cshell edition; stock 3 s retained.\r\n");return 1;}
+    copy_bytes(&bits,&seconds,4);copy_bytes(after,before,4);store32(after+4,bits);
+    return add_edit(edits,count,base+g_shell_layout->chat_duration,before,after,8);
+}
+/* Chat typing: drop key-bound actions while the message editor types (console.c). */
+static int queue_chat_actions(Edit edits[48],U32 *count,U8 *base){
+    const ShellLayout *L=g_shell_layout;U8 before[4],after[4];
+    if(!g_chat_blocks_actions)return 1;
+    if(!L->command_slot){g_chat_blocks_actions=0;log_text("Chat typing: not verified for this cshell edition; key actions unchanged.\r\n");return 1;}
+    store32(before,(U32)(base+L->command_on));store32(after,(U32)kpc_command_on);
+    g_command_shell=base;
+    return add_edit(edits,count,base+L->command_slot,before,after,4);
+}
+/* Smooth scripted cameras: the sample store call (camera.c). */
+static int queue_camera(Edit edits[48],U32 *count,U8 *base){
+    const ShellLayout *L=g_shell_layout;U8 before[5],after[5];
+    if(!g_camera_smooth)return 1;
+    if(!L->camera_set_call){g_camera_smooth=0;log_text("Cutscene camera smoothing: not verified for this cshell edition; stock camera samples.\r\n");return 1;}
+    near_call(before,base+L->camera_set_call,base+L->camera_set);near_call(after,base+L->camera_set_call,kpc_camera_set);
+    g_camera_shell=base;
+    return add_edit(edits,count,base+L->camera_set_call,before,after,5);
+}
 static int queue_loading(Edit edits[48],U32 *count,U8 *base){
     const ShellLayout *L=g_shell_layout;U8 before[5],after[5];
     if(!g_loading_enabled)return 1;
@@ -564,7 +597,7 @@ static int patch_shell(HMODULE module){
         report_error("Unexpected movement dispatch in cshell.dll.");goto done;
     }
     if(!queue_sensitivity(edits,&count,base)||!queue_hud(edits,&count,base)||!queue_ui(edits,&count,base)||
-       !queue_loading(edits,&count,base)||!commit_edits(edits,count)){
+       !queue_loading(edits,&count,base)||!queue_chat(edits,&count,base)||!queue_chat_actions(edits,&count,base)||!queue_camera(edits,&count,base)||!commit_edits(edits,count)){
         report_error("UI/HUD/sensitivity/movement instructions differ or their memory update failed. No changes in this cshell transaction were retained.");goto done;
     }
     g_hud_shell=base;
@@ -574,6 +607,9 @@ static int patch_shell(HMODULE module){
         else log_text("Server timeout: not verified for this cshell edition; stock 120 s retained.\r\n");
     }
     if(g_loading_enabled){log_text("Campaign loading art: original R?M? pictures in multiplayer campaign loads, minimum ms=");log_hex(g_loading_min_ms);log_text(".\r\n");}
+    if(g_chat_seconds!=3&&g_shell_layout->chat_duration){log_text("Chat message time: seconds=");log_hex(g_chat_seconds);log_text(" (stock 3).\r\n");}
+    if(g_camera_smooth&&g_shell_layout->camera_set_call)log_text("Cutscene camera smoothing: server camera samples interpolated every frame.\r\n");
+    if(g_chat_blocks_actions)log_text("Chat typing: key-bound actions (noclip, movement...) are ignored while a message is being typed.\r\n");
     if(g_loading_enabled&&g_loading_hold)log_text("Loading picture spawn hold: the player enters the world when the picture's minimum time has passed.\r\n");
     log_text("Ground contact: V5 applied in memory.\r\n");
     kpc_status|=GROUND_READY|GROUND_RUNTIME;
@@ -663,17 +699,24 @@ static int install_game_fixes(void){
         }
         g_net_timeout_enabled=seconds!=0;g_net_timeout_seconds=(float)seconds;
     }
-    min_step_ms=GetPrivateProfileIntW(L"KPCFix",L"LocalServerMinStepMs",0,ini_path);
+    min_step_ms=GetPrivateProfileIntW(L"KPCFix",L"LocalServerMinStepMs",16,ini_path);
     if(min_step_ms>50){
         report_error("[KPCFix] LocalServerMinStepMs must be 0 (off) or an integer from 1 to 50. No client changes were applied.");return 0;
     }
     g_min_step_seconds=(float)min_step_ms*0.001f;
     g_focus_enabled=GetPrivateProfileIntW(L"Multiplayer",L"KeepAudioOnFocusLoss",1,ini_path)!=0;
+    g_console_key_fix=GetPrivateProfileIntW(L"KPCFix",L"ConsoleKeyFix",1,ini_path)!=0;
+    g_chat_blocks_actions=GetPrivateProfileIntW(L"Multiplayer",L"ChatBlocksActions",1,ini_path)!=0;
+    g_camera_smooth=GetPrivateProfileIntW(L"Multiplayer",L"SmoothCutsceneCamera",1,ini_path)!=0;
     g_focus_resync=g_focus_enabled&&GetPrivateProfileIntW(L"Multiplayer",L"ResyncAudioOnFocus",1,ini_path)!=0;
     g_focus_log=kpc_log_text;
     g_loading_enabled=GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingArt",1,ini_path)!=0;
     g_loading_min_ms=GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingMinimumMs",5000,ini_path);
     g_loading_hold=g_loading_enabled&&GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingHoldSpawn",1,ini_path)!=0;
+    g_chat_seconds=GetPrivateProfileIntW(L"Multiplayer",L"ChatMessageSeconds",8,ini_path);
+    if(g_chat_seconds<1||g_chat_seconds>60){
+        report_error("[Multiplayer] ChatMessageSeconds must be an integer from 1 to 60 (stock 3). No client changes were applied.");return 0;
+    }
     g_loading_log=kpc_log_text;
     if(g_loading_min_ms>30000){
         report_error("[Multiplayer] CampaignLoadingMinimumMs must be an integer from 0 to 30000. No client changes were applied.");return 0;
@@ -752,14 +795,34 @@ static int install_game_fixes(void){
             }
         }
     }
-    if(g_loading_hold){
-        /* Spawn hold release tick: the client update's per-frame call. */
+    if(g_camera_smooth)g_camera_clock=(U32 (WINAPI *)(void))dword(base+0x97278);
+    if(g_loading_hold||g_camera_smooth){
+        /* Per-frame tick (spawn hold release, camera smoothing): the client update's call. */
         U8 before[5];
         near_call(before,base+0x13876,base+0x13bb0);near_call(replacement,base+0x13876,kpc_client_frame);
         if(!add_edit(edits,&count,base+0x13876,before,replacement,5)){
             report_error("The original client update call differs. No client edits were applied.");return 0;
         }
         g_loading_client=base;
+        /* New connection marker: the "Got ID packet" console print. */
+        near_call(before,base+0x6986e,base+0x1c8d0);near_call(replacement,base+0x6986e,kpc_new_connection_print);
+        if(!add_edit(edits,&count,base+0x6986e,before,replacement,5)){
+            report_error("The original connection ID print call differs. No client edits were applied.");return 0;
+        }
+        g_id_print_target=(U32)(base+0x1c8d0);
+    }
+    if(g_console_key_fix){
+        /* Console key: drop the character the toggle key types (console.c). */
+        static const U8 char_before[5]={0x83,0xf8,0x60,0x74,0x45};
+        U8 before[5];
+        near_call(before,base+0x6dc9,base+0x287a0);near_call(replacement,base+0x6dc9,kpc_console_key_entry);
+        if(!add_edit(edits,&count,base+0x6dc9,before,replacement,5)){
+            report_error("The original console key call differs. No client edits were applied.");return 0;
+        }
+        near_call(replacement,base+0x700a,kpc_console_char_entry);
+        if(!add_edit(edits,&count,base+0x700a,char_before,replacement,5)){
+            report_error("The original console character test differs. No client edits were applied.");return 0;
+        }
     }
     if(g_net_timeout_enabled){
         static const U8 before[14]={0x8b,0x4e,0x30,0xd9,0x46,0x74,0xd8,0x59,0x4c,0xdf,0xe0,0xf6,0xc4,0x41};
@@ -793,6 +856,7 @@ static int install_game_fixes(void){
     log_text("Timing V3: clock guard and 8 independent carries applied in memory.\r\n");
     if(min_step_ms){log_text("LocalServerMinStepMs=");log_hex(min_step_ms);log_text(": EXPERIMENTAL minimum local-server step; shorter frames are carried, not simulated.\r\n");}
     if(g_focus_enabled)log_text("Focus loss: remote multiplayer keeps server-owned sounds running (single player and menus stock).\r\n");
+    if(g_console_key_fix)log_text("Console key: the character typed by the console toggle key is not added to the console line.\r\n");
     if(g_focus_resync)log_text("Focus regain: remote multiplayer sounds re-synchronised to real time 300 ms after the window returns.\r\n");
     if(g_net_timeout_enabled){log_text("Server timeout: in-world multiplayer connection seconds=");log_hex((U32)g_net_timeout_seconds);log_text(" (stock 120 s elsewhere).\r\n");}
     log_text(input_clock_enabled?"Input clock v2: timeGetTime plus delayed/zero interval guards; no global clock hook.\r\n":"InputClock=0: original input clocks and intervals retained; Timing V3/Ground V5 remain enabled.\r\n");
