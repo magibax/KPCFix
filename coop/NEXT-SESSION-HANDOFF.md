@@ -43,7 +43,8 @@ two-PC tested.
 | 25 | Powerup animation only seen by the picker since row 1 | `player powerup` (`f6ff0`) is not per client: it broadcasts `0x39` (activator object, effect `0x35`) to every client; `player animate` is a server-side animation of the activator's model. Probable cause: an observer's client drops the effect when it does not hold the just-teleported activator object yet | **probable fix** (`CoopPowerupResend`): the effect is re-sent to every other member 400 ms later. Needs the two-PC test; if still invisible, check the client SFX handler for effect `0x35` (cshell table `0x201bf94c`) for a local-player test |
 | 26 | `!kill` | — | **added**: damage entry `vtable+0x50` with the damage-brush record (`2f1c0` layout), damager = the player itself (passes `CoopFriendlyFire`), kill-invulnerable set |
 | 27 | Chat "everything" cheat | — | **added**: `!all` (`kpc_cheats 1`): every armour piece, every weapon, 1000 of each ammo (capped by `f3440`) |
-| 28 | Host `!changelevel <world>` | — | **added** (`coop_session_changelevel`, `coop_campaign_find`): campaign mode, host only, `R1M2A` or `worldsealm1\R1M2A`; from the lobby or during play; same world change as an exit; the selection becomes "from <world>" so natural exits continue along WORLDORDER (decision: carries on, not a one-off); `!abort` returns to the lobby and the full selection |
+| 28 | Host `!changelevel <world>` | — | **added** (`coop_session_changelevel`, `coop_campaign_find`): campaign mode, host only, `R1M2A` or `worlds
+ealm1\R1M2A`; from the lobby or during play; same world change as an exit; the selection becomes "from <world>" so natural exits continue along WORLDORDER (decision: carries on, not a one-off); `!abort` returns to the lobby and the full selection |
 * **Builds in the working tree:** server `server-tools/KPCServerTools.dll` (build with
   `C:\KPCTest\pass2\build-coop.sh`, byte-identical across rebuilds) and client
   `dinput.dll` (`C:\KPCTest\clientbuild\build-coop.sh`). Hashes: `SHA256SUMS`,
@@ -53,11 +54,12 @@ two-PC tested.
   in `C:\KPCTest\backup\` for what each install replaced. The laptop installs from
   `C:\KPCTest\pkg-client-*` or GitHub. How to upgrade:
   [UPGRADE-TEST-INSTALL.md](UPGRADE-TEST-INSTALL.md).
-* **Current install (2026-11-12, commit `2b50501`):** `C:\Games\Psycho` has client
-  `dinput.dll` `2ab53bd7` and Server Tools `035f23a2`; backup
-  `C:\KPCTest\backup\games-psycho-20261112-before-2ab53bd7` (it also holds the moved
-  `9ff661bf` `server.dll`). `smoke1` already had `035f23a2`. Laptop package:
-  `C:\KPCTest\pkg-client-2ab53bd7`.
+* **Current install (2026-11-12, commit `f37135a`):** `C:\Games\Psycho` has client
+  `dinput.dll` `2ab53bd7` (unchanged) and Server Tools `7dbba5eb`; backup
+  `C:\KPCTestackup\games-psycho-20261112-before-7dbba5eb` (holds the previous
+  `035f23a2` files and the moved `server.dll` as `server.dll.active-moved`). `smoke1` has
+  `7dbba5eb` too (backup `C:\KPCTestackup\smoke1-20261112-before-7dbba5eb`). Laptop
+  package (client only, unchanged): `C:\KPCTest\pkg-client-2ab53bd7`.
 
 ## Live-confirmed (two PCs)
 
@@ -83,7 +85,9 @@ the R2M2A Ballbuster above 60 FPS.
 | Client: chat messages 8 s | `ChatMessageSeconds=8` |
 | Client: `LocalServerMinStepMs` default 16; VSync at refresh rate, no 60 cap (`DDrawCompat-CLIENT.ini`) | defaults |
 
-Tests: server unit tests 24/24 (64- and 32-bit), emulator matrix 43 modes, native server
+Tests (Server Tools `7dbba5eb`): server unit tests 26/26 (64- and 32-bit, new `test_coop_inventory.c`),
+emulator matrix 48 modes (new: spawner reference, pickup respawn, cheat keys, `!kill`/`!class`/`!all`,
+inventory restore, powerup re-send, `!changelevel`), `check_live.py` both modes, native server
 smoke (Coop/Normal/PassThrough) on `smoke1`, client suite 20/20, `audit_sites.py` (client cshell session: chat command bits, keep running on focus loss + Audio checkbox, window-break log).
 
 ## Two-PC test (next)
@@ -101,6 +105,35 @@ Both PCs on the current client; server started with
    the log); find a secret (both see the message).
 5. R2M2A garage: the Ballbuster clears the door and shoots the car.
 6. Watch a cutscene camera: report if it looks choppy (62.5 Hz server updates).
+
+Server Tools `7dbba5eb` (rows 8, 20, 22–28). Host = the first player in (marked `*` in `!coop`):
+
+7. **Spawner room (row 22):** host `!changelevel R4M1A`. The non-host walks into the
+   head-spawn room alone while the host stays at the start: Headless spawn. Log:
+   `spawner reference moved to the nearest player`.
+8. **Exits still host-only:** in R1M1A the non-host walks into the victory trigger:
+   refused ("Only the host"); the host can still start it.
+9. **Cheat keys (rows 20, 23):** server console `kpc_cheats 1`. Each player binds and
+   presses GimmieGimmieGimmie, NextArmor and CyclePlayerClass: only the presser gets
+   the items or changes class; chat `... used ... (key)`. With `kpc_cheats 0`: "Cheats
+   are disabled" and nothing changes. `!class demon` / `!class` also work.
+10. **Class keeps items (row 23):** with weapons and ammo, cycle the class 4 times: still
+    the same weapons, armour and ammo.
+11. **Persistence (row 8):** collect weapons, armour, shards and ammo, then take the exit:
+    everything is back about half a second after spawning in the next world (log
+    `inventory-saved` / `inventory-restored`). Same after `!abort` into the lobby and a
+    new `!campaign`, and after `!kill`.
+12. **Pickup respawn (row 24):** pick up a weapon, ammo and an armour shard: each
+    comes back after 15 s. Stand on the spot: it waits until you step off.
+    Armour pieces, pamphlets and keys do not come back.
+13. **Powerup (row 25):** one player takes an armour piece while the other watches the
+    cutscene: does the watcher see the powerup glow/animation? (log `powerup effect
+    0x35 re-sent to 1 observer(s)`).
+14. **`!kill` (row 26):** dies, normal respawn; items back (with `CoopKeepOnDeath=1`).
+15. **`!all` (row 27):** with `kpc_cheats 1`: all armour, weapons, full ammo, only for the typer.
+16. **`!changelevel` (row 28):** non-host `!changelevel R1M2A` is refused; host
+    `!changelevel worlds\realm1\R1M2A` from the lobby and again during play: the loading
+    picture shows, everyone arrives, and the next natural exit goes to R1M2B.
 
 Send `KPCServerTools.log` and both `KPCFix.log`.
 
