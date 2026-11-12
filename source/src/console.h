@@ -9,4 +9,7 @@ void kpc_console_key_entry(void);
 void kpc_console_char_entry(void);
 U32 CDECL kpc_console_key_down(void);
 U32 CDECL kpc_console_char_drop(void);
+void kpc_input_state_entry(void);
+U32 CDECL kpc_input_enabled(U32 state);
+U32 kpc_blocked_input_frames(void);
 #endif

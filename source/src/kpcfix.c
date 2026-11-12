@@ -315,12 +315,13 @@ static int valid_image(const U8 *base,U32 image_size,U32 preferred){
     return dword(base+pe+24+56)==image_size&&dword(base+pe+24+28)==preferred;
 }
 
+#define EDIT_CAP 96u /* one transaction: cshell (HUD, UI, chat, focus...) or client */
 typedef struct {U8 *address;U32 length;U8 before[40],after[40];DWORD protection;int touched;} Edit;
-static int add_edit(Edit edits[48],U32 *count,U8 *address,const U8 *before,const U8 *after,U32 length){
+static int add_edit(Edit edits[EDIT_CAP],U32 *count,U8 *address,const U8 *before,const U8 *after,U32 length){
     Edit *e;
     if(length>40||!equal_bytes(address,before,length))return 0;
     if(equal_bytes(before,after,length))return 1;
-    if(*count>=48)return 0;
+    if(*count>=EDIT_CAP)return 0;
     e=&edits[(*count)++];e->address=address;e->length=length;e->protection=0;e->touched=0;copy_bytes(e->before,before,length);copy_bytes(e->after,after,length);return 1;
 }
 static int apply_edit(Edit *e){
@@ -343,7 +344,7 @@ static int undo_edit(Edit *e){
     flushed=FlushInstructionCache(GetCurrentProcess(),e->address,e->length);
     return restored&&flushed;
 }
-static int commit_edits(Edit edits[48],U32 count){
+static int commit_edits(Edit edits[EDIT_CAP],U32 count){
     U32 i,j;
     for(i=0;i<count;i++)if(!equal_bytes(edits[i].address,edits[i].before,edits[i].length))return 0;
     for(i=0;i<count;i++){
@@ -366,7 +367,7 @@ __attribute__((noipa)) U32 WINAPI kpc_bind_ip(const char *ip){
     if(!ip||!*ip)return 0;
     return original_bind_inet_addr(ip);
 }
-static int queue_bind_fix(Edit edits[48],U32 *count,U8 *base){
+static int queue_bind_fix(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     U8 before[6]={0xff,0x15,0,0,0,0},after[6];
     if(!GetPrivateProfileIntW(L"Multiplayer",L"EmptyBindIPFix",1,ini_path))return 1;
     original_bind_inet_addr=(void *)dword(base+0x97288);
@@ -378,7 +379,7 @@ static int queue_bind_fix(Edit edits[48],U32 *count,U8 *base){
     return 1;
 }
 
-static int queue_net_trace(Edit edits[48],U32 *count,U8 *base){
+static int queue_net_trace(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     static const U32 sites[7]={0x97284,0x972a0,0x972a8,0x9728c,0x972a4,0x97290,0x9729c};
     void *targets[7]={(void *)kpc_net_startup,(void *)kpc_net_cleanup,(void *)kpc_net_socket,(void *)kpc_net_close,(void *)kpc_net_bind,(void *)kpc_net_send,(void *)kpc_net_receive};
     U8 before[4],after[4];U32 i,values[7];
@@ -396,7 +397,7 @@ static int queue_net_trace(Edit edits[48],U32 *count,U8 *base){
 }
 
 /* Redirect only the menu's sensitivity operands; shared constants have other users. */
-static int queue_sensitivity(Edit edits[48],U32 *count,U8 *base){
+static int queue_sensitivity(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     const U32 *sites=g_shell_layout->sensitivity_sites;
     const U32 *values=g_shell_layout->sensitivity_constants;
     const float *targets[3]={&sensitivity_maximum,&sensitivity_minimum,&sensitivity_inverse};
@@ -415,7 +416,7 @@ static int queue_sensitivity(Edit edits[48],U32 *count,U8 *base){
 
 /* Limit scaling to the HUD's own panel draws, glyphs and crosshair calls.
  * No renderer surfaces, global resolution values or menu draw calls change. */
-static int queue_hud(Edit edits[48],U32 *count,U8 *base){
+static int queue_hud(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     typedef struct {U32 length;U8 before[7];void (*entry)(void);} HudSite;
     static const HudSite sites[]={
         {5,{0xff,0x50,0x04,0x8b,0x16},hud_panel_entry},
@@ -476,7 +477,7 @@ static int queue_hud(Edit edits[48],U32 *count,U8 *base){
 
 /* Additional reviewed UI paths. Each option queues into the SAME cshell
  * transaction as the established ground/sensitivity/HUD changes. */
-static int queue_ui(Edit edits[48],U32 *count,U8 *base){
+static int queue_ui(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     U8 before[7],after[7];U32 i;
     if(g_cursor_percent!=100){
         static const U8 dims[6]={0xff,0x92,0x74,0x01,0x00,0x00};
@@ -532,7 +533,7 @@ static int queue_ui(Edit edits[48],U32 *count,U8 *base){
  * at 3.0 s unless the message carries its own (flag 2). The immediate of that
  * MOV [ESP+0x10], imm32 is replaced; the instruction stays the same. */
 static U32 g_chat_seconds=8;
-static int queue_chat(Edit edits[48],U32 *count,U8 *base){
+static int queue_chat(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     static const U8 before[8]={0xc7,0x44,0x24,0x10,0x00,0x00,0x40,0x40};
     U8 after[8];float seconds=(float)g_chat_seconds;U32 bits;
     if(g_chat_seconds==3)return 1;
@@ -541,7 +542,7 @@ static int queue_chat(Edit edits[48],U32 *count,U8 *base){
     return add_edit(edits,count,base+g_shell_layout->chat_duration,before,after,8);
 }
 /* Chat typing: drop key-bound actions while the message editor types (console.c). */
-static int queue_chat_actions(Edit edits[48],U32 *count,U8 *base){
+static int queue_chat_actions(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     const ShellLayout *L=g_shell_layout;U8 before[4],after[4];
     if(!g_chat_blocks_actions)return 1;
     if(!L->command_slot){g_chat_blocks_actions=0;log_text("Chat typing: not verified for this cshell edition; key actions unchanged.\r\n");return 1;}
@@ -549,8 +550,33 @@ static int queue_chat_actions(Edit edits[48],U32 *count,U8 *base){
     g_command_shell=base;
     return add_edit(edits,count,base+L->command_slot,before,after,4);
 }
+/* Keep running on focus loss: the OnEvent 4/3 music calls (focus.c). */
+static int queue_focus_music(Edit edits[EDIT_CAP],U32 *count,U8 *base){
+    const ShellLayout *L=g_shell_layout;U8 before[5],after[5];
+    if(!g_focus_enabled)return 1;
+    if(!L->music_pause_call){log_text("Focus loss: music hooks not verified for this cshell edition; music pauses as stock.\r\n");return 1;}
+    g_focus_shell=base;
+    near_call(before,base+L->music_pause_call,base+L->music_pause);near_call(after,base+L->music_pause_call,kpc_music_pause);
+    if(!add_edit(edits,count,base+L->music_pause_call,before,after,5))return 0;
+    near_call(before,base+L->music_resume_call,base+L->music_resume);near_call(after,base+L->music_resume_call,kpc_music_resume);
+    if(!add_edit(edits,count,base+L->music_resume_call,before,after,5))return 0;
+    /* Setup > Audio checkbox (ui.c): the Audio screen's vtable slots. */
+    if(!L->audio_vtable){log_text("Focus loss: Audio-menu checkbox not verified for this cshell edition; console variable only.\r\n");return 1;}
+    {
+        const U32 offsets[5]={0x08,0x0c,0x10,0x14,0x18};
+        const U32 originals[5]={L->audio_init,L->audio_term,L->audio_draw,L->audio_move,L->audio_event};
+        void *const hooks[5]={(void *)kpc_audio_init,(void *)kpc_audio_term,(void *)kpc_audio_draw,(void *)kpc_audio_move,(void *)kpc_audio_event};
+        U32 i;
+        g_audio_shell=base;
+        for(i=0;i<5;i++){
+            store32(before,(U32)(base+originals[i]));store32(after,(U32)hooks[i]);
+            if(!add_edit(edits,count,base+L->audio_vtable+offsets[i],before,after,4))return 0;
+        }
+    }
+    return 1;
+}
 /* Smooth scripted cameras: the sample store call (camera.c). */
-static int queue_camera(Edit edits[48],U32 *count,U8 *base){
+static int queue_camera(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     const ShellLayout *L=g_shell_layout;U8 before[5],after[5];
     if(!g_camera_smooth)return 1;
     if(!L->camera_set_call){g_camera_smooth=0;log_text("Cutscene camera smoothing: not verified for this cshell edition; stock camera samples.\r\n");return 1;}
@@ -558,7 +584,7 @@ static int queue_camera(Edit edits[48],U32 *count,U8 *base){
     g_camera_shell=base;
     return add_edit(edits,count,base+L->camera_set_call,before,after,5);
 }
-static int queue_loading(Edit edits[48],U32 *count,U8 *base){
+static int queue_loading(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     const ShellLayout *L=g_shell_layout;U8 before[5],after[5];
     if(!g_loading_enabled)return 1;
     if(!L->preload_slot){g_loading_enabled=0;log_text("Campaign loading art: not verified for this cshell edition; stock loading retained.\r\n");return 1;}
@@ -578,7 +604,7 @@ static int queue_loading(Edit edits[48],U32 *count,U8 *base){
 static int patch_shell(HMODULE module){
     WCHAR path[PATH_CAP];U8 digest[32],movement_call[7],guard_call[5];
     static const U8 original_move[7]={0x8b,0x46,0x38,0x50,0xff,0x52,0x40};U32 file_size,count=0,n;U8 *base=(U8 *)module;
-    const ShellProfile *profile;Edit edits[48];int result=0;
+    const ShellProfile *profile;Edit edits[EDIT_CAP];int result=0;
     n=GetModuleFileNameW(module,path,PATH_CAP);
     if(!n||n>=PATH_CAP||!basename_is(path,L"cshell.dll"))return 1;
     if(__sync_val_compare_and_swap(&movement_lock,0,1)!=0){report_error("Concurrent cshell loading prevented safe movement-patch installation. Restart with the tested V3/V5 setup.");return 0;}
@@ -597,7 +623,7 @@ static int patch_shell(HMODULE module){
         report_error("Unexpected movement dispatch in cshell.dll.");goto done;
     }
     if(!queue_sensitivity(edits,&count,base)||!queue_hud(edits,&count,base)||!queue_ui(edits,&count,base)||
-       !queue_loading(edits,&count,base)||!queue_chat(edits,&count,base)||!queue_chat_actions(edits,&count,base)||!queue_camera(edits,&count,base)||!commit_edits(edits,count)){
+       !queue_loading(edits,&count,base)||!queue_chat(edits,&count,base)||!queue_chat_actions(edits,&count,base)||!queue_focus_music(edits,&count,base)||!queue_camera(edits,&count,base)||!commit_edits(edits,count)){
         report_error("UI/HUD/sensitivity/movement instructions differ or their memory update failed. No changes in this cshell transaction were retained.");goto done;
     }
     g_hud_shell=base;
@@ -634,7 +660,7 @@ extern void *g_movie_tail;
 extern U32 g_movie_filter;
 static int install_game_fixes(void){
     U8 digest[32],replacement[16],before_iat[4],after_iat[4];U32 size,i,count=0,n;
-    U8 *base=(U8 *)GetModuleHandleW(NULL);Edit edits[48];HMODULE pinned,loaded;
+    U8 *base=(U8 *)GetModuleHandleW(NULL);Edit edits[EDIT_CAP];HMODULE pinned,loaded;
     if(!paths_ready){report_error("Game path is unavailable or too long. No game fixes were applied.");return 0;}
     if(!basename_is(main_path,L"client.exe")){log_text("Non-game host: input forwarding only.\r\n");return 1;}
     if(!GetPrivateProfileIntW(L"KPCFix",L"Enabled",1,ini_path)){
@@ -704,7 +730,10 @@ static int install_game_fixes(void){
         report_error("[KPCFix] LocalServerMinStepMs must be 0 (off) or an integer from 1 to 50. No client changes were applied.");return 0;
     }
     g_min_step_seconds=(float)min_step_ms*0.001f;
-    g_focus_enabled=GetPrivateProfileIntW(L"Multiplayer",L"KeepAudioOnFocusLoss",1,ini_path)!=0;
+    /* The hooks are always installed; the INI value is the console variable's
+     * default, which the console or the Setup > Audio checkbox can change. */
+    g_focus_enabled=1;
+    g_focus_default=GetPrivateProfileIntW(L"Multiplayer",L"KeepAudioOnFocusLoss",1,ini_path)!=0;
     g_console_key_fix=GetPrivateProfileIntW(L"KPCFix",L"ConsoleKeyFix",1,ini_path)!=0;
     g_chat_blocks_actions=GetPrivateProfileIntW(L"Multiplayer",L"ChatBlocksActions",1,ini_path)!=0;
     g_camera_smooth=GetPrivateProfileIntW(L"Multiplayer",L"SmoothCutsceneCamera",1,ini_path)!=0;
@@ -788,6 +817,16 @@ static int install_game_fixes(void){
                 report_error("The original focus-change sound calls differ. No client edits were applied.");return 0;
             }
         }
+        /* Focus-loss render shutdown (music pause marker) and the local
+         * server's active-window test (focus.c). */
+        near_call(before,base+0x6d1d,base+0x53980);near_call(replacement,base+0x6d1d,kpc_focus_term_render);
+        if(!add_edit(edits,&count,base+0x6d1d,before,replacement,5)){
+            report_error("The original focus-loss render shutdown call differs. No client edits were applied.");return 0;
+        }
+        near_call(before,base+0x157c5,base+0x287b0);near_call(replacement,base+0x157c5,kpc_focus_active);
+        if(!add_edit(edits,&count,base+0x157c5,before,replacement,5)){
+            report_error("The original local-server focus test differs. No client edits were applied.");return 0;
+        }
         if(g_focus_resync){
             near_call(before,base+0x13bcd,base+0x73bb0);near_call(replacement,base+0x13bcd,kpc_sound_update);
             if(!add_edit(edits,&count,base+0x13bcd,before,replacement,5)){
@@ -810,6 +849,14 @@ static int install_game_fixes(void){
             report_error("The original connection ID print call differs. No client edits were applied.");return 0;
         }
         g_id_print_target=(U32)(base+0x1c8d0);
+    }
+    if(g_chat_blocks_actions){
+        /* Chat typing: the engine's input-enabled read in the command update (console.c). */
+        static const U8 input_before[6]={0x8b,0x88,0x14,0x10,0x00,0x00};
+        near_call(replacement,base+0x23c84,kpc_input_state_entry);replacement[5]=0x90;
+        if(!add_edit(edits,&count,base+0x23c84,input_before,replacement,6)){
+            report_error("The original input-state read differs. No client edits were applied.");return 0;
+        }
     }
     if(g_console_key_fix){
         /* Console key: drop the character the toggle key types (console.c). */
@@ -855,9 +902,10 @@ static int install_game_fixes(void){
     kpc_status|=TIMING_RUNTIME|ANIMATION_RUNTIME;
     log_text("Timing V3: clock guard and 8 independent carries applied in memory.\r\n");
     if(min_step_ms){log_text("LocalServerMinStepMs=");log_hex(min_step_ms);log_text(": EXPERIMENTAL minimum local-server step; shorter frames are carried, not simulated.\r\n");}
-    if(g_focus_enabled)log_text("Focus loss: remote multiplayer keeps server-owned sounds running (single player and menus stock).\r\n");
+    if(g_focus_enabled){log_text("Focus loss: KeepAudioOnFocusLoss default=");log_hex(g_focus_default);log_text(" (1: sounds, music and a local game keep running in every mode; console variable and Setup > Audio).\r\n");}
+    if(g_chat_blocks_actions)log_text("Chat typing: no command (movement, fire, invulnerability...) is sent to the server while a message is being typed.\r\n");
     if(g_console_key_fix)log_text("Console key: the character typed by the console toggle key is not added to the console line.\r\n");
-    if(g_focus_resync)log_text("Focus regain: remote multiplayer sounds re-synchronised to real time 300 ms after the window returns.\r\n");
+    if(g_focus_resync)log_text("Focus regain: kept sounds re-synchronised to real time 300 ms after the window returns.\r\n");
     if(g_net_timeout_enabled){log_text("Server timeout: in-world multiplayer connection seconds=");log_hex((U32)g_net_timeout_seconds);log_text(" (stock 120 s elsewhere).\r\n");}
     log_text(input_clock_enabled?"Input clock v2: timeGetTime plus delayed/zero interval guards; no global clock hook.\r\n":"InputClock=0: original input clocks and intervals retained; Timing V3/Ground V5 remain enabled.\r\n");
     if(GetModuleHandleExW(0,L"cshell.dll",&loaded)){

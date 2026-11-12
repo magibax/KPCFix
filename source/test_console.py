@@ -52,10 +52,33 @@ for a in (90, 93, 0, 42): rig.invoke_address(command, (a,), this=SHELL)
 assert actions == [], actions                                                            # typing: all dropped
 rig.u.mem_write(SHELL + 0x8c + 0x12ed, b'\x00')
 rig.invoke_address(command, (2,), this=SHELL); assert actions == [(SHELL, 2)], actions
+# Engine command state (sent to the server, polled there by IsCommandOn):
+# client.exe 0x23c84 "mov ecx,[eax+0x1014]" (input enabled) -> gate entry.
+site = bytes(rig.u.mem_read(CLIENT + 0x23c84, 6))
+assert site[5] == 0x90 and target(rig, 0x23c84) == rig.dllbase + syms['_kpc_input_state_entry'], site.hex()
+assert b'Chat typing: no command' in bytes(rig.logs)
+CM = 0x5b0000
+entry = rig.dllbase + syms['_kpc_input_state_entry']
+def gate(enabled):
+    """The entry as called from 0x23c84: EAX = cm; returns ECX, EAX, EDX after."""
+    rig.u.mem_write(CM + 0x1014, pack(enabled))
+    rig.u.reg_write(x.UC_X86_REG_EAX, CM); rig.u.reg_write(x.UC_X86_REG_EDX, 0x1234); rig.u.reg_write(x.UC_X86_REG_ECX, 0xdead)
+    rig.invoke_address(entry, ())
+    return rig.u.reg_read(x.UC_X86_REG_ECX), rig.u.reg_read(x.UC_X86_REG_EAX), rig.u.reg_read(x.UC_X86_REG_EDX)
+rig.u.mem_write(SHELLBASE + 0x1c8de8, pack(SHELL))
+rig.u.mem_write(SHELL + 0x8c + 0x12ed, b'\x00')
+assert gate(1) == (1, CM, 0x1234) and gate(0) == (0, CM, 0x1234)  # not typing: ECX = [cm+0x1014], EAX/EDX kept
+rig.u.mem_write(SHELL + 0x8c + 0x12ed, b'\x01')
+assert gate(1) == (0, CM, 0x1234)                                 # typing: the frame's commands are cleared
+assert gate(0) == (0, CM, 0x1234)
+rig.u.mem_write(SHELLBASE + 0x1c8de8, pack(0))
+assert gate(1) == (1, CM, 0x1234)                                 # no shell object: stock
+rig.u.mem_write(SHELLBASE + 0x1c8de8, pack(SHELL)); rig.u.mem_write(SHELL + 0x8c + 0x12ed, b'\x00')
 rigc = Rig(settings={'Multiplayer.ChatBlocksActions': 0}); rigc.factory(); assert not rigc.messages
 assert read(rigc.u, SHELLBASE + 0xff724) == SHELLBASE + 0xc9d80
+assert bytes(rigc.u.mem_read(CLIENT + 0x23c84, 6)) == bytes.fromhex('8b8814100000')
 # Disabled: both sites keep their original bytes.
 rig0 = Rig(settings={'ConsoleKeyFix': 0}); rig0.factory(); assert not rig0.messages
 assert bytes(rig0.u.mem_read(CLIENT + 0x6dc9, 5)) == bytes(rig0.initial_client[0x6dc9:0x6dce])
 assert bytes(rig0.u.mem_read(CLIENT + 0x700a, 5)) == bytes.fromhex('83f8607445')
-print(args.fixtures.name, 'passed console key: toggle character dropped within 250 ms, later characters kept, chat typing drops actions, disabled')
+print(args.fixtures.name, 'passed console key: toggle character dropped within 250 ms, later characters kept, chat typing drops actions and clears the command state, disabled')

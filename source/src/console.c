@@ -35,6 +35,42 @@ void __attribute__((thiscall)) kpc_command_on(void *shell,U32 action){
     ((CommandFn)(g_command_shell+L->command_on))(shell,action);
 }
 U32 kpc_blocked_actions(void){return blocked_actions;}
+
+/* The engine also keeps the bound commands' on/off state itself and sends it
+ * to the server: object.lto polls IsCommandOn(client, 93/91) (0xef1b4,
+ * 0xef204) for Invuln/NoTarget, so the OnCommandOn filter above cannot stop
+ * them. client.exe 16131ccf input update 0x23c26: after the input manager
+ * fills the new command buffer, 0x23c84 reads the input-enabled flag
+ * [cm+0x1014] (SetInputState) and clears the whole buffer when it is 0.
+ * While the chat editor is typing that read reports 0, so the frame has no
+ * command on: no movement, firing or developer cheat reaches the shell or the
+ * server, and held commands are released as on a normal key-up. Typed text
+ * still arrives through WM_CHAR/key events. */
+static U32 blocked_frames;
+static int chat_typing(void){
+    const ShellLayout *L=g_shell_layout;U8 *shell;
+    if(!g_chat_blocks_actions||!g_command_shell||!L||!L->client_shell_global||!L->chat_editor)return 0;
+    shell=*(U8 **)(g_command_shell+L->client_shell_global);
+    return shell&&shell[L->chat_editor+L->chat_editing];
+}
+U32 CDECL kpc_input_enabled(U32 state){
+    if(state&&chat_typing()){blocked_frames++;return 0;}
+    return state;
+}
+U32 kpc_blocked_input_frames(void){return blocked_frames;}
+/* Replaces "mov ecx,[eax+0x1014]" (6 bytes) at 0x23c84; EAX = cm. */
+void kpc_input_state_entry(void);
+__asm__(".global kpc_input_state_entry\n"
+        "kpc_input_state_entry:\n"
+        " pushl %eax\n"
+        " pushl %edx\n"
+        " pushl 0x1014(%eax)\n"
+        " call kpc_input_enabled\n"
+        " addl $4,%esp\n"
+        " movl %eax,%ecx\n"
+        " popl %edx\n"
+        " popl %eax\n"
+        " ret\n");
 static U32 key_ms,key_pending;
 #define CONSOLE_KEY_WINDOW_MS 250u
 

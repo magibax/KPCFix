@@ -29,6 +29,15 @@ typedef struct {
     U32 camera_set_call, camera_set, camera_global;
     /* Server-connection timeout (netwatch.c): global holding the client shell. */
     U32 client_shell_global;
+    /* Keep running on focus loss (focus.c): OnEvent 4/3 music pause and
+     * resume calls and their targets; zero = music stock. */
+    U32 music_pause_call, music_pause, music_resume_call, music_resume;
+    /* Setup > Audio keep-running checkbox (ui.c): the Audio screen vtable
+     * (slots +8 init, +0xc term, +0x10 draw, +0x14 mouse move, +0x18 event)
+     * and originals, the checkbox class ctor, image loader and image names;
+     * zero = no checkbox. */
+    U32 audio_vtable, audio_init, audio_term, audio_draw, audio_move, audio_event;
+    U32 checkbox_ctor, checkbox_images, checkbox_checked, checkbox_unchecked;
 } ShellLayout;
 
 extern const ShellLayout *g_shell_layout;
