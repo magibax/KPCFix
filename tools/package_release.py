@@ -6,8 +6,6 @@ refuses stale manifests, unexpected tracked files or unpinned DLL dependencies.
 """
 import argparse
 import hashlib
-import json
-import re
 from pathlib import Path, PurePosixPath
 import subprocess
 import zipfile
@@ -22,29 +20,9 @@ CLIENT_ROOT_FILES = frozenset({
 CLIENT_DIRS = ('source/', 'verification/', 'LICENSES/')
 EXTERNAL_DDRAW_SHA256 = '94895cf6ede8fd0f74ee1447fdc08b7044a9c65a1a25a49a4df893a0370975a3'
 PRODUCTS = {
-    'client': ('SHA256SUMS', 'KPCFix-Windows'),
-    'server': ('server-tools/SHA256SUMS-Server-Tools', 'KPCFix-Server-Tools'),
+    'client': ('SHA256SUMS', 'KPCFix-Windows-1.13.zip'),
+    'server': ('server-tools/SHA256SUMS-Server-Tools', 'KPCFix-Server-Tools-1.0.0.zip'),
 }
-
-SEMVER_CORE = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z')
-
-
-def validate_version(version):
-    """Accept only stable MAJOR.MINOR.PATCH versions for release filenames."""
-    if not isinstance(version, str) or SEMVER_CORE.fullmatch(version) is None:
-        raise ValueError(f'Invalid stable SemVer: {version!r}')
-    return version
-
-
-def release_version(component):
-    with (ROOT / 'tools/release_versions.json').open(encoding='utf-8') as f:
-        versions = json.load(f)
-    return validate_version(versions[component])
-
-
-def archive_filename(component):
-    return f'{PRODUCTS[component][1]}-v{release_version(component)}.zip'
-
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
@@ -76,8 +54,7 @@ def manifest_entries(text):
     return result
 
 def make_package(component, out_dir, external_ddraw):
-    manifest_path, _ = PRODUCTS[component]
-    archive_name = archive_filename(component)
+    manifest_path, archive_name = PRODUCTS[component]
     base = 'server-tools/' if component == 'server' else ''
     entries = manifest_entries((ROOT / manifest_path).read_text(encoding='utf-8'))
     tracked_paths = tracked()

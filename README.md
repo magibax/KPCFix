@@ -2,8 +2,6 @@
 
 KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high frame rates to the Windows version of *KISS: Psycho Circus — The Nightmare Child*. It supports the official **1.13** Europe, US, German and Italian Covermount builds.
 
-KPCFix and Server Tools use independent semantic versions (for example, **v1.1.0** and **v1.0.1**). Those are project versions; **1.13** always refers to the supported game version.
-
 - **Smooth mouse input.** Turning the camera and moving the menu cursor feel smoother, especially on a high-refresh display. The sensitivity slider gives finer control at low settings. To restore the original mouse behaviour and Input Rate slider, set `StockMouse=1` in `KPCFix.ini` and restart.
 - **Multiplayer from the main menu.** Direct IP now lets you query and join a server immediately after launching the game. This fixes the “No Response” that previously meant loading a local map before you could connect.
 - **Play above 60 FPS.** Timing and movement fixes. In playtesting, the game has generally been stable with FPS unlocked, and narration, camera pans and animations have typically kept their expected pace. Some scripted sequences may still be unstable (for now).
@@ -42,6 +40,11 @@ Extract the Server Tools ZIP into the game directory, close the game/server and 
 
 See the [client build instructions](source/BUILD.md), [architecture](ARCHITECTURE.md), [configuration reference](CONFIGURATION.md) and [verification procedures](TESTING.md).
 
-For edition fingerprints, see [compatibility notes](COMPATIBILITY-NOTES.md). Maintainers can find the packaging and tag procedure in the [release guide](https://github.com/magibax/KPCFix/blob/main/RELEASING.md). Experimental campaign hosting is tracked in [co-op research](https://github.com/magibax/KPCFix/tree/coop/mvp-lobby/coop).
+For edition fingerprints, see [compatibility notes](COMPATIBILITY-NOTES.md). Maintainers can find the packaging and tag procedure in the [release guide](https://github.com/magibax/KPCFix/blob/main/RELEASING.md). Experimental campaign hosting is tracked in [co-op research](https://github.com/magibax/KPCFix/tree/feature/coop-campaign/coop).
 
-Future graphics investigations are tracked separately in the [graphics research roadmap](https://github.com/magibax/KPCFix/blob/main/GRAPHICS-RESEARCH.md).
+## Graphics research
+
+- Engine performance optimisation: Inspect the engine for opportunities to improve FPS, reduce rendering overhead and optimise performance without introducing instability.
+- Anisotropic filtering & antialiasing: Investigate enabling or improving anisotropic filtering and antialiasing, including within the game's menus.
+- Graphics configuration: Investigate c_GlobalDetail, GibDetail, LodOffset and other graphics settings to understand their behaviour, performance impact and sensible defaults for modern hardware.
+- Graphics fidelity improvements: Investigate engine-level methods to improve rendering quality, texture filtering, model detail, draw distances and other visual effects.

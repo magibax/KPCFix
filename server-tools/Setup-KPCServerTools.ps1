@@ -14,14 +14,7 @@ try {
  $backend=Join-Path $PSScriptRoot 'server.original.dll'
  $proxy=Join-Path $PSScriptRoot 'KPCServerTools.dll'
  $originalHash=$profile.'server.dll'.sha256
- # Explicitly approved experimental proxy hashes allow a safe return to stable R3.
- # Never trust an arbitrary proxy merely because the official backup exists.
- $approvedExperimentalProxies=@(
-  '7112b5ed97f94f8b7cd84bc80f7fdc945f0fb02e1a1cc6ad8f574b9b70d6d373',
-  '23dd5de7f099c04706d2a59603bb88763d21bbde2cd9053cf6ebade935598b08',
-  '7ea0dfa44dc7870579de6b4e6ffea9018903b7525c3aa7d1b8c9d91013d3fc0d'
- )
- $knownProxies=@($meta.proxy_sha256)+@($meta.previous_proxy_hashes)+$approvedExperimentalProxies
+ $knownProxies=@($meta.proxy_sha256)+@($meta.previous_proxy_hashes)
  if(-not $Uninstall -and (Get-FileHash -LiteralPath $proxy -Algorithm SHA256).Hash -ne $meta.proxy_sha256){throw 'Proxy DLL does not match its build metadata.'}
  if(Test-Path -LiteralPath $backend){
   if((Get-FileHash -LiteralPath $backend -Algorithm SHA256).Hash -ne $originalHash){throw 'server.original.dll does not match this dedicated executable.'}
