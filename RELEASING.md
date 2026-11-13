@@ -38,8 +38,8 @@ requirement, *not* either KPCFix product's release version.
 | Windows client | `kpcfix-vMAJOR.MINOR.PATCH` | `KPCFix-Windows-vMAJOR.MINOR.PATCH.zip` |
 | Server Tools | `server-tools-vMAJOR.MINOR.PATCH` | `KPCFix-Server-Tools-vMAJOR.MINOR.PATCH.zip` |
 
-The current pinned versions are **`kpcfix-v1.1.1`** (same DLL as v1.1.0,
-barebones package) and **`server-tools-v1.0.1`**. These names are pinned in
+The current pinned versions are **`kpcfix-v1.1.2`** and
+**`server-tools-v1.0.1`**. These names are pinned in
 `tools/release_versions.json`; they are **not published merely by editing main**.
 A future release must increment the relevant pinned version in that file
 *before* the verified, annotated tag is pushed. CI rejects tags not matching
@@ -49,16 +49,18 @@ Current releases (barebones packages, published 2026-11-13 from `main`):
 
 | Product | Tag | Installable asset |
 | --- | --- | --- |
-| Windows client | [`kpcfix-v1.1.1`](https://github.com/magibax/KPCFix/releases/tag/kpcfix-v1.1.1) | `KPCFix-Windows-v1.1.1.zip` |
+| Windows client | [`kpcfix-v1.1.2`](https://github.com/magibax/KPCFix/releases/tag/kpcfix-v1.1.2) | `KPCFix-Windows-v1.1.2.zip` |
 | Server Tools | [`server-tools-v1.0.1`](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.1) | `KPCFix-Server-Tools-v1.0.1.zip` |
 
 Earlier releases:
 
 | Product | Tag | Installable asset |
 | --- | --- | --- |
-| Windows client | [`kpcfix-v1.1.0`](https://github.com/magibax/KPCFix/releases/tag/kpcfix-v1.1.0) | `KPCFix-Windows-v1.1.0.zip` (also the source of the pinned `ddraw.dll`) |
-| Windows client | `kpcfix-1.13-r4` (tag only; its GitHub Release was removed) | `KPCFix-Windows-1.13.zip` |
-| Server Tools | [`server-tools-v1.0.0-r3`](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3) | `KPCFix-Server-Tools-1.0.0.zip` |
+| Server Tools | [`server-tools-v1.0.0-r3`](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3) | `KPCFix-Server-Tools-1.0.0.zip` (kept as the fallback for v1.0.1) |
+
+The GitHub Releases of `kpcfix-v1.1.1`, `kpcfix-v1.1.0` and `kpcfix-1.13-r4`
+were removed; their tags remain. v1.1.0, v1.1.1 and v1.1.2 ship the same
+`dinput.dll`.
 
 Server Tools R3 was published from `a034fa6`. Its ZIP SHA-256 is
 `bb518c27864b59a41e9425e015071bc99cbf26d1a724532edf5fe944307c6646`.
@@ -69,8 +71,8 @@ for the appropriate product (not both unless both have passed acceptance):
 
 ```sh
 git fetch origin main
-git tag -a kpcfix-v1.1.1 origin/main -m "KPCFix v1.1.1"
-git push origin kpcfix-v1.1.1
+git tag -a kpcfix-v1.1.2 origin/main -m "KPCFix v1.1.2"
+git push origin kpcfix-v1.1.2
 
 # Or, after separate Server Tools acceptance:
 git tag -a server-tools-v1.0.1 origin/main -m "Server Tools v1.0.1"
@@ -97,8 +99,8 @@ branch to publish stable assets.
 - **Server:** `server-tools/server-tools-source/build_dll.py` must reproduce
   tracked `KPCServerTools.dll` and `SERVER_TOOLS_BUILD.json`.
 - **Third-party graphics dependency:** `ddraw.dll` is not kept in Git. The
-  workflow temporarily extracts the known DDrawCompat binary from the
-  `kpcfix-v1.1.0` release and refuses any SHA-256 other than
+  workflow temporarily extracts the known DDrawCompat binary from the newest
+  published `kpcfix-v*` release and refuses any SHA-256 other than
   `94895cf6ede8fd0f74ee1447fdc08b7044a9c65a1a25a49a4df893a0370975a3`.
   Replace this provenance source only as an explicit, independently tested
   dependency upgrade.

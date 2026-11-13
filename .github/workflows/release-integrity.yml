@@ -61,14 +61,18 @@ jobs:
           cmp "${RUNNER_TEMP}/client-build/dinput.dll" dinput.dll
           cmp "${RUNNER_TEMP}/client-build/SYMBOLS.json" source/SYMBOLS.json
           cmp "${RUNNER_TEMP}/client-build/BUILD_RESULT.json" source/BUILD_RESULT.json
-      - name: Retrieve pinned DDrawCompat DLL from the prior release
+      - name: Retrieve pinned DDrawCompat DLL from the newest client release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p "${RUNNER_TEMP}/ddraw-input"
-          gh release download kpcfix-v1.1.0 -p KPCFix-Windows-v1.1.0.zip -D "${RUNNER_TEMP}/ddraw-input"
-          unzip -p "${RUNNER_TEMP}/ddraw-input/KPCFix-Windows-v1.1.0.zip" ddraw.dll > "${RUNNER_TEMP}/ddraw.dll"
+          # Newest published client release (list is newest first); the SHA-256 below pins the binary.
+          tag="$(gh release list --limit 50 --json tagName -q '[.[] | select(.tagName | startswith("kpcfix-v"))][0].tagName')"
+          test -n "$tag" || { echo 'ERROR: no published kpcfix-v* release to take ddraw.dll from'; exit 1; }
+          echo "Taking ddraw.dll from release $tag"
+          gh release download "$tag" -p 'KPCFix-Windows-v*.zip' -D "${RUNNER_TEMP}/ddraw-input"
+          unzip -p "${RUNNER_TEMP}"/ddraw-input/KPCFix-Windows-v*.zip ddraw.dll > "${RUNNER_TEMP}/ddraw.dll"
           echo "94895cf6ede8fd0f74ee1447fdc08b7044a9c65a1a25a49a4df893a0370975a3  ${RUNNER_TEMP}/ddraw.dll" | sha256sum -c
       - name: Run packaging tests
         run: python3 -m unittest discover -s tools -p 'test_*.py' -v
