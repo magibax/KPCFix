@@ -54,8 +54,11 @@ For a subsequent revision, choose the next unused tag for the affected product. 
   `94895cf6ede8fd0f74ee1447fdc08b7044a9c65a1a25a49a4df893a0370975a3`.
   Replace this provenance source only as an explicit, independently tested
   dependency upgrade.
-- **Package contents:** `tools/package_release.py` includes only the
-  product's tracked files, and for the client the pinned `ddraw.dll`. It
+- **Package contents:** packages are barebones. `tools/package_release.py`
+  ships only the files listed in its `CLIENT_FILES` / `SERVER_FILES` (binaries,
+  INIs, install/run/check scripts and their data, README and licences), and for
+  the client the pinned `ddraw.dll`. Source, tests, build reports, verification
+  runs and developer docs stay in the repository. It
   compares every file with the product's manifest, checks case-insensitive
   collisions and path traversal, then writes a stable ZIP and ZIP checksum.
 - **Original game assets:** Never add `dedicated.exe`, `client.exe`,

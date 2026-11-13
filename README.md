@@ -38,9 +38,9 @@ Extract the Server Tools ZIP into the game directory, close the game/server and 
 
 ## Building and testing
 
-See the [client build instructions](source/BUILD.md), [architecture](ARCHITECTURE.md), [configuration reference](CONFIGURATION.md) and [verification procedures](TESTING.md).
+The release ZIP holds only what you need to play. Source, build instructions and the full documentation are in the [GitHub repository](https://github.com/magibax/KPCFix): [client build instructions](https://github.com/magibax/KPCFix/blob/main/source/BUILD.md), [architecture](https://github.com/magibax/KPCFix/blob/main/ARCHITECTURE.md), [configuration reference](https://github.com/magibax/KPCFix/blob/main/CONFIGURATION.md) and [verification procedures](https://github.com/magibax/KPCFix/blob/main/TESTING.md).
 
-For edition fingerprints, see [compatibility notes](COMPATIBILITY-NOTES.md). Maintainers can find the packaging and tag procedure in the [release guide](https://github.com/magibax/KPCFix/blob/main/RELEASING.md). Experimental campaign hosting is tracked in [co-op research](https://github.com/magibax/KPCFix/tree/feature/coop-campaign/coop).
+For edition fingerprints, see [compatibility notes](https://github.com/magibax/KPCFix/blob/main/COMPATIBILITY-NOTES.md). Maintainers can find the packaging and tag procedure in the [release guide](https://github.com/magibax/KPCFix/blob/main/RELEASING.md). Experimental campaign hosting is tracked in [co-op research](https://github.com/magibax/KPCFix/tree/coop/mvp-lobby/coop).
 
 ## Graphics research
 

@@ -1,6 +1,6 @@
 """Asset-free tests for strict release manifest validation."""
 import unittest
-from package_release import manifest_entries, client_path, digest
+from package_release import manifest_entries, client_path, server_path, digest
 
 H = 'a' * 64
 
@@ -21,11 +21,18 @@ class ManifestTests(unittest.TestCase):
             manifest_entries('not-a-sha  ./README.md\n')
 
     def test_source_packaging_boundary(self):
-        self.assertTrue(client_path('source/src/kpcfix.c'))
-        self.assertTrue(client_path('verification/SUMMARY.json'))
+        self.assertTrue(client_path('dinput.dll'))
+        self.assertTrue(client_path('LICENSES/DDrawCompat-0BSD.txt'))
+        self.assertFalse(client_path('source/src/kpcfix.c'))
+        self.assertFalse(client_path('verification/SUMMARY.json'))
+        self.assertFalse(client_path('TESTING.md'))
         self.assertFalse(client_path('server-tools/KPCServerTools.dll'))
         self.assertFalse(client_path('coop/README.md'))
         self.assertFalse(client_path('.github/workflows/release-integrity.yml'))
+        self.assertTrue(server_path('KPCServerTools.dll'))
+        self.assertTrue(server_path('legacy-object-patches.json'))
+        self.assertFalse(server_path('server-tools-source/src/proxy.c'))
+        self.assertFalse(server_path('server-tools-source/tests/check_proxy.py'))
 
     def test_hash(self):
         self.assertEqual(digest(b'abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')

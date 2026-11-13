@@ -8,14 +8,14 @@ Follows coop/UPGRADE-TEST-INSTALL.md:
   * never touches original game files, server.original.dll or the user's
     KPCServerTools.ini (the DLL has a built-in default for every missing key).
 
-Client (--client): dinput.dll and the client package's root scripts and docs are
-replaced when they differ. KPCFix.ini and DDrawCompat-CLIENT.ini are the user's
+Client (--client): the files of the client release package (dinput.dll, scripts,
+README, licences and SHA256SUMS) are replaced when they differ. KPCFix.ini and DDrawCompat-CLIENT.ini are the user's
 settings: they are never replaced. Sections and keys that the repository
 version has and the installed file lacks are added (with their comment lines);
 every existing line and value stays as it is.
 
-Server (--server): every tracked file under server-tools/ is copied to the same
-path in the game folder. The active server.dll is replaced by the new
+Server (--server): the files of the Server Tools release package are copied to
+the game folder (source and tests are not). The active server.dll is replaced by the new
 KPCServerTools.dll only when it is a Server Tools proxy already (it carries the
 "[KPCFix Server Tools]" marker, and server.original.dll exists and is not a
 proxy). Otherwise it is left alone and you are told to run
@@ -31,11 +31,10 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 MERGED_INIS = ('KPCFix.ini', 'DDrawCompat-CLIENT.ini')
-CLIENT_FILES = (
-    'dinput.dll', 'ARCHITECTURE.md', 'COMPATIBILITY-NOTES.md', 'CONFIGURATION.md',
-    'Check-KPCVersion.cmd', 'Check-KPCVersion.ps1', 'Launch-KPCFix.cmd', 'README.md',
-    'SUPPORTED_BUILDS.json', 'Setup-KPCFix.ps1', 'TESTING.md', 'SHA256SUMS',
-)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import package_release  # noqa: E402  (shipped-file lists)
+CLIENT_FILES = tuple(sorted(package_release.CLIENT_FILES - set(MERGED_INIS))) + ('SHA256SUMS',)
+SERVER_FILES = tuple(sorted(package_release.SERVER_FILES)) + ('SHA256SUMS-Server-Tools',)
 NEVER = {'kpcservertools.ini', 'server.original.dll', 'object.lto', 'client.exe', 'cshell.dll', 'dedicated.exe'}
 
 
@@ -141,11 +140,6 @@ def merge_ini(installed_text, repo_text):
 
 # ---- plan and apply ---------------------------------------------------------
 
-def tracked(prefix):
-    raw = subprocess.check_output(['git', '-C', str(ROOT), 'ls-files', '-z', '--', prefix])
-    return sorted(p.decode('utf-8') for p in raw.split(b'\0') if p)
-
-
 def is_proxy(path):
     """True for any Server Tools build: every one carries its log prefix."""
     return b'[KPCFix Server Tools]' in path.read_bytes()
@@ -174,8 +168,8 @@ def plan(game, client, server):
             if added:
                 merges.append((dst, new, added))
     if server:
-        for path in tracked('server-tools/'):
-            copy_if_differs(ROOT / path, game / path[len('server-tools/'):], 'server')
+        for name in SERVER_FILES:
+            copy_if_differs(ROOT / 'server-tools' / name, game / name, 'server')
         new_dll = ROOT / 'server-tools' / 'KPCServerTools.dll'
         active, original = game / 'server.dll', game / 'server.original.dll'
         if not active.is_file() or not original.is_file():

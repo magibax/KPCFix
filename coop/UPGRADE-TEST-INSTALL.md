@@ -32,8 +32,9 @@ The install step, `tools/install_game.py`:
 * **Backup first:** every file it is about to change is copied to
   `C:\KPCTest\backup\<folder name>-<date>-<time>-before-<short hash>` (the server DLL's hash, or the
   client's when only the client is installed).
-* **Client files:** `dinput.dll` and the client package's scripts and documents are replaced when
-  they differ from the repository.
+* **Client files:** the client package's files (`dinput.dll`, scripts, README, licences) are
+  replaced when they differ from the repository. The server side copies only the Server Tools
+  package's files, not its source or tests.
 * **Client settings:** `KPCFix.ini` and `DDrawCompat-CLIENT.ini` are never replaced. A key or a
   section that the repository file has and the installed file lacks is added, with its comment
   lines; every existing line and value stays. In a file without sections (DDrawCompat) a new
@@ -66,7 +67,8 @@ Run it alone, without a build:
   `C:\KPCTest\pass2\<dir>\server-tools`; copy the new `KPCServerTools.dll` and `SERVER_TOOLS_BUILD.json`
   (and `SHA256SUMS-Server-Tools` if it changed) back into `server-tools\`. Then run `unit-coop.sh` and
   `matrix-coop.sh <dir>`.
-* **Hashes:** update the hashes of the changed files in the root `SHA256SUMS`. Hash the committed (LF)
+* **Hashes:** update the hashes of the changed shipped files in the root `SHA256SUMS` (it lists
+  shipped files only; source and tests are not in it). Hash the committed (LF)
   contents, not the Windows working copy: a CRLF checkout gives different hashes for text files.
 * **Commit:** commit on `coop/mvp-lobby`. Install only committed builds, so every installed hash can be
   traced to a commit.

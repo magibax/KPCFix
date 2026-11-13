@@ -52,7 +52,7 @@ The small 32-bit proxy forwards the engine's two exports and intercepts its look
 
 Compiled-proxy emulation passed for Europe and US engine profiles at relocated DLL/object addresses, with cheats enabled, disabled, pass-through and altered-object rejection. Hook tests cover separate player state, live revocation, client OFF acknowledgements, chat announcements and prompt restoration. These checks supplement Windows testing; they do not replace it. The stable R3 warning-spacing fix was confirmed in a Windows playtest. Record the DLL hash and repeat the applicable live checks when testing a different build.
 
-Source and build/test instructions are in `server-tools-source/README.md`. The stable download is [Server Tools R3](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3).
+The release ZIP holds only what you need to run a server. Source and build/test instructions are in the [GitHub repository](https://github.com/magibax/KPCFix/blob/main/server-tools/server-tools-source/README.md). The stable download is [Server Tools R3](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3).
 
 ## Installing alongside KPCFix
 
@@ -60,7 +60,7 @@ Server Tools uses its own README, license, checksums, compatibility checker, bui
 
 ## Unreleased co-op MVP session (experimental)
 
-Development builds include an opt-in chat lobby and a fixed route (R1M2B → R1M2C → R1M3A). Tick **EXPERIMENTAL co-op session** in the launcher; players type `!ready` and the host types `!start`. Lobby, Start and a host `!next` change were tested live with one client; natural exits and two clients are not yet Windows-tested. See [coop/COOP-MVP.md](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/COOP-MVP.md) for the test protocol and limitations.
+Development builds include an opt-in chat lobby and a fixed route (R1M2B → R1M2C → R1M3A). Tick **EXPERIMENTAL co-op session** in the launcher; players type `!ready` and the host types `!start`. Lobby, Start and a host `!next` change were tested live with one client; natural exits and two clients are not yet Windows-tested. See [coop/COOP-MVP.md](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/COOP-MVP.md) for the test protocol and limitations.
 
 ## Unreleased co-op diagnostics and spawn-point instrumentation
 
@@ -83,4 +83,4 @@ TraceCollisionABI=1
 
 Run R1M2B with at most three clients in a fresh server session, then inspect `KPCServerTools.log`. The first 64 candidate position requests are written only to the log; no user-facing chat or screen text is generated. To end the trial, set all three `[Coop]` keys to 0 and restart the server. `Enabled=0` continues to pass through to the original engine. Do not ship a new release without rebuilding the tracked binary and build manifest, checking hashes, and performing Windows runtime verification.
 
-See [engine trace findings](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/SPAWN-ENGINE-TRACE.md), [site verifier](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/tools/check_spawn_site.py) and [log decoder](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/tools/decode_spawn_log.py).
+See [engine trace findings](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/SPAWN-ENGINE-TRACE.md), [site verifier](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/tools/check_spawn_site.py) and [log decoder](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/tools/decode_spawn_log.py).

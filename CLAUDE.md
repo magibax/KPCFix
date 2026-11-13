@@ -68,12 +68,13 @@ and `SERVER_TOOLS_SUPPORTED_BUILDS.json` (server), rebuilds only the component w
 changed, and copies outputs back to the same places as the manual steps above. Its state
 lives in `.git/kpc-build-state/`. It then packages on every run:
 `tools/refresh_manifests.py` rewrites the hashes in both manifests from the working tree,
-`tools/package_release.py` writes the two full release ZIPs to `dist/` (every tracked file
-of each product: DLL, INIs, README and other docs, scripts, source), and `dist/client/` gets
+`tools/package_release.py` writes the two barebones release ZIPs to `dist/` (only the files
+in its `CLIENT_FILES` / `SERVER_FILES`: DLL, INIs, scripts and their data, README, licences;
+no source, tests or developer docs), and `dist/client/` gets
 the three files a test PC needs (`dinput.dll`, `KPCFix.ini`, `DDrawCompat-CLIENT.ini`). The
 client ZIP needs the pinned `ddraw.dll` (`--ddraw`, `KPC_DDRAW`, or `C:\Games\Psycho`).
-A new shipped file must be tracked and have a manifest line, or packaging stops with
-"Manifest/tree mismatch". `dist/` is ignored by git.
+A new shipped file must be added to that list, tracked, and given a manifest line, or
+packaging stops with "Manifest/tree mismatch". `dist/` is ignored by git.
 
 Last it updates the desktop test install with `tools/install_game.py` (game folder
 `C:\Games\Psycho`, or `--game-dir` / `KPC_GAME_DIR`; `--no-install` skips it,
@@ -122,8 +123,8 @@ backup folder in the handoff ("Where things stand").
 After a server build: copy `KPCServerTools.dll` and `SERVER_TOOLS_BUILD.json` into
 `server-tools/`, stage, then recompute `server-tools/SHA256SUMS-Server-Tools` from the
 **git index** (`git show :path`, LF content; `core.autocrlf=true` makes working copies
-CRLF). Add new source/test files to that list. The root `SHA256SUMS` covers the client
-package only.
+CRLF). The manifests list shipped files only (not source or tests). The root `SHA256SUMS`
+covers the client package only.
 
 ## Server Tools conventions (`proxy.c`)
 
