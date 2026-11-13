@@ -27,7 +27,7 @@ Frame-rate settings are in `DDrawCompat-CLIENT.ini`; see the README's Frame rate
 | KPCFix | LockInputRate | 1 | Locks the runtime value to zero in KPCFix mouse mode. |
 | KPCFix | HideInputRate | 1 | Hides the slider when the lock is active. |
 | KPCFix | NormalizeInputRateConfigs | 1 | With the lock active, updates autoexec.cfg and existing profile configurations. First edits create backups. |
-| KPCFix | LocalServerMinStepMs | 16 | 0 or 1–50. The single-player (local) server never simulates a frame shorter than this; shorter frames are carried into the next one, so game time stays real time at any frame rate. KPCFix's timing fix removes the engine's 10 ms floor, and without this minimum some AI stalls above 60 FPS, such as the R2M2A Ballbuster in the garage door. 0 keeps Timing V3 alone. |
+| KPCFix | LocalServerMinStepMs | 16 | 0 or 1–50. The single-player (local) server never simulates a frame shorter than this; shorter frames are carried into the next one, so game time stays real time at any frame rate. KPCFix's timing fix removes the engine's 10 ms floor, and without this minimum some AI stalls above 60 FPS, such as the R2M2A Ballbuster in the garage door. |
 | KPCFix | ConsoleKeyFix | 1 | The console toggle key no longer types its own character into the console (the apostrophe on UK keyboards). 0 = original behaviour. |
 | KPCFix | ForceDeveloper | 1 | Setup-KPCFix.ps1 applies Developer=1 to default.cfg, autoexec.cfg and existing profiles. Direct game launches skip this step. Independent of StockMouse and Enabled. |
 | HUD | ScalePercent | 150 | Missing key or 0 selects 100. Explicit scale accepts 50–400. |
