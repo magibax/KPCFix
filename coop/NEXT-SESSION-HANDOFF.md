@@ -140,6 +140,40 @@ until every member stands in it; (4) leave it and rely on `!goto`.
 
 ### Code and other releases
 
+* **Original game bug: destroying a jukebox leaves the music wrong** (user-confirmed
+  2026-11-13 with `[KPCFix] Enabled=0`, so not a KPCFix regression; affects single player and
+  any server). Same three scripts in R1M1A, R2M1A and R4M1A (`C:\KPCTest\scratch-campaign\objects.json`):
+  * Using the jukebox: `jukeon` plays `jukenoise` and starts `musicfader`.
+  * `musicfader`: `2 music intensity 9`, `20 music intensity 0` (silence), `70 music intensity 2`
+    in R1M1A (plus `script_object_disable SwitchObj2` at 0 and re-enable at 70), `70 music
+    intensity 1` in R2M1A and R4M1A; all `transition measure`. `song1` has no intensity-0 style.
+  * Damaging it: `jukeoff` aborts `jukeon` and stops `jukenoise`, but never touches
+    `musicfader`. So the music goes silent, plays a bar or two around 35–45 s, fades out, and
+    returns only at `musicfader`'s 70 s step. Earlier KPCFix runs where it never returned were
+    not matched for timing or trigger zones; recheck that during the fix.
+  * **Wanted:** destroying the jukebox stops its music at once and returns to the level's normal
+    music (R1M1A intensity 2 and `SwitchObj2` enabled; R2M1A and R4M1A intensity 1).
+
+  Fix ideas (none started):
+  1. **Object-module hook (preferred).** When a script named `jukeoff` starts in one of the three
+     worlds, also run `script_object_abort musicfader`, the world's normal `music intensity N
+     transition measure`, and in R1M1A `script_object_enable SwitchObj2`, through the engine's own
+     script command dispatcher. The co-op work already hooks script events and the script clock
+     (`TraceScripts`, `CoopScriptClock`), so start from that research. Single player runs
+     `object.lto` in the client's in-process server, which KPCFix does not patch yet; the client's
+     existing `LoadLibraryA` hook (used for `cshell.dll`) could install it for `object.lto` too.
+     Server Tools already patches `object.lto` for dedicated servers, so one shared table of
+     world → commands could serve both.
+  2. **Property override at world load.** Hook the engine's property reads when the world creates
+     `jukeoff` and fill a spare command slot. Not enough on its own: `jukeoff` has one free slot in
+     R1M1A and R2M1A (`command8`) and none usable in R4M1A (its `command8` is the commented-out
+     `;0 spawn gibs`), but the fix needs two or three commands.
+  3. **Ruled out:** editing or shipping changed world files or `.rez` archives (the hard rule
+     against game files), or a client-only music workaround that guesses when the jukebox died.
+
+  Test: start each jukebox, damage it before 20 s and again between 20 and 70 s, and confirm normal
+  music returns within a bar; also let one play to the end (unchanged), and check `Enabled=0` /
+  the hook switched off still shows the original behaviour.
 * **R6** (cost of walking the player list): measure first; see the R6 notes below.
 * **Other releases** (user, 2026-11-13: the patch should work on every release eventually).
   The Audio checkbox exists only for the Europe/USA `cshell.dll` layout (`audio_vtable` and
