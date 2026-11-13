@@ -148,11 +148,25 @@ until every member stands in it; (4) leave it and rely on `!goto`.
   `cshell.dll` builds, plus their `test_focus.py` runs. Check the other shell-UI hooks in
   `profiles.h` the same way. Server Tools has one `object.lto` (`3a03f879`) for every
   release, so the server fixes apply everywhere.
-* **Port general client fixes to `main`** (deferred by the user, 2026-11-13; a port was
-  started and cancelled, nothing kept). These client fixes are not co-op specific and fix
-  bugs the stable release still has:
-  * `LocalServerMinStepMs=16` (`minstep_hook.S`, the clock slot at `client.exe 0x664b2`):
-    AI stalls above 60 FPS, e.g. the R2M2A Ballbuster in the garage door. User-confirmed.
+* **Ported to `main` (2026-11-13, on `main`'s working tree, not yet committed or released):**
+  `LocalServerMinStepMs=16` (client), `ConsoleKeyFix` (client), the co-op
+  `CoopServerFrameMs` hook as stable Server Tools `[ServerTools] ServerFrameMs=16` (always on,
+  not session-only), and the DDrawCompat default without the 60 FPS cap (VSync at the monitor
+  refresh, `FpsLimiter = off`). Stable runners: `C:\KPCTest\pass2\matrix-stable.sh <dir> <server
+  fixture root>` (Europe + USA, 12 cases, ~15 s) and `C:\KPCTest\clientbuild\suite-stable.sh
+  <research root>` (four regions, 65 cases, ~2 min). Build with the Docker images, not WSL
+  (WSL's GCC 15 / binutils breaks `objcopy`). The research ZIP's German folder holds a
+  pre-1.13 build; use `C:\KPCTest\KPCFix-region-research` instead.
+* **Open: server frame fix for the USA `server.dll`.** `ServerFrameMs` (stable) and
+  `CoopServerFrameMs` (co-op) only hook the Europe-family `server.dll` `83b7bce8…`
+  (`0x235b0` → `0x2a05f`, server object `+0x1f8/+0x214/+0x218`). The USA `server.dll`
+  `93178237…` keeps original timing, so the R2M2A Ballbuster can still stall on a USA
+  server; users are told so in `README.md` and `server-tools/README-Server-Tools.md`. Find
+  the USA frame call, frame function and offsets (RE copies in `C:\KPCTest\re`, research
+  folder `patched to 1.13/USA/server.dll`), add a second profile to the frame hook in both
+  `proxy.c` versions, extend the `check_proxy.py` frame test to the USA fixture, then remove
+  the USA notes. Details: `COMPATIBILITY-NOTES.md` on `main`, "Server frame timing".
+* **Still to port to `main` later** (not co-op specific; the user is leaving them for now):
   * `ChatBlocksActions` (`console.c`, cshell `OnCommandOn` slot `0xff724` plus the
     `client.exe 0x23c84` input-state read): typing a chat message no longer fires bound
     actions (noclip, invuln, movement).
@@ -162,16 +176,10 @@ until every member stands in it; (4) leave it and rely on `!goto`.
     T19 lit state, position above Enable Sound FX; `checkbox_hit_box`/`_label` in
     `profiles.h`); the `coop/mvp-lobby` checkbox breaks the stock Audio controls.
     `KeepRendererOnFocusLoss` was left out of the port plan (untested).
-  * `ConsoleKeyFix` (`console.c`, `client.exe 0x6dc9`/`0x700a`): the console key no longer
-    types its character (`'` on UK keyboards).
-  Port by hand onto a branch cut from `main`, not by merging: copy only these pieces of
-  `kpcfix.c`, `shell_layout.h`, `profiles.h` and `build.py`, leave out the window-shard
-  diagnostic, loading art, chat time, cutscene camera and server timeout, and adapt
-  `test_minstep.py`, `test_console.py` and `test_focus.py` to match. Build check: WSL has
-  gcc (15.2, not the CI's 13.3); Python 3.12 on Windows has Unicorn 2.1.4; fixtures are in
-  `C:\KPCTest\fixtures`. Once ported, drop the first draft's matching "known issues" from the
-  main README. The stock 60 FPS cap on `main` should only be lifted after
-  `LocalServerMinStepMs` is on `main`.
+  Port by hand, not by merging: `main` now has `console.c` with the console key only, so add
+  the chat pieces to it, plus the `shell_layout.h`/`profiles.h` fields and `kpcfix.c` hooks,
+  and extend `test_console.py`; bring `focus.c` and `test_focus.py` across. Leave out the
+  window-shard diagnostic, loading art, chat time, cutscene camera and server timeout.
 
 ### Older open items (2026-11-12 triage)
 
