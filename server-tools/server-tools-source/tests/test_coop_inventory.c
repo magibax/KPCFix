@@ -87,8 +87,36 @@ static void test_spot(void){
  /* Invalid (NaN) positions fail closed: the item waits. */
  {union{unsigned int u;float f;}nan;nan.u=0x7fc00000u;players[0]=nan.f;assert(!coop_respawn_spot_clear(item,players,1));}
 }
+static void test_class_swap(void){
+ /* ids 2-14; group 3-6 melee (BeastClaws 1, Punisher 3, Thornblade 0, Twister 2),
+  * 7-10 any class, 11-14 one per class; Fists any class. */
+ unsigned int c[13];unsigned int id;
+#define B(i) ((unsigned short)(1u<<((i)-2u)))
+ c[0]=COOP_INV_ANY_CLASS;c[1]=1;c[2]=3;c[3]=0;c[4]=2;
+ for(id=7;id<=10;id++)c[id-2]=COOP_INV_ANY_CLASS;
+ c[9]=3;c[10]=2;c[11]=1;c[12]=0;
+ /* Starbearer with Thornblade, a gun and the class weapon of 11-14 -> Demon gets Punisher and id 11. */
+ assert(coop_inv_class_swap(B(5)|B(8)|B(14),c,3)==(B(4)|B(11)));
+ /* Already owns the Demon melee: only the other group. */
+ assert(coop_inv_class_swap(B(4)|B(5)|B(14),c,3)==B(11));
+ /* Only any-class weapons (Fists, guns): nothing to add. */
+ assert(coop_inv_class_swap(B(2)|B(7)|B(9),c,1)==0);
+ /* Nothing owned: nothing. Back to the own class: nothing new. */
+ assert(coop_inv_class_swap(0,c,2)==0);
+ assert(coop_inv_class_swap(B(5)|B(14),c,0)==0);
+ /* Unknown classes (unreadable definitions) never match; bad input. */
+ for(id=0;id<13;id++)c[id]=COOP_INV_CLASSES;
+ assert(coop_inv_class_swap(B(5),c,0)==0);
+ assert(coop_inv_class_swap(B(5),0,0)==0&&coop_inv_class_swap(B(5),c,4)==0);
+#undef B
+}
+static void test_fresh_start(void){
+ /* A start from the lobby forgets the saved inventory; every other change keeps it. */
+ assert(!coop_inv_keep_through_change(1));
+ assert(coop_inv_keep_through_change(0));
+}
 int main(void){
- test_plan();test_classes();test_respawn_policy();test_spot();
- printf("PASS coop inventory: restore plan order and growth only, classes, respawnable items, spot test\n");
+ test_plan();test_classes();test_respawn_policy();test_spot();test_class_swap();test_fresh_start();
+ printf("PASS coop inventory: restore plan order and growth only, classes, respawnable items, spot test, class-change weapons, fresh start\n");
  return 0;
 }

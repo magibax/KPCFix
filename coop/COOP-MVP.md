@@ -48,13 +48,15 @@ original bytes, and fail closed when the bytes differ.
 | `!next` | host, in play | Forces the next world (debugging; exits are host-only anyway) |
 | `!changelevel <world>` | host, lobby or play (campaign mode) | Everyone goes to that WORLDORDER world (`R1M2A` or `worlds\realm1\R1M2A`, any case), and the campaign carries on from there (natural exits lead to its successor). Unknown names get the format; others get "Only the host" |
 | `!kill` | anyone | Kills the player who typed it (normal death and respawn) |
-| `!class` / `!class starbearer\|beastking\|celestial\|demon` | anyone, `kpc_cheats 1` | Next or named player class; weapons, armour and ammo are kept |
+| `!class` / `!class starbearer\|beastking\|celestial\|demon` | anyone | Next or named player class; weapons, armour and ammo are kept, and the new class's melee / class weapon is added where the player had one |
 | `!all` | anyone, `kpc_cheats 1` | Every armour piece, every weapon, full ammo, for the typer only |
 | `!gimmie`, `!nextarmor` | anyone, `kpc_cheats 1` | 50 of each ammo + the next missing weapon / the next missing armour piece, for the typer only |
 | `!coop` / `!status`, `!help`, `!leave` / `!join` | anyone / member | Status line, command list, sit out / rejoin |
 
-The stock cheat **keys** GimmieGimmieGimmie, NextArmor and CyclePlayerClass (bind them in
-Setup > Controls) also work per player with `kpc_cheats 1` (`CoopCheatKeys`).
+The stock cheat **keys** GimmieGimmieGimmie and NextArmor (bind them in Setup >
+Controls) also work per player with `kpc_cheats 1`, CyclePlayerClass without it
+(`CoopCheatKeys`). GimmieGimmieGimmie gives 200 of each ammo up to the stock cap,
+100 + 100 per armour piece (`f3440`), as in single player.
 
 Commands are read from the game's own chat relay (object `0xfeec4`) and answered with
 its broadcast; no new network messages. Replies are at most 111 bytes.
@@ -178,7 +180,11 @@ Built 2026-11-12 (`7dbba5eb`), emulator and native-smoke tested, not yet two-PC 
   world change, keyed by the member (`coop_inventory.h`). 400 ms after a spawn the
   class is applied and whatever is missing is given with `f3440` (armour first: it
   raises the ammo cap; weapons need the gauntlets and the player's class, so a weapon
-  from another class is given with the class set to it for the call).
+  from another class is given with the class set to it for the call). A start from
+  the lobby forgets every snapshot (fresh run); `!abort` and changes along the
+  campaign keep them.
+* **Window shards** (`CoopWindowShards=1`): the window's hide is held 200 ms after its
+  break message, so remote clients still have the window when they build the shards.
 * **Respawning pickups** (`CoopItemRespawnSec=15`): campaign worlds author
   `Respawn=false`. At the pickup's hide call (`0xcc29e`) a weapon, ammo, shard, health
   or power-up gets the stock deathmatch respawn (`+0xb4`, `+0xb8`); the respawn

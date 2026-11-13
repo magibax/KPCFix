@@ -58,6 +58,37 @@ static int coop_inv_ammo(unsigned int id){return id>=COOP_INV_AMMO_FIRST&&id<=CO
 
 static unsigned int coop_inv_bits(unsigned int v){unsigned int n=0;while(v){n+=v&1u;v>>=1;}return n;}
 
+/* ---- class change (T9) ----
+ * The weapon slots show the current class's weapon (definition class def+8,
+ * any-class byte def+0xc, read by f3482-f349b). Weapon ids after Fists come
+ * in groups of four, one slot each: 3-6 (melee: BeastClaws, Punisher,
+ * Thornblade, Twister), 7-10 and 11-14. classes[id - 2] is the class of each
+ * weapon id 2-14 (0-3, COOP_INV_ANY_CLASS, or COOP_INV_CLASSES = unknown).
+ * Returns the weapon bits (bit id - 2) to give so that every group in which
+ * the player owns a class-specific weapon also has the new class's weapon.
+ * Groups without a class-specific weapon (any-class guns) need nothing. */
+#define COOP_INV_ANY_CLASS 0xffu
+static unsigned short coop_inv_class_swap(unsigned short owned,const unsigned int *classes,unsigned int cls){
+ unsigned int g,k,id;unsigned short give=0;
+ if(!classes||cls>=COOP_INV_CLASSES)return 0;
+ for(g=3u;g+3u<=COOP_INV_WEAPON_LAST;g+=4u){
+  int has_specific=0;unsigned int match=0;
+  for(k=0;k<4u;k++){
+   id=g+k;
+   if(classes[id-COOP_INV_WEAPON_FIRST]<COOP_INV_CLASSES&&(owned&(1u<<(id-COOP_INV_WEAPON_FIRST))))has_specific=1;
+   if(classes[id-COOP_INV_WEAPON_FIRST]==cls)match=id;
+  }
+  if(has_specific&&match&&!(owned&(1u<<(match-COOP_INV_WEAPON_FIRST))))give|=(unsigned short)(1u<<(match-COOP_INV_WEAPON_FIRST));
+ }
+ return give;
+}
+/* A start from the lobby (!campaign, !start, !changelevel from the lobby)
+ * begins a fresh run: every member's saved inventory is forgotten instead of
+ * saved, so the lobby's deathmatch start items (gauntlets and melee from the
+ * server's start-armour options) do not follow the players into the
+ * campaign. Changes during the campaign and !abort keep the inventory. */
+static int coop_inv_keep_through_change(unsigned int start_pending){return !start_pending;}
+
 /* What to give so that `now` has at least everything in `saved`. Nothing is
  * ever taken away; counts only grow (a fresh spawn's start items stay). */
 static void coop_inv_plan(const CoopInvState *saved,const CoopInvState *now,CoopInvPlan *p){

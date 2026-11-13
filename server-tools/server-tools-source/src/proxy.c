@@ -767,12 +767,15 @@ static int coop_host_sequences=1;   /* [Coop] CoopHostSequences (default 1) */
  *   CoopKeepInventory=1    weapons/armour/shards/ammo/class kept through world changes and lobby resets
  *   CoopKeepOnDeath=1      ... and through a death in the same world
  *   CoopItemRespawnSec=15  taken weapons, ammo, shards and other pickups come back (0 = off)
+ *   CoopWindowShards=1     a broken window stays visible 200 ms so remote clients draw its shards
  *   CoopPowerupResend=1    the armour "player powerup" effect is re-sent to the observers */
 static int coop_spawner_nearest=1,coop_cheat_keys=1,coop_keep_inventory=1,coop_keep_on_death=1,coop_powerup_resend=1;
 static U32 coop_item_respawn_sec=15;
+static int coop_window_shards=1;
 static U32 coop_powerup_obj,coop_powerup_due;
 static void coop_inv_spawned(int slot,U32 client,int respawn,U32 now);
 static void coop_inv_world_unload(void);
+static void coop_window_world_unload(void);
 static int coop_more_command(U32 player,const char *cmd,const char *who);
 /* [Coop] CoopSkill (absent = unchanged; 0 Lullaby, 1 Daydream, 2 Sleepless,
  * 3 Cold Sweat, 4 Nightmare as printed by the stock skill command fb710).
@@ -1136,6 +1139,28 @@ static U32 coop_item_name(U32 id,char *out,U32 cap){
  if(coop_rd((U32)coop_image+0x141e40u+id*0x20u,&np)&&np)coop_copy_str(out,np,cap);
  return out[0]!=0;
 }
+/* One refusal for every refused per-player cheat (chat and keys):
+ * "[Co-op] Cheats are disabled on this server (host console: kpc_cheats 1):
+ * <cheat> refused for <name>". A held or repeated key says it at most once
+ * per COOP_CHEAT_REFUSE_MS for each player and cheat. */
+#define COOP_CHEAT_REFUSE_MS 3000u
+enum {COOP_CHEAT_K_GIMMIE=0,COOP_CHEAT_K_ARMOR=1,COOP_CHEAT_K_ALL=2,COOP_CHEAT_KINDS=3};
+static U32 coop_cheat_refused_ms[COOP_SESSION_MAX_MEMBERS+1u][COOP_CHEAT_KINDS];   /* last row: not a member */
+static void coop_cheat_refused(int member,U32 kind,const char *what,const char *who){
+ CoopResult r;U32 m=0,now=GetTickCount();
+ if(kind<COOP_CHEAT_KINDS){
+  U32 *t=&coop_cheat_refused_ms[member>=0&&(U32)member<COOP_SESSION_MAX_MEMBERS?(U32)member:COOP_SESSION_MAX_MEMBERS][kind];
+  if(*t&&(int)(now-*t)<(int)COOP_CHEAT_REFUSE_MS)return;   /* signed: *t is now|1 */
+  *t=now|1u;
+ }
+ coop_result(&r,COOP_ACT_ANNOUNCE,"");
+ coop_text(r.msg,&m,"[Co-op] Cheats are disabled on this server (host console: kpc_cheats 1): ",sizeof r.msg);
+ coop_text(r.msg,&m,what,sizeof r.msg);coop_text(r.msg,&m," refused for ",sizeof r.msg);
+ coop_text(r.msg,&m,who&&who[0]?who:"?",sizeof r.msg);
+ coop_log("cheat",r.msg);coop_execute(&r);
+}
+static U32 coop_has_weapon(U32 player,U32 id);
+static int coop_weapon_usable(U32 player,U32 id);
 static int coop_cheat_command(U32 player,const char *cmd,const char *who){
  int gimmie=coop_cheat_word(cmd,"gimmie")||coop_cheat_word(cmd,"gimme");
  int armour=coop_cheat_word(cmd,"nextarmor")||coop_cheat_word(cmd,"nextarmour");
@@ -1144,13 +1169,14 @@ static int coop_cheat_command(U32 player,const char *cmd,const char *who){
  if(!gimmie&&!armour)return 0;
  coop_result(&r,COOP_ACT_ANNOUNCE,"");
  if(!coop_cheats_allowed()){
-  coop_text(r.msg,&m,"[Co-op] Cheats are disabled on this server (host console: kpc_cheats 1)",sizeof r.msg);
-  coop_execute(&r);return 1;
+  U32 client=0;coop_rd(player+0x120u,&client);
+  coop_cheat_refused(coop_find_client(&coop_state,client),gimmie?COOP_CHEAT_K_GIMMIE:COOP_CHEAT_K_ARMOR,gimmie?"gimmie gimmie gimmie":"next armor",who);
+  return 1;
  }
  coop_text(r.msg,&m,"[Co-op] ",sizeof r.msg);coop_text(r.msg,&m,who,sizeof r.msg);
  if(gimmie){
   for(id=0x11u;id<=0x14u;id++)((CheatGiveFn)(coop_image+0xf3440u))((void *)player,id,COOP_GIMMIE_AMMO,1);
-  for(id=3u;id<=14u;id++)if(!(((HasItemFn)(coop_image+0xf25f0u))((void *)player,id)&0xffu)){got=id;break;}
+  for(id=3u;id<=14u;id++)if(!coop_has_weapon(player,id)&&coop_weapon_usable(player,id)){got=id;break;}
   if(got)((CheatGiveFn)(coop_image+0xf3440u))((void *)player,got,1,1);
   coop_text(r.msg,&m," used gimmie gimmie gimmie: ammo",sizeof r.msg);
   if(got&&coop_item_name(got,item,sizeof item)){coop_text(r.msg,&m," + ",sizeof r.msg);coop_text(r.msg,&m,item,sizeof r.msg);}
@@ -1275,6 +1301,7 @@ static void __attribute__((thiscall)) coop_next_level(void *shell){
  char world[0x80];U32 now=GetTickCount();
  if(coop_session_enabled){
   coop_inv_world_unload();   /* before the members' player objects are forgotten */
+  coop_window_world_unload();
   coop_session_world_loading(&coop_state,now);coop_sb_world_loading(&coop_sb);coop_log("world-loading","native NextLevel");
   coop_apply_skill();coop_spawner_ok=coop_spawner_no=0;
  }
@@ -1699,6 +1726,7 @@ static void coop_share_ammo(U32 player,U32 id,U32 amount){
   coop_log("item",line);
  }
 }
+static void coop_respawn_log2(const char *event,U32 item,U32 kind,const char *extra);
 static void __attribute__((thiscall)) coop_item_pickup(void *item,void *player){
  U32 def=0,id=0,live[64],n,i,given=0,self=0,before=0,after;int known;
  if(coop_rd((U32)player+8u,&self))coop_set_activator(self);   /* a pickup can start a cutscene */
@@ -1706,6 +1734,7 @@ static void __attribute__((thiscall)) coop_item_pickup(void *item,void *player){
   * not respawn may be removed by it, so the item is not read again. */
  known=coop_rd((U32)item+0x54u,&def)&&def&&coop_rd(def,&id);
  if(!known)id=0;
+ if(id==COOP_INV_SHARD&&coop_item_respawn_sec)coop_respawn_log2("touched",(U32)item,3u," (shard pickup reached the common pickup cc180)");
  if(coop_item_ammo_id(id))before=coop_ammo_count((U32)player,id);
  ((PickupFn)(coop_image+0xcc180u))(item,player);
  if(coop_item_ammo_id(id)){
@@ -1909,12 +1938,23 @@ __asm__(".global coop_spawner_pos_entry\n"
 #define COOP_INV_SNAPSHOT_MS 1000u
 static CoopInvSnap coop_inv_snap[COOP_SESSION_MAX_MEMBERS];
 static U32 coop_inv_pending[COOP_SESSION_MAX_MEMBERS],coop_inv_due[COOP_SESSION_MAX_MEMBERS],coop_inv_last_ms;
+/* f25f0 answers only for the armour pieces 0x27-0x2c (bits of player+0x260)
+ * and returns 0 for every other id. A weapon is owned when the inventory
+ * list [player+0x54] has a node for it: dd170(inv, id) (thiscall, ret 4;
+ * nodes {?, id, count, next} from inv+4). f3440 uses the same test (f344e)
+ * to decide whether a weapon is new. */
+typedef U32 (__attribute__((thiscall)) *InvFindFn)(void *,U32);
 static U32 coop_has_item(U32 player,U32 id){return ((HasItemFn)(coop_image+0xf25f0u))((void *)player,id)&0xffu;}
+static U32 coop_has_weapon(U32 player,U32 id){
+ U32 inv=0;
+ if(!player||!coop_inv_weapon(id)||!coop_rd(player+0x54u,&inv)||!inv)return 0;
+ return ((InvFindFn)(coop_image+0xdd170u))((void *)inv,id)!=0;
+}
 static int coop_inv_read(U32 player,CoopInvState *st){
  U32 inv=0,id,k;
  if(!player||!coop_rd(player+0x54u,&inv)||!inv||!coop_rd(player+0x264u,&st->cls))return 0;
  st->weapons=0;st->armour=0;
- for(id=COOP_INV_WEAPON_FIRST;id<=COOP_INV_WEAPON_LAST;id++)if(coop_has_item(player,id))st->weapons|=(unsigned short)(1u<<(id-COOP_INV_WEAPON_FIRST));
+ for(id=COOP_INV_WEAPON_FIRST;id<=COOP_INV_WEAPON_LAST;id++)if(((InvFindFn)(coop_image+0xdd170u))((void *)inv,id))st->weapons|=(unsigned short)(1u<<(id-COOP_INV_WEAPON_FIRST));
  for(id=COOP_INV_ARMOUR_FIRST;id<=COOP_INV_ARMOUR_LAST;id++)if(coop_has_item(player,id))st->armour|=(unsigned char)(1u<<(id-COOP_INV_ARMOUR_FIRST));
  for(k=0;k<4u;k++)st->ammo[k]=((InvCountFn)(coop_image+0xdd190u))((void *)inv,COOP_INV_AMMO_FIRST+k);
  st->shards=((InvCountFn)(coop_image+0xdd190u))((void *)inv,COOP_INV_SHARD);
@@ -1924,6 +1964,20 @@ static int coop_inv_read(U32 player,CoopInvState *st){
  * (f3482-f349b: [player+0x54+id*4] weapon object, +8 definition, def+8 class,
  * def+0xc any-class byte). One kept from another class (class cycle) is
  * given with the player's class set to the weapon's for the call. */
+/* Class of a weapon id: 0-3, or COOP_INV_ANY_CLASS (any class), or
+ * COOP_INV_CLASSES when the definition is unreadable. */
+static U32 coop_weapon_class(U32 player,U32 id){
+ U32 obj=0,def=0,need=0;
+ if(!coop_inv_weapon(id)||!coop_rd(player+0x54u+id*4u,&obj)||!obj||!coop_rd(obj+8u,&def)||!def||!coop_rd(def+8u,&need)||!bsp_mem_readable(def+0xcu,1))return COOP_INV_CLASSES;
+ if(*(const U8 *)(def+0xcu))return COOP_INV_ANY_CLASS;
+ return need<COOP_INV_CLASSES?need:COOP_INV_CLASSES;
+}
+/* 1 when f3440 would accept the weapon for the player's current class. */
+static int coop_weapon_usable(U32 player,U32 id){
+ U32 c=coop_weapon_class(player,id),cur=0;
+ if(c==COOP_INV_ANY_CLASS)return 1;
+ return coop_rd(player+0x264u,&cur)&&c==cur;
+}
 static U32 coop_give_weapon(U32 player,U32 id){
  U32 obj=0,def=0,need=0,cls=0,r;U8 any=1;
  if(coop_rd(player+0x54u+id*4u,&obj)&&obj&&coop_rd(obj+8u,&def)&&def&&coop_rd(def+8u,&need)&&bsp_mem_readable(def+0xcu,1))any=*(const U8 *)(def+0xcu);
@@ -1979,6 +2033,13 @@ static void coop_inv_log(const char *event,int i,const CoopInvState *s,U32 gives
 static void coop_inv_world_unload(void){
  U32 i;
  if(!coop_keep_inventory)return;
+ if(!coop_inv_keep_through_change(coop_state.start_pending)){
+  U32 n=0;
+  for(i=0;i<COOP_SESSION_MAX_MEMBERS;i++){if(coop_inv_snap[i].valid)n++;coop_inv_snap[i].valid=0;coop_inv_pending[i]=0;}
+  {char line[80];U32 k=0;coop_text(line,&k,"fresh start from the lobby: ",sizeof line);coop_dec(line,&k,n,sizeof line);
+   coop_text(line,&k," saved inventories cleared",sizeof line);coop_log("inventory-cleared",line);}
+  return;
+ }
  for(i=0;i<COOP_SESSION_MAX_MEMBERS;i++){
   U32 pl;
   if(!coop_state.m[i].used||coop_state.m[i].seen_epoch!=coop_state.epoch||!coop_state.m[i].spawned)continue;
@@ -2022,7 +2083,7 @@ static void coop_inv_frame(U32 now){
  *                    invulnerable). Self damage passes CoopFriendlyFire.
  *   !all             (kpc_cheats 1) every armour piece, every weapon (any class)
  *                    and full ammo of each type (f3440 caps it).
- *   !class [name]    (kpc_cheats 1) next class, or starbearer|beastking|
+ *   !class [name]    (no cheat permission) next class, or starbearer|beastking|
  *                    celestial|demon (water/earth/air/fire, 1-4). Inventory
  *                    is kept (snapshot before, missing items given after). */
 typedef void (__attribute__((thiscall)) *DamageFn)(void *,void *);
@@ -2046,17 +2107,39 @@ static void coop_say(const char *a,const char *b,const char *c){
 static void coop_give_all(U32 player){
  U32 id;
  for(id=COOP_INV_ARMOUR_FIRST;id<=COOP_INV_ARMOUR_LAST;id++)if(!coop_has_item(player,id))((GiveItemFn)(coop_image+0xf3440u))((void *)player,id,1,1);
- for(id=COOP_INV_WEAPON_FIRST;id<=COOP_INV_WEAPON_LAST;id++)if(!coop_has_item(player,id))coop_give_weapon(player,id);
+ for(id=COOP_INV_WEAPON_FIRST;id<=COOP_INV_WEAPON_LAST;id++)if(!coop_has_weapon(player,id))coop_give_weapon(player,id);
  for(id=COOP_INV_AMMO_FIRST;id<=COOP_INV_AMMO_LAST;id++)((GiveItemFn)(coop_image+0xf3440u))((void *)player,id,1000,1);
 }
+/* Class change: the weapon slots show the current class's weapon, so a
+ * class-specific weapon the player owns (melee ids 3-6, ids 7-10, ids 11-14:
+ * coop_inv_class_swap groups) is matched by the new class's weapon of the
+ * same group (definition class def+8, any-class byte def+0xc). Nothing is
+ * taken away, so cycling back finds the old weapons again. */
+static U32 coop_class_weapons(U32 player,U32 cls,unsigned short owned){
+ U32 classes[COOP_INV_WEAPON_LAST-COOP_INV_WEAPON_FIRST+1],id,n=0;
+ unsigned short want;
+ for(id=COOP_INV_WEAPON_FIRST;id<=COOP_INV_WEAPON_LAST;id++)classes[id-COOP_INV_WEAPON_FIRST]=coop_weapon_class(player,id);
+ want=coop_inv_class_swap(owned,classes,cls);
+ for(id=COOP_INV_WEAPON_FIRST;id<=COOP_INV_WEAPON_LAST;id++)
+  if(want&(1u<<(id-COOP_INV_WEAPON_FIRST))){((GiveItemFn)(coop_image+0xf3440u))((void *)player,id,1,1);n++;}
+ return n;
+}
 static void coop_change_class(U32 player,int cls){
- int slot=-1;U32 client=0;CoopInvState before;int have=0;
+ int slot=-1;U32 client=0,added=0;CoopInvState before,now;int have=0;
  if(coop_rd(player+0x120u,&client))slot=coop_find_client(&coop_state,client);
  have=coop_inv_read(player,&before);
  if(cls<0){U32 cur=0;coop_rd(player+0x264u,&cur);cls=(int)((cur+1u)&3u);}
  coop_set_class(player,(U32)cls);
- if(have){before.cls=(U32)cls;coop_inv_apply(player,&before);}
- if(slot>=0&&coop_inv_snap[slot].valid&&coop_inv_snap[slot].client==client)coop_inv_snap[slot].s.cls=(U32)cls;
+ if(have){
+  added=coop_class_weapons(player,(U32)cls,before.weapons);
+  before.cls=(U32)cls;coop_inv_apply(player,&before);
+ }
+ if(slot>=0&&coop_inv_snap[slot].valid&&coop_inv_snap[slot].client==client){
+  if(coop_inv_read(player,&now))coop_inv_snap[slot].s=now;else coop_inv_snap[slot].s.cls=(U32)cls;
+ }
+ {char line[96];U32 k=0;coop_text(line,&k,"class=",sizeof line);coop_text(line,&k,coop_class_name((U32)cls),sizeof line);
+  coop_text(line,&k," weapons-before=",sizeof line);coop_dec(line,&k,have?coop_inv_bits(before.weapons):0u,sizeof line);
+  coop_text(line,&k," class-weapons-given=",sizeof line);coop_dec(line,&k,added,sizeof line);coop_log("class-change",line);}
 }
 static int coop_more_command(U32 player,const char *cmd,const char *who){
  int kill=coop_cheat_word(cmd,"kill"),all=coop_cheat_word(cmd,"all"),cls=coop_cheat_word(cmd,"class");
@@ -2066,9 +2149,11 @@ static int coop_more_command(U32 player,const char *cmd,const char *who){
   if(coop_kill_player(player))coop_say("[Co-op] ",who," used !kill");
   return 1;
  }
- if(!coop_cheats_allowed()){coop_say("[Co-op] Cheats are disabled on this server (host console: kpc_cheats 1)","","");return 1;}
- if(all){coop_give_all(player);coop_say("[Co-op] ",who," used !all: every armour piece, weapon and full ammo");return 1;}
- {
+ if(all){
+  if(!coop_cheats_allowed()){U32 client=0;coop_rd(player+0x120u,&client);coop_cheat_refused(coop_find_client(&coop_state,client),COOP_CHEAT_K_ALL,"!all",who);return 1;}
+  coop_give_all(player);coop_say("[Co-op] ",who," used !all: every armour piece, weapon and full ammo");return 1;
+ }
+ {   /* !class: no cheat permission needed (user decision 2026-11-13) */
   const char *a=cmd+5;int want=-1;U32 now_cls=0;
   while(*a==' '||*a=='\t')a++;
   if(*a){want=coop_class_parse(a);if(want<0){coop_say("[Co-op] Use: !class, or !class starbearer|beastking|celestial|demon","","");return 1;}}
@@ -2100,16 +2185,17 @@ typedef U32 (CDECL *ClientPlayerFn)(U32);
 #define COOP_CHEAT_GIMMIE 0x2fu
 #define COOP_CHEAT_CLASS 0x31u
 #define COOP_CHEAT_ARMOR 0x39u
-static U32 coop_stock_cheat[3],coop_cheat_denied_ms;
+static U32 coop_stock_cheat[3];
 static void coop_key_cheat(U32 client,U32 k,U32 f,U32 b,U32 v){
  static const char *const what[3]={"gimmie gimmie gimmie","cycle player class","next armor"};
- U32 player=((ClientPlayerFn)(coop_image+0xf4370u))(client),now=GetTickCount(),before=0,after=0,id;
+ U32 player=((ClientPlayerFn)(coop_image+0xf4370u))(client),before=0,after=0,id;
  char name[COOP_NAME_MAX];int mi=coop_find_client(&coop_state,client);
  name[0]=0;
  if(mi>=0){U32 q=0;coop_text(name,&q,coop_state.m[mi].name,sizeof name);}
  else if(player)coop_copy_str(name,player+0x1e8u,sizeof name);
- if(!coop_cheats_allowed()){
-  if(!coop_cheat_denied_ms||now-coop_cheat_denied_ms>3000u){coop_cheat_denied_ms=now|1u;coop_say("[Co-op] Cheats are disabled on this server (host console: kpc_cheats 1)","","");}
+ /* The class cycle needs no cheat permission (user decision 2026-11-13). */
+ if(k!=1u&&!coop_cheats_allowed()){
+  coop_cheat_refused(mi,k==0u?COOP_CHEAT_K_GIMMIE:COOP_CHEAT_K_ARMOR,what[k],name);
   return;
  }
  if(!player||!coop_stock_cheat[k])return;
@@ -2159,22 +2245,36 @@ static void CDECL coop_cheat_msg(U32 client,U32 msg){
  * player stands on the item's spot: it retries every 0.5 s. */
 typedef void (__attribute__((thiscall)) *ItemHideFn)(void *,U32);
 typedef void (__attribute__((thiscall)) *ItemRespawnFn)(void *);
+/* Logged per world: up to 24 lines, and beyond that still the first line of
+ * each kind (scheduled / respawned / skipped) for every item id, so a busy
+ * world (health and ammo) cannot hide what happened to a rarer item. */
 static U32 coop_respawn_epoch=0xffffffffu,coop_respawn_logged,coop_respawn_scheduled,coop_respawn_done,coop_respawn_waits;
-static void coop_respawn_log(const char *event,U32 item){
- char line[120],name[24];U32 k=0,def=0,id=0;
- if(coop_respawn_epoch!=coop_state.epoch){coop_respawn_epoch=coop_state.epoch;coop_respawn_logged=0;}
- if(coop_respawn_logged>=24u)return;
- coop_respawn_logged++;
+static U32 coop_respawn_seen[4][2];   /* [kind][id/32] first-line bits, ids 0-63 */
+static void coop_respawn_log2(const char *event,U32 item,U32 kind,const char *extra){
+ char line[160],name[24];U32 k=0,def=0,id=0,first=0;
+ if(coop_respawn_epoch!=coop_state.epoch){U32 a,b;coop_respawn_epoch=coop_state.epoch;coop_respawn_logged=0;for(a=0;a<4u;a++)for(b=0;b<2u;b++)coop_respawn_seen[a][b]=0;}
  name[0]=0;if(coop_rd(item+0x54u,&def)&&def&&coop_rd(def,&id))coop_item_name(id,name,sizeof name);
+ if(kind<4u&&id<64u&&!(coop_respawn_seen[kind][id>>5]&(1u<<(id&31u)))){coop_respawn_seen[kind][id>>5]|=1u<<(id&31u);first=1;}
+ if(coop_respawn_logged>=24u&&!first)return;
+ coop_respawn_logged++;
  coop_text(line,&k,event,sizeof line);coop_text(line,&k," item=",sizeof line);coop_text(line,&k,name[0]?name:"?",sizeof line);
+ if(extra)coop_text(line,&k,extra,sizeof line);
  coop_log("item-respawn",line);
 }
+static void coop_respawn_log(const char *event,U32 item){coop_respawn_log2(event,item,event[0]=='s'?0u:event[0]=='r'?1u:4u,0);}
 static void __attribute__((thiscall)) coop_item_hide(void *item,U32 force){
  U32 it=(U32)item,def=0,id=0;
  if(coop_item_respawn_sec&&!(force&0xffu)&&bsp_mem_readable(it+0x54u,0x94)&&!*(const U8 *)(it+0xb4u)&&!*(const U8 *)(it+0xe4u)&&
     coop_rd(it+0x54u,&def)&&def&&coop_rd(def,&id)&&coop_item_respawnable(id)){
   *(U8 *)(it+0xb4u)=1;*(float *)(it+0xb8u)=(float)(I32)coop_item_respawn_sec;*(U8 *)(it+0x81u)=1;
   coop_respawn_scheduled++;coop_respawn_log("scheduled",it);
+ }else if(coop_item_respawn_sec&&bsp_mem_readable(it+0x54u,0x94)&&coop_rd(it+0x54u,&def)&&def&&coop_rd(def,&id)&&coop_item_respawnable(id)){
+  /* Evidence for T14 (armour shards): why a respawnable item was not scheduled. */
+  char why[64];U32 k=0;
+  coop_text(why,&k," not scheduled: force=",sizeof why);coop_dec(why,&k,force&0xffu,sizeof why);
+  coop_text(why,&k," Respawn=",sizeof why);coop_dec(why,&k,*(const U8 *)(it+0xb4u),sizeof why);
+  coop_text(why,&k," expiry=",sizeof why);coop_dec(why,&k,*(const U8 *)(it+0xe4u),sizeof why);
+  coop_respawn_log2("skipped",it,2u,why);
  }
  ((ItemHideFn)(coop_image+0xcc570u))(item,force);
 }
@@ -2197,6 +2297,47 @@ static void __attribute__((thiscall)) coop_item_respawn(void *item){
  ((ItemRespawnFn)(coop_image+0xcc080u))(item);
  coop_respawn_done++;coop_respawn_log("respawned",(U32)item);
 }
+
+/* ---- CoopWindowShards (session, default 1): window shards on remote clients ----
+ * object.lto window break 483cc: clears the window's flags 0x2001 (visible
+ * bit 1) with SetObjectFlags [g_pServerDE+0x1fc](hobj, flags) at 48413
+ * (cdecl, popped at 48422), then sends message 0x39 (effect 0x4b) to every
+ * client (484c1-48540). cshell's shard handler 5bd30 builds the shards from
+ * the window object's polygons and gives up when the object is not on the
+ * client ("not in the PVS", 5bdaf). Two-PC test 2026-11-13: every break was
+ * logged by the client's LogWindowBreaks as "window object MISSING" on both
+ * PCs, so the hidden window was already gone from the clients when the
+ * message was read. The flags are now applied with the visible bit kept, and
+ * the visible bit is cleared COOP_WINDOW_HIDE_MS later from the frame hook. */
+#define COOP_WINDOW_HIDE_MS 200u
+#define COOP_WINDOW_MAX 16u
+typedef U32 (CDECL *ObjFlagsGetFn)(U32);
+typedef void (CDECL *ObjFlagsSetFn)(U32,U32);
+static U32 coop_window_obj[COOP_WINDOW_MAX],coop_window_due[COOP_WINDOW_MAX],coop_window_logged;
+static void CDECL coop_window_flags(U32 hobj,U32 flags){
+ U32 de=0,set=0,i;
+ if(!coop_rd((U32)coop_image+0x16de80u,&de)||!de||!coop_rd(de+0x1fcu,&set)||!set)return;
+ if(!(flags&1u)&&hobj){
+  for(i=0;i<COOP_WINDOW_MAX;i++)if(!coop_window_obj[i]||coop_window_obj[i]==hobj){
+   coop_window_obj[i]=hobj;coop_window_due[i]=GetTickCount()+COOP_WINDOW_HIDE_MS;
+   ((ObjFlagsSetFn)set)(hobj,flags|1u);   /* everything but the hide, now */
+   if(coop_window_logged<8u){coop_window_logged++;coop_log("window","break: kept visible 200 ms for the shard message");}
+   return;
+  }
+ }
+ ((ObjFlagsSetFn)set)(hobj,flags);       /* list full: stock behaviour */
+}
+static void coop_window_frame(U32 now){
+ U32 de=0,get=0,set=0,i;
+ for(i=0;i<COOP_WINDOW_MAX;i++){
+  U32 h=coop_window_obj[i];
+  if(!h||(int)(now-coop_window_due[i])<0)continue;
+  coop_window_obj[i]=0;
+  if(!de&&(!coop_rd((U32)coop_image+0x16de80u,&de)||!de||!coop_rd(de+0x1f8u,&get)||!get||!coop_rd(de+0x1fcu,&set)||!set))return;
+  ((ObjFlagsSetFn)set)(h,((ObjFlagsGetFn)get)(h)&~1u);
+ }
+}
+static void coop_window_world_unload(void){U32 i;for(i=0;i<COOP_WINDOW_MAX;i++)coop_window_obj[i]=0;coop_window_logged=0;}
 
 /* ---- CoopPowerupResend: send the activator's powerup effect to observers ----
  * Same message f6ff0 builds (object.lto message helper: 52140 create,
@@ -2574,7 +2715,7 @@ static void *CDECL coop_music_event(const char *label,U32 argc,U32 argv){
  * then deliver due per-player music starts. Installed only with CoopMusic. */
 static void __attribute__((thiscall)) coop_frame(void *shell){
  ((ShellFn)(coop_image+0x100720u))(shell);
- if(coop_session_enabled){coop_inv_frame(GetTickCount());coop_powerup_frame(GetTickCount());}
+ if(coop_session_enabled){coop_inv_frame(GetTickCount());coop_powerup_frame(GetTickCount());if(coop_window_shards)coop_window_frame(GetTickCount());}
  if(coop_session_enabled&&coop_music)coop_music_frame(GetTickCount());
  if(coop_session_enabled&&coop_intro)coop_intro_frame(GetTickCount());
  if(coop_session_enabled&&coop_start_scoreboard){
@@ -2627,7 +2768,7 @@ static void make_call(OptionalSite *s,U8 *b,const void *target){
  s->hooked[0]=0xe8;copy(s->hooked+1,(const U8 *)&rel,4);
  for(i=5;i<s->size;i++)s->hooked[i]=0x90;
 }
-#define OPTIONAL_SITES 47u
+#define OPTIONAL_SITES 48u
 static void optional_sites(OptionalSite *s,U8 *b){
  static const struct {U32 rva,size;U8 original[6];} table[OPTIONAL_SITES]={
   {SPAWN_POS_CALL_RVA,6,{0xff,0x91,0xe0,0x01,0x00,0x00}},
@@ -2677,6 +2818,7 @@ static void optional_sites(OptionalSite *s,U8 *b){
   {0xfead7,5,{0xe8,0x34,0xce,0xff,0xff}},        /* client message 0x3b -> cheat handler fb910 */
   {0xcc29e,5,{0xe8,0xcd,0x02,0x00,0x00}},        /* pickup taken -> hide/remove cc570(item, 0) */
   {0xcbfff,5,{0xe8,0x7c,0x00,0x00,0x00}},        /* item respawn countdown done -> cc080 */
+  {0x48413,6,{0xff,0x91,0xfc,0x01,0x00,0x00}},   /* window break: SetObjectFlags (hide) before message 0x39 */
  };
  U32 i;
  for(i=0;i<OPTIONAL_SITES;i++){s[i].rva=table[i].rva;s[i].size=table[i].size;copy(s[i].original,table[i].original,6);}
@@ -2727,6 +2869,7 @@ static void optional_sites(OptionalSite *s,U8 *b){
  make_call(&s[44],b,(const void *)coop_cheat_msg);
  make_call(&s[45],b,(const void *)coop_item_hide);
  make_call(&s[46],b,(const void *)coop_item_respawn);
+ make_call(&s[47],b,(const void *)coop_window_flags);
  s[0].enabled=spawn_trace_enabled;
  s[1].enabled=spawn_separation_enabled||coop_session_enabled;
  s[2].enabled=campaign_trace||coop_session_enabled;
@@ -2751,6 +2894,7 @@ static void optional_sites(OptionalSite *s,U8 *b){
  s[43].enabled=coop_session_enabled&&coop_spawner_nearest;
  s[44].enabled=coop_session_enabled&&coop_cheat_keys;
  s[45].enabled=s[46].enabled=coop_session_enabled&&coop_item_respawn_sec;
+ s[47].enabled=coop_session_enabled&&coop_window_shards;
  coop_ff_skip_target=(U32)b+0xf3f1eu;
  coop_c4230_target=(U32)b+0xc4230u;
 }
@@ -2932,6 +3076,7 @@ static void initialize(void){
  coop_powerup_resend=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopPowerupResend",1,ini_path)!=0;
  coop_item_respawn_sec=coop_session_enabled?GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopItemRespawnSec",15,ini_path):0;
  if(coop_item_respawn_sec>600u)coop_item_respawn_sec=600u;
+ coop_window_shards=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopWindowShards",1,ini_path)!=0;
  coop_spread=coop_session_enabled&&same(back_sha,bsp_original_hash,32)&&
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSpawnSpread",1,ini_path)!=0;
  coop_spread_bsp=coop_spread;
@@ -3018,7 +3163,7 @@ static void initialize(void){
      "[KPCFix Co-op] effective CoopSpawnerNearest=1 (monster spawner radius measured from the nearest player)":
      "[KPCFix Co-op] effective CoopSpawnerNearest=0 (stock: from the first player)");
    log_file(coop_cheat_keys?
-     "[KPCFix Co-op] effective CoopCheatKeys=1 (GimmieGimmieGimmie/CyclePlayerClass/NextArmor keys per player with kpc_cheats 1)":
+     "[KPCFix Co-op] effective CoopCheatKeys=1 (GimmieGimmieGimmie/NextArmor keys per player with kpc_cheats 1; CyclePlayerClass always)":
      "[KPCFix Co-op] effective CoopCheatKeys=0 (stock: those keys do nothing in multiplayer)");
    log_file(coop_keep_inventory?(coop_keep_on_death?
      "[KPCFix Co-op] effective CoopKeepInventory=1 CoopKeepOnDeath=1 (weapons, armour, shards, ammo and class kept through world changes, lobby and deaths)":
@@ -3028,6 +3173,9 @@ static void initialize(void){
    coop_text(line,&m,coop_item_respawn_sec?" (taken weapons, ammo, shards and power-ups come back when the spot is clear)":" (stock: taken items stay gone)",sizeof line);
    log_file(line);
    log_file(coop_powerup_resend?"[KPCFix Co-op] effective CoopPowerupResend=1":"[KPCFix Co-op] effective CoopPowerupResend=0");
+   log_file(coop_window_shards?
+     "[KPCFix Co-op] effective CoopWindowShards=1 (a broken window stays visible 200 ms so every client draws its shards)":
+     "[KPCFix Co-op] effective CoopWindowShards=0 (stock: the window is hidden before the shard message)");
   }
   if(coop_session_enabled)log_file(coop_friendly_fire?
     "[KPCFix Co-op] effective CoopFriendlyFire=1 (players can hurt each other)":

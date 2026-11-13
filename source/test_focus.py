@@ -198,9 +198,9 @@ assert screen('_kpc_audio_init') == 1
 b = box['at']
 assert calls == [('s_init', SCREEN), ('ctor', b), ('w_init', b, 0x111, 0x333, 0x222),   # [+0x48], [+0x50], [+0x4c] as 0x7512
                  ('images', b, SHELLBASE + 0x109de8, SHELLBASE + 0x109e04)], calls
-assert read(rig.u, b + 0x28) == 0xbc and read(rig.u, b + 0x2c) == 0x164 + 40       # one row below Sound Quality
+assert read(rig.u, b + 0x28) == 0xbc and read(rig.u, b + 0x2c) == 0x100 - 40       # gap above Enable Sound FX
 assert rig.cstr(b + 0x108) == 'Keep Running When Minimised' and rig.cstr(b + 0x40).startswith('Keep sounds, music')
-assert bytes(rig.u.mem_read(b + 0x14c, 1)) == b'\x00'                               # on = checked
+assert bytes(rig.u.mem_read(b + 0x14c, 1)) == b'\x01'                               # on = 1 = lit image +0x100 (checked.pcx)
 screen('_kpc_audio_draw', 0x7777); assert calls == [('s_draw', SCREEN, 0x7777), ('w_draw', b, 0x7777)], calls
 screen('_kpc_audio_move'); assert calls == [('s_move', SCREEN), ('w_hover', b, 250, 400)], calls
 box['hit'] = 0; assert screen('_kpc_audio_event', 1, 5) == 1 and calls == [('w_event', b, 1, 5), ('s_event', SCREEN, 1, 5)], calls
@@ -209,13 +209,13 @@ screen('_kpc_audio_event', 0x0d, 0); assert calls == [('s_event', SCREEN, 0x0d, 
 # The widget's change callback (+0x150, cdecl(widget)) writes the console variable.
 callback = read(rig.u, b + 0x150)
 rig.u.mem_write(0x62000400, b'\x68' + pack(b) + b'\xe8' + struct.pack('<i', callback - (0x62000400 + 10)) + b'\x83\xc4\x04\xc3')
-rig.u.mem_write(b + 0x14c, b'\x01'); cvar['sets'].clear(); rig.invoke_address(0x62000400, ())
-assert cvar['sets'] == [('KeepAudioOnFocusLoss', '0')], cvar
 rig.u.mem_write(b + 0x14c, b'\x00'); cvar['sets'].clear(); rig.invoke_address(0x62000400, ())
+assert cvar['sets'] == [('KeepAudioOnFocusLoss', '0')], cvar
+rig.u.mem_write(b + 0x14c, b'\x01'); cvar['sets'].clear(); rig.invoke_address(0x62000400, ())
 assert cvar['sets'] == [('KeepAudioOnFocusLoss', '1')], cvar
 # Console change while the screen is open: the box follows on the next draw.
 rig.u.mem_write(CVAR + 0x18, struct.pack('<f', 0.0)); screen('_kpc_audio_draw', 1)
-assert bytes(rig.u.mem_read(b + 0x14c, 1)) == b'\x01'
+assert bytes(rig.u.mem_read(b + 0x14c, 1)) == b'\x00'                               # off = unlit
 # Screen inactive (+0x5c = 0): nothing is forwarded.
 rig.u.mem_write(SCREEN + 0x5c, b'\x00')
 screen('_kpc_audio_draw', 1); screen('_kpc_audio_move'); assert calls == [('s_move', SCREEN)], calls

@@ -129,6 +129,7 @@ def profile_int(a):
  if key=='CoopKeepOnDeath':return 0 if '--no-keep-on-death' in sys.argv else a[2]
  if key=='CoopPowerupResend':return 0 if '--no-powerup-resend' in sys.argv else a[2]
  if key=='CoopItemRespawnSec':return 0 if '--no-item-respawn' in sys.argv else a[2]
+ if key=='CoopWindowShards':return 0 if '--no-window-shards' in sys.argv else a[2]
  if key=='CoopSoundClock':
   # Default argument is the effective CoopScriptClock.
   if '--no-sound-clock' in sys.argv:return 0
@@ -245,7 +246,8 @@ def coop_scenario():
         0xf3c08:(6,'39b8f0010000'),0xcc145:(5,'e836000000'),0x30c9e:(5,'e8ed800c00'),
         0xfdfdb:(6,'ff90f0000000'),0xc8348:(6,'8b88d0010000'),0x409bb:(5,'e870380800'),0xb676f:(5,'e8cccc0300'),
         0xc2c9c:(5,'e87fcc0200'),0xc2c56:(5,'e8f5cc0200'),
-        0xd51fb:(6,'ff90d0010000'),0xfead7:(5,'e834ceffff'),0xcc29e:(5,'e8cd020000'),0xcbfff:(5,'e87c000000')}
+        0xd51fb:(6,'ff90d0010000'),0xfead7:(5,'e834ceffff'),0xcc29e:(5,'e8cd020000'),0xcbfff:(5,'e87c000000'),
+        0x48413:(6,'ff91fc010000')}
  music_flag='--no-music' not in sys.argv
  intro_flag='--intro' in sys.argv
  trace_timing='--trace-timing' in sys.argv
@@ -258,6 +260,7 @@ def coop_scenario():
  item_respawn='--no-item-respawn' not in sys.argv;keep_inv='--no-keep-inventory' not in sys.argv
  hooked_optional[0xd51fb]=spawner_nearest;hooked_optional[0xfead7]=cheat_keys
  hooked_optional[0xcc29e]=hooked_optional[0xcbfff]=item_respawn
+ window_shards='--no-window-shards' not in sys.argv;hooked_optional[0x48413]=window_shards
  bars='--no-health-bars' not in sys.argv
  for rva in (0xea6d2,0xea7c3,0xeaa10,0xeab11):hooked_optional[rva]=bars
  spawners='--no-spawners' not in sys.argv;trace_spawners='--trace-spawners' in sys.argv
@@ -841,6 +844,8 @@ def coop_scenario():
  else:assert sbm()==[]
  assert changes()==1 and (not intermission or ends[0]==shell) and read(obj+0x16da88)==2   # count-1: native pre-increment wraps to R1M2B
  next_level();assert len(nextlevels)==1 and read(obj+0x16da88)==0
+ if '--no-keep-inventory' not in sys.argv:
+  assert 'inventory-cleared fresh start from the lobby: 0 saved inventories cleared' in b''.join(log).decode('latin1'),'a start from the lobby forgets the saved inventories'
  if music_on:n=len(msgs);music_world('song5')               # reloaded world creates its music (epoch 1)
  spawn(alice);assert any('R1M2B started (epoch 1)' in m for m in said),said
  spawn(bob)
@@ -972,12 +977,31 @@ def coop_scenario():
    del stubs[obj+0xcc570];del stubs[obj+0xcc080]
    print('PASS co-op pickup respawn: weapons/shards scheduled, progression/forced/expiring items not, spot must be clear')
   else:assert 'effective CoopItemRespawnSec=0' in logtext()
+  # Window break (483cc): the hide at 48413 keeps the visible bit until the
+  # shard message 0x39 has gone out; the frame hook clears it 200 ms later.
+  if window_shards:
+   setf=[];old1f8,old1fc=read(dev+0x1f8),read(dev+0x1fc)
+   stubs[nb+0x1f10]=ccall(2,lambda a:setf.append((a[0],a[1])));write(dev+0x1fc,nb+0x1f10)
+   stubs[nb+0x1f20]=ccall(1,lambda a:0x2011 if a[0]==0x600 else 0);write(dev+0x1f8,nb+0x1f20)
+   call_regs(target[0x48413],[0x600,0x10],{},0)
+   assert setf==[(0x600,0x11)],setf
+   frame(100);assert setf==[(0x600,0x11)],'still visible while the message is read'
+   frame(150);assert setf==[(0x600,0x11),(0x600,0x2010)],setf
+   frame(500);assert len(setf)==2,'hidden once'
+   call_regs(target[0x48413],[0x600,0x2011],{},0);assert setf[-1]==(0x600,0x2011),'a flag change that keeps it visible passes through'
+   assert 'window break: kept visible 200 ms for the shard message' in logtext()
+   write(dev+0x1f8,old1f8);write(dev+0x1fc,old1fc)
+   print('PASS co-op window shards: hide deferred 200 ms after the break message')
+  else:assert 'effective CoopWindowShards=0' in logtext()
   # Per-player cheats: inventory stubs shared by the cheat, class and restore checks.
   state0,state4=read(obj+0x174f00),read(obj+0x174f04);write(obj+0x174f00,1);write(obj+0x174f04,1)
   has={};counts={};gives=[];classes=[];dmg=[];dead=[0]
   inv=nb+0xc00;write(alice+0x54,inv);write(alice+0x264,0);vt_a=nb+0xa00;write(alice,vt_a)
-  stubs[obj+0xf25f0]=tcall(1,lambda this,a:has.get(a[0],0) if this==alice else 0)
   stubs[obj+0xdd190]=tcall(1,lambda this,a:counts.get(a[0],0) if this==inv else 0)
+  # Weapon ownership is a node in the inventory list (dd170); f25f0 answers
+  # only for armour pieces (object.lto f25f0-f2666).
+  stubs[obj+0xf25f0]=tcall(1,lambda this,a:has.get(a[0],0) if this==alice and 0x27<=a[0]<=0x2c else 0)
+  stubs[obj+0xdd170]=tcall(1,lambda this,a:(0x7000+a[0] if has.get(a[0]) else 0) if this==inv and 2<=a[0]<=0x0e else 0)
   def give(this,a):
    gives.append((this,a[0],a[1],a[2]))
    if a[0]<=0x0e or 0x27<=a[0]<=0x2c:has[a[0]]=1
@@ -1009,7 +1033,13 @@ def coop_scenario():
    assert classes==[(alice,1,1)] and read(alice+0x264)==1 and (0x31,0x111) not in calls
    assert any('Alice used cycle player class: now Beast King (key)' in m for m in said)
    write(obj+0x174f00,0);n=len(said);calls.clear();call_regs(target[0xfead7],[0x111,0x39],{},0)
-   assert not calls and any('Cheats are disabled' in m for m in said[n:]);write(obj+0x174f00,1)
+   assert not calls and any('Cheats are disabled on this server (host console: kpc_cheats 1): next armor refused for Alice' in m for m in said[n:]),said[n:]
+   n=len(said);call_regs(target[0xfead7],[0x111,0x39],{},0);assert len(said)==n,'repeated key: refused once per 3 s'
+   n=len(said);call_regs(target[0xfead7],[0x111,0x2f],{},0)
+   assert not calls and any('gimmie gimmie gimmie refused for Alice' in m for m in said[n:]),'another refused cheat still says so'
+   classes.clear();call_regs(target[0xfead7],[0x111,0x31],{},0)
+   assert classes and read(alice+0x264)==2,'class cycle key needs no cheat permission'
+   write(alice+0x264,1);write(obj+0x174f00,1)
    del stubs[obj+0xfb910];del stubs[obj+0xf4370]
    print('PASS co-op cheat keys: gimmie/class/next armor per player under kpc_cheats, stock table restored')
   else:assert 'effective CoopCheatKeys=0' in logtext()
@@ -1027,8 +1057,22 @@ def coop_scenario():
   assert [g[1] for g in gives]==[0x28,0x29,0x2a,0x2b,0x2c]+list(range(2,15))+[0x11,0x12,0x13,0x14],gives
   assert all(g[2]==1000 for g in gives[-4:])
   write(obj+0x174f00,0);n=len(gives);out=chat(alice,'!all');assert len(gives)==n and any('Cheats are disabled' in m for m in out)
-  out=chat(alice,'!class demon');assert read(alice+0x264)==0 and any('Cheats are disabled' in m for m in out)
-  write(obj+0x174f00,1)
+  out=chat(alice,'!class demon');assert read(alice+0x264)==3 and any('Alice is now Demon' in m for m in out),'!class needs no cheat permission'
+  assert any('Cheats are disabled on this server (host console: kpc_cheats 1): !all refused for Alice' in m for m in said),said[-4:]
+  write(alice+0x264,0);write(obj+0x174f00,1)
+  # Class change keeps the slots filled: a class-specific weapon the player owns
+  # is matched by the new class's weapon of its group (def+8 class, def+0xc any).
+  wcls={2:0xff,3:1,4:3,5:0,6:2,7:0xff,8:0xff,9:0xff,10:0xff,11:3,12:2,13:1,14:0}
+  for wid,c in wcls.items():
+   wo=nb+0x1800+wid*0x10;wd=nb+0x1a00+wid*0x10;write(alice+0x54+wid*4,wo);write(wo+8,wd)
+   write(wd+8,c if c<4 else 0);u.mem_write(wd+0xc,bytes([1 if c==0xff else 0]))
+  has.clear();has.update({0x27:1,5:1,8:1,14:1});gives.clear();write(alice+0x264,0)
+  out=chat(alice,'!class demon');assert read(alice+0x264)==3,out
+  assert sorted(g[1] for g in gives)==[4,11],gives
+  assert 'class-change class=Demon weapons-before=3 class-weapons-given=2' in logtext(),logtext()[-400:]
+  gives.clear();chat(alice,'!class demon');assert gives==[],'already has the Demon weapons'
+  for wid in wcls:write(alice+0x54+wid*4,0)
+  has.clear();write(alice+0x264,0)
   print('PASS co-op chat: !kill self damage, !class by name or cycle, !all under kpc_cheats')
   # Inventory: snapshot every second while alive, restored after a respawn.
   if keep_inv:
@@ -1072,7 +1116,7 @@ def coop_scenario():
    print('PASS co-op powerup: the activator effect re-sent to the observers')
   write(obj+0x174f00,state0);write(obj+0x174f04,state4)
   write(alice,0);write(alice+0x54,0);write(dev+0x1d0,old1d0);roster(0xa1)
-  for k in (0xf25f0,0xdd190,0xf3440,0xf2090):del stubs[obj+k]
+  for k in (0xf25f0,0xdd170,0xdd190,0xf3440,0xf2090):del stubs[obj+k]
  if not intermission:coop_new_features()
  # CoopSpawnSpread: a second player at a taken (non-R1M2B) start queries the
  # engine (IntersectSegment g_pServerDE+0x90: floor and line rays) and the

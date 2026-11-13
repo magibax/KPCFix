@@ -103,9 +103,14 @@ U32 THISCALL kpc_mouse_menu_ready(void *menu){
  * cannot join that array. KPCFix owns one more instance of the game's own
  * checkbox class (ctor 0xd060, 0x154 bytes, images 0xd1b0 with
  * menu/checkbox_checked.pcx / _unchecked.pcx, text label at +0x108 in the
- * widget font, tooltip +0x40, "unchecked" byte +0x14c, change callback
- * +0x150), configured exactly like Enable Music (0x752b..0x75d0) and placed
- * one row below Sound Quality (0xbc, 0x164 + 40). The screen's own init,
+ * widget font, tooltip +0x40, state byte +0x14c, change callback +0x150),
+ * configured like Enable Music (0x752b..0x75d0) and placed in the gap above
+ * Enable Sound FX (x 0xbc, y 0x100 - 40; the music slider is at 0x9c plus
+ * the font offset, Enable Sound FX at 0x100). State: the draw 0xd31c shows
+ * image +0x100 (checkbox_checked.pcx, the lit picture) when +0x14c is 1 and
+ * +0x104 (unchecked, unlit) otherwise; Enable Music stores the inverse of its
+ * setting there, which drew this box unlit while on (two-PC test T19), so
+ * this box stores the setting itself: 1 = on = lit. The screen's own init,
  * term, draw, mouse-move and event slots are wrapped: each runs the original,
  * then the same widget call for the extra box (vtable +0x08 init, +0x0c draw,
  * +0x24 hover, +0x2c event; scalar destructor +0x00 with flag 0 releases its
@@ -121,17 +126,17 @@ typedef U32 (THISCALL *ScreenFn1)(void *,U32);
 typedef U32 (THISCALL *ScreenFn2)(void *,U32,U32);
 typedef U32 (THISCALL *ScreenFn3)(void *,U32,U32,U32);
 #define BOX_FN(slot) (((U32 *)*(U32 **)keep_box)[(slot)/4])
-static void CDECL keep_box_changed(U8 *box){kpc_set_keep_running(!box[0x14c]);}
+static void CDECL keep_box_changed(U8 *box){kpc_set_keep_running(box[0x14c]!=0);}
 static void copy_text(char *d,const char *s,U32 cap){U32 i;for(i=0;i+1<cap&&s[i];i++)d[i]=s[i];d[i]=0;}
 static void keep_box_create(U8 *screen){
     const ShellLayout *L=g_shell_layout;U8 *b=keep_box;U8 *font;
     ((ScreenFn0)(g_audio_shell+L->checkbox_ctor))(b);
     ((ScreenFn3)BOX_FN(0x08))(b,*(U32 *)(screen+0x48),*(U32 *)(screen+0x50),*(U32 *)(screen+0x4c));
     ((ScreenFn2)(g_audio_shell+L->checkbox_images))(b,(U32)(g_audio_shell+L->checkbox_checked),(U32)(g_audio_shell+L->checkbox_unchecked));
-    b[0x14c]=!kpc_keep_running();
+    b[0x14c]=kpc_keep_running()?1:0;
     *(U32 *)(b+0x28)=0xbc;
     if((font=*(U8 **)(b+0xf4))!=NULL)*(U32 *)(b+0x148)=*(U32 *)(font+0x514)+*(U32 *)(b+0x30)+0xbc;
-    *(U32 *)(b+0x2c)=0x164+40;
+    *(U32 *)(b+0x2c)=0x100-40;
     copy_text((char *)b+0x108,keep_label,0x40);
     copy_text((char *)b+0x40,keep_tip,0x80);
     *(U32 *)(b+0x150)=(U32)keep_box_changed;
@@ -156,7 +161,7 @@ U32 THISCALL kpc_audio_term(void *screen){
 U32 THISCALL kpc_audio_draw(void *screen,U32 surface){
     U32 result=((ScreenFn1)(g_audio_shell+g_shell_layout->audio_draw))(screen,surface);
     if(keep_box_live&&((U8 *)screen)[0x5c]){
-        keep_box[0x14c]=!kpc_keep_running(); /* console changes show at once */
+        keep_box[0x14c]=kpc_keep_running()?1:0; /* console changes show at once */
         ((ScreenFn1)BOX_FN(0x0c))(keep_box,surface);
     }
     return result;

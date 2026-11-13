@@ -1,7 +1,7 @@
 {
   "output": "dinput.dll",
   "platform": "windows",
-  "sha256": "cf896d631f6a3ed350beb537ea73d0e020ae1b1a7f95a3f4d40ed787b9c5e390",
+  "sha256": "1e97026a6944cc6d7e2e3478aca576b2e7a1b1c9fce390bbe0a2d7ddb2525f8e",
   "bytes": 58368,
   "exports": [
     "DirectInputCreateA",
