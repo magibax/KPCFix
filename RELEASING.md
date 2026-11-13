@@ -166,4 +166,4 @@ An existing stable tag remains immutable, even if a later stable main
 commit updates launcher scripts or checksum manifests; such fixes
 require a **new** SemVer release after Windows acceptance.
 
-See [2026-11-11 audit remediation and unverified runtime gates](AUDIT-REMEDIATION.md) before publishing another release.
+Before publishing another release, complete the manual checks in [TESTING.md](TESTING.md), including its Windows acceptance matrix and the checks listed for new fixes.

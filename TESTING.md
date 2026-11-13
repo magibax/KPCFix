@@ -4,7 +4,7 @@ From the repository root build the client with the command in [source/BUILD.md](
 
 ## Automated checks
 
-- With original patched and unpatched fixtures for all four regions and Unicorn 2.1.4, run source/verify.py as documented in the client build guide. It exercises region selection, rejection of altered files, timing, configuration I/O, networking, UI, enemy HUD and cinematics. The recorded verification/SUMMARY.json belongs to the earlier DLL identified by its own hash.
+- With original patched and unpatched fixtures for all four regions and Unicorn 2.1.4, run source/verify.py as documented in the client build guide. It exercises region selection, rejection of altered files, timing (including the minimum local-server step), the console key, configuration I/O, networking, UI, enemy HUD and cinematics. The recorded verification/SUMMARY.json belongs to the earlier DLL identified by its own hash.
 - Run the server assembly harness in both default and --usa modes. It needs Unicorn and GNU binutils and uses synthetic fixtures. Build the server first for check_live.py, which loads build/hooks.bin. Exercise check_proxy.py and check_live.py with both dedicated-server layouts, enabled and disabled paths and altered-object rejection.
 - Stage the client and Server Tools separately. Check SHA256SUMS from the client extraction root and SHA256SUMS-Server-Tools from the server extraction root. The client checksum includes the external DDrawCompat ddraw.dll provided in the release. Verify distinct case-insensitive file paths before extracting both into one game directory.
 
@@ -13,10 +13,20 @@ From the repository root build the client with the command in [source/BUILD.md](
 | Environment | Procedure and expected observation |
 |---|---|
 | Windows, each client shell layout | Run the checker, launch twice, confirm detection in KPCFix.log, then launch directly. Resolution and bindings persist. Test an unsupported input on a disposable installation and verify the refusal. |
-| Windows and Wine, client | Compare capped 60 FPS and high refresh during narration, panning, animations, movement and key release. Toggle StockMouse. Check aiming, the Input Rate slider and saved bindings. Listen for stutter and stereo balance. |
+| Windows and Wine, client | Compare the shipped default (VSync at the monitor refresh, no cap) with a 60 FPS cap (`FpsLimiter = flipend(60)`) and with VSync off, during narration, panning, animations, movement and key release. Toggle StockMouse. Check aiming, the Input Rate slider and saved bindings. Listen for stutter and stereo balance. |
 | 1080p and 1440p | Compare HUD scales 100, 150 and 200. Check enemy bars and labels, cursor hotspot, tooltips at screen edges and 4:3 movies with filtering on and off. |
 | Multiplayer | Query and join by direct IP immediately after a fresh launch. Repeat with two players and both server layouts. Check chat, cheat permission, revocation while airborne and clean shutdown. |
 | Server installation and migration | Test clean install, recognised legacy object restore, existing proxy upgrade, repeat setup and uninstall. Compare stock object and backend hashes throughout. Confirm an existing active INI survives setup. |
+
+### Checks for the 2026-11-13 fixes
+
+| Fix | Procedure and expected observation |
+|---|---|
+| Client `LocalServerMinStepMs=16` | Single player above 60 FPS (VSync off or a 144 Hz+ monitor): in R2M2A the Ballbuster drives through the garage door. With `LocalServerMinStepMs=0` it can stall there. Narration and scripted sequences keep their pace. |
+| Client `ConsoleKeyFix=1` | With a UK keyboard layout, open the console: no apostrophe appears on the input line. Typing an apostrophe afterwards still works. With `ConsoleKeyFix=0` the original behaviour returns. |
+| Server Tools `ServerFrameMs=16` (Europe-family server) | Host a deathmatch map: movement, weapons and respawns feel normal for every client, and `KPCServerTools.log` reports "Minimum server frame installed, ServerFrameMs=16". Host R2M2A: the Ballbuster clears the garage door. With `ServerFrameMs=0` no frame line is logged. |
+| Server Tools on the USA server | Start a server with the USA `server.dll`: it runs normally and `KPCServerTools.log` reports that ServerFrameMs is not supported for this server.dll. |
+| Server Tools upgrade from v1.0.1 | On an installation with the published v1.0.1 proxy (`8de76e10…`) as `server.dll`, run the new setup: it upgrades in place, keeps `server.original.dll` and the active `KPCServerTools.ini`, and an INI without `ServerFrameMs` behaves as 16. |
 
 Record toolchain, DLL hashes, regional files, OS or Wine version, renderer and observed results. Emulator assertions, byte-identical builds and native playtests answer different questions.
 

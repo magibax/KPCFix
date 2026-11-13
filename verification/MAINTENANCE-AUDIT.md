@@ -5,7 +5,7 @@ state, **not** current Server Tools R3 or the experimental co-op build.
 In particular, its GCC 13.3 server reproduction result does not apply to
 R3, which reproducibly builds with GCC 14.2 and binutils 2.44.
 For current procedures, use the [release guide](https://github.com/magibax/KPCFix/blob/main/RELEASING.md)
-and the [2026-11-11 audit](https://github.com/magibax/KPCFix/blob/main/KPCFix-audit-report.md).
+and the [testing guide](https://github.com/magibax/KPCFix/blob/main/TESTING.md).
 
 
 Baseline: main at 3cb17e94287d5c07ecb0344eb2d92ad5d668c36f. The tree had 133 files and the visible history had 33 commits. Its latest changes split server hosting from the client and renamed colliding package files. The release tags point to earlier commits. A tag checkout and a subsequently replaced release attachment can have different contents.

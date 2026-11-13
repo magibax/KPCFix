@@ -17,6 +17,7 @@ python server-tools-source/tests/check_proxy.py PATH_TO_EDITION_FOLDER
 python server-tools-source/tests/check_proxy.py PATH_TO_EDITION_FOLDER --cheats
 python server-tools-source/tests/check_proxy.py PATH_TO_EDITION_FOLDER --off
 python server-tools-source/tests/check_proxy.py PATH_TO_EDITION_FOLDER --bad-object
+python server-tools-source/tests/check_proxy.py PATH_TO_EDITION_FOLDER --no-server-frame
 python server-tools-source/tests/check_live.py PATH_TO_OBJECT_LTO PATH_TO_DEDICATED_EXE
 python server-tools-source/tests/check_live.py PATH_TO_OBJECT_LTO PATH_TO_DEDICATED_EXE --disabled
 python server-tools-source/tests/run_checks.py
