@@ -2,6 +2,8 @@
 
 Windows dedicated-server tools for official game version **1.13**. Supports the supplied Europe/UK, USA, German and Italian 1.13 builds.
 
+Server Tools uses its own semantic version (MAJOR.MINOR.PATCH), independently of the KPCFix client. The game compatibility version remains 1.13.
+
 ## Update an existing DLL installation
 
 Close the game and server, copy these files into the game directory, then run **Setup-KPCServerTools.cmd** again to deploy the new DLL. Keep your existing `server.original.dll` and `KPCServerTools.ini`. The setup recognizes the preceding proxy build.
@@ -40,7 +42,7 @@ Enabled=1
 AllowCheats=0
 ```
 
-**Important:** `Start-KPC-Selected-Server.ps1` explicitly requires the `AllowCheats` key in `KPCServerTools.ini`; if it is absent, the graphical server launcher stops with `AllowCheats is missing from KPCServerTools.ini.` Existing INI files are preserved by setup, so re-running setup does not fill a missing key. Retain `AllowCheats=0` (or `AllowCheats=1` when explicitly desired) under `[ServerTools]` whenever adding co-op settings. The key must exist even if cheats are disabled.
+The graphical launcher adds `AllowCheats` under `[ServerTools]` if an older `KPCServerTools.ini` omits it, and saves the file as UTF-8 without a byte-order mark. Setup preserves existing INI files.
 
 `Enabled=0` makes the proxy pass calls through to the official engine without installing Server Tools hooks; restart the server after changing it. `AllowCheats` sets initial permission, which the graphical launcher updates from its checkbox. Use the console command for live changes. Chat logging and announcements are active whenever the tools are enabled. Startup/errors are also appended to `KPCServerTools.log`.
 
@@ -52,7 +54,7 @@ The small 32-bit proxy forwards the engine's two exports and intercepts its look
 
 Compiled-proxy emulation passed for Europe and US engine profiles at relocated DLL/object addresses, with cheats enabled, disabled, pass-through and altered-object rejection. Hook tests cover separate player state, live revocation, client OFF acknowledgements, chat announcements and prompt restoration. These checks supplement Windows testing; they do not replace it. The stable R3 warning-spacing fix was confirmed in a Windows playtest. Record the DLL hash and repeat the applicable live checks when testing a different build.
 
-Source and build/test instructions are in `server-tools-source/README.md`. The stable download is [Server Tools R3](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3).
+The release ZIP holds only what you need to run a server. Source and build/test instructions are in the [GitHub repository](https://github.com/magibax/KPCFix/blob/main/server-tools/server-tools-source/README.md). The stable download is [Server Tools R3](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3).
 
 ## Installing alongside KPCFix
 
@@ -60,7 +62,7 @@ Server Tools uses its own README, license, checksums, compatibility checker, bui
 
 ## Unreleased co-op MVP session (experimental)
 
-Development builds include an opt-in chat lobby and a fixed route (R1M2B → R1M2C → R1M3A). Tick **EXPERIMENTAL co-op session** in the launcher; players type `!ready` and the host types `!start`. Lobby, Start and a host `!next` change were tested live with one client; natural exits and two clients are not yet Windows-tested. See [coop/COOP-MVP.md](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/COOP-MVP.md) for the test protocol and limitations.
+Development builds include an opt-in chat lobby and a fixed route (R1M2B → R1M2C → R1M3A). Tick **EXPERIMENTAL co-op session** in the launcher; players type `!ready` and the host types `!start`. Lobby, Start and a host `!next` change were tested live with one client; natural exits and two clients are not yet Windows-tested. See [coop/COOP-MVP.md](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/COOP-MVP.md) for the test protocol and limitations.
 
 ## Unreleased co-op diagnostics and spawn-point instrumentation
 
@@ -79,8 +81,8 @@ TraceSpawns=1
 TraceCollisionABI=1
 ```
 
-`AllowCheats` is required for the graphical server launcher to proceed. `TraceCollisionABI=1` enables read-only diagnostic segment rays and does **not** enable automatic collision-aware spawning.
+`TraceCollisionABI=1` enables read-only diagnostic segment rays and does **not** enable automatic collision-aware spawning.
 
 Run R1M2B with at most three clients in a fresh server session, then inspect `KPCServerTools.log`. The first 64 candidate position requests are written only to the log; no user-facing chat or screen text is generated. To end the trial, set all three `[Coop]` keys to 0 and restart the server. `Enabled=0` continues to pass through to the original engine. Do not ship a new release without rebuilding the tracked binary and build manifest, checking hashes, and performing Windows runtime verification.
 
-See [engine trace findings](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/SPAWN-ENGINE-TRACE.md), [site verifier](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/tools/check_spawn_site.py) and [log decoder](https://github.com/magibax/KPCFix/blob/feature/coop-campaign/coop/tools/decode_spawn_log.py).
+See [engine trace findings](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/SPAWN-ENGINE-TRACE.md), [site verifier](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/tools/check_spawn_site.py) and [log decoder](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/tools/decode_spawn_log.py).

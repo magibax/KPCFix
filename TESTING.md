@@ -25,3 +25,30 @@ Record toolchain, DLL hashes, regional files, OS or Wine version, renderer and o
 From the repository root run `python3 -m unittest discover -s tools -p 'test_*.py'`. Build both archives using the [release procedure](https://github.com/magibax/KPCFix/blob/main/RELEASING.md). Verify the internal manifests, compare ZIP member paths case-insensitively across products and record the ZIP hash with the playtest results.
 
 For an upgrade, test with the official engine already preserved as `server.original.dll`. A recognised active proxy should upgrade in place. An unrecognised active `server.dll` should stop setup without replacing it. With a verified original backup, move the active DLL aside and rerun setup. Confirm the original engine hash and active INI survive both paths.
+
+## Audit remediation Windows acceptance matrix (pending manual verification)
+
+These are mandatory *manual* checks before publishing a future stable
+Server Tools revision. A passing CI run is not a substitute for them.
+
+| Scenario | Required observation |
+| --- | --- |
+| Existing stable R3 | Run setup twice, launch a deathmatch map, confirm same official backend and stock object.lto hashes |
+| Experimental v7/v8 to stable | With verified server.original.dll, replace payload/manifest with stable candidate, rerun setup, confirm approved original proxy replaced and no co-op diagnostics are emitted |
+| Unrecognized active server.dll | Setup must stop without replacing files; with verified original backup, move the unknown DLL aside and retry explicitly |
+| Existing INI missing AllowCheats | Launch GUI with cheats disabled then enabled; check the key is inserted under [ServerTools], value toggles, and all other settings/comments are unchanged |
+| Text encoding and line endings | Test LF, CRLF and UTF-8 BOM INIs, compare bytes except the deliberate key insertion/update and the removed BOM |
+| Remove / reinstall | Restore official server.dll and verify object.lto untouched; reinstall stable payload and check DLL and backend hashes |
+| Disabled hooks | Set Enabled=0, restart, confirm original engine pass-through and no experimental trace markers |
+
+The current experimental co-op DLL and the published stable Server Tools R3
+are **different binaries**. Every recorded co-op Windows test should include
+the full KPCServerTools.dll SHA-256, diagnostic build marker, relevant INI
+switches, map, dedicated executable region and client count. Historically
+named v8 builds can have different hashes despite the same banner; those
+logs must not be treated as interchangeable evidence.
+
+For client changes that alter patch code, require a four-region Unicorn
+run against original fixtures followed by the Windows/Wine rows above.
+Client double-loading, HUD transaction idempotence and movie tests
+cannot be certified by source review alone.

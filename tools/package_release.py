@@ -6,23 +6,54 @@ refuses stale manifests, unexpected tracked files or unpinned DLL dependencies.
 """
 import argparse
 import hashlib
+import json
+import re
 from pathlib import Path, PurePosixPath
 import subprocess
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-CLIENT_ROOT_FILES = frozenset({
-    'ARCHITECTURE.md', 'COMPATIBILITY-NOTES.md', 'CONFIGURATION.md',
-    'Check-KPCVersion.cmd', 'Check-KPCVersion.ps1', 'DDrawCompat-CLIENT.ini',
-    'KPCFix.ini', 'LICENSE', 'Launch-KPCFix.cmd', 'README.md',
-    'SUPPORTED_BUILDS.json', 'Setup-KPCFix.ps1', 'TESTING.md', 'dinput.dll',
+# Release packages are barebones: only the files a player or server host needs to
+# install, run, check and remove the fix, plus the README and licences. Source,
+# tests, build reports, verification runs and developer docs stay in the repository.
+CLIENT_FILES = frozenset({
+    'dinput.dll', 'KPCFix.ini', 'DDrawCompat-CLIENT.ini',
+    'Setup-KPCFix.ps1', 'Launch-KPCFix.cmd', 'Check-KPCVersion.cmd', 'Check-KPCVersion.ps1',
+    'SUPPORTED_BUILDS.json', 'README.md', 'LICENSE', 'LICENSES/DDrawCompat-0BSD.txt',
 })
-CLIENT_DIRS = ('source/', 'verification/', 'LICENSES/')
+SERVER_FILES = frozenset({
+    'KPCServerTools.dll', 'KPCServerTools-default.ini', 'SERVER_TOOLS_BUILD.json',
+    'SERVER_TOOLS_SUPPORTED_BUILDS.json', 'Setup-KPCServerTools.cmd', 'Setup-KPCServerTools.ps1',
+    'Restore-Original-Server.cmd', 'Restore-LegacyObject.ps1', 'legacy-object-patches.json',
+    'Check-KPCServerVersion.ps1', 'KPC-Server-Launcher.cmd', 'KPC-Server-Launcher.ps1',
+    'Start-KPC-Selected-Server.ps1', 'maps.json', 'server-template.cfg',
+    'README-Server-Tools.md', 'LICENSE-Server-Tools.txt',
+})
 EXTERNAL_DDRAW_SHA256 = '94895cf6ede8fd0f74ee1447fdc08b7044a9c65a1a25a49a4df893a0370975a3'
 PRODUCTS = {
-    'client': ('SHA256SUMS', 'KPCFix-Windows-1.13.zip'),
-    'server': ('server-tools/SHA256SUMS-Server-Tools', 'KPCFix-Server-Tools-1.0.0.zip'),
+    'client': ('SHA256SUMS', 'KPCFix-Windows'),
+    'server': ('server-tools/SHA256SUMS-Server-Tools', 'KPCFix-Server-Tools'),
 }
+
+SEMVER_CORE = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z')
+
+
+def validate_version(version):
+    """Accept only stable MAJOR.MINOR.PATCH versions for release filenames."""
+    if not isinstance(version, str) or SEMVER_CORE.fullmatch(version) is None:
+        raise ValueError(f'Invalid stable SemVer: {version!r}')
+    return version
+
+
+def release_version(component):
+    with (ROOT / 'tools/release_versions.json').open(encoding='utf-8') as f:
+        versions = json.load(f)
+    return validate_version(versions[component])
+
+
+def archive_filename(component):
+    return f'{PRODUCTS[component][1]}-v{release_version(component)}.zip'
+
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
@@ -32,7 +63,16 @@ def tracked():
     return {p.decode('utf-8') for p in raw.split(b'\0') if p}
 
 def client_path(path):
-    return path in CLIENT_ROOT_FILES or path.startswith(CLIENT_DIRS)
+    return path in CLIENT_FILES
+
+def server_path(path):
+    """Path relative to server-tools/."""
+    return path in SERVER_FILES
+
+def shipped(component):
+    """Repository paths of the tracked files a package contains."""
+    return {('server-tools/' + p) if component == 'server' else p
+            for p in (SERVER_FILES if component == 'server' else CLIENT_FILES)}
 
 def manifest_entries(text):
     result = {}
@@ -54,14 +94,15 @@ def manifest_entries(text):
     return result
 
 def make_package(component, out_dir, external_ddraw):
-    manifest_path, archive_name = PRODUCTS[component]
+    manifest_path, _ = PRODUCTS[component]
+    archive_name = archive_filename(component)
     base = 'server-tools/' if component == 'server' else ''
     entries = manifest_entries((ROOT / manifest_path).read_text(encoding='utf-8'))
     tracked_paths = tracked()
-    included = {p[len(base):] for p in tracked_paths if p.startswith(base)} if base else {
-        p for p in tracked_paths if client_path(p)
-    }
-    included.discard(manifest_path[len(base):])
+    untracked = shipped(component) - tracked_paths
+    if untracked:
+        raise ValueError(f'Shipped files not tracked in git: {sorted(untracked)}')
+    included = {p[len(base):] for p in shipped(component)}
     external = {'ddraw.dll'} if component == 'client' else set()
     missing = (included | external) - entries.keys()
     excess = entries.keys() - (included | external)
