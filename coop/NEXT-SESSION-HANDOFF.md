@@ -148,6 +148,30 @@ until every member stands in it; (4) leave it and rely on `!goto`.
   `cshell.dll` builds, plus their `test_focus.py` runs. Check the other shell-UI hooks in
   `profiles.h` the same way. Server Tools has one `object.lto` (`3a03f879`) for every
   release, so the server fixes apply everywhere.
+* **Port general client fixes to `main`** (deferred by the user, 2026-11-13; a port was
+  started and cancelled, nothing kept). These client fixes are not co-op specific and fix
+  bugs the stable release still has:
+  * `LocalServerMinStepMs=16` (`minstep_hook.S`, the clock slot at `client.exe 0x664b2`):
+    AI stalls above 60 FPS, e.g. the R2M2A Ballbuster in the garage door. User-confirmed.
+  * `ChatBlocksActions` (`console.c`, cshell `OnCommandOn` slot `0xff724` plus the
+    `client.exe 0x23c84` input-state read): typing a chat message no longer fires bound
+    actions (noclip, invuln, movement).
+  * `KeepAudioOnFocusLoss` + `ResyncAudioOnFocus` (`focus.c`): alt-tab no longer pauses
+    sound, music or a local game, so narration stays in sync. The Setup > Audio checkbox
+    (`ui.c`) is wanted too, but only in its untested-branch form (RT10 click hit-test,
+    T19 lit state, position above Enable Sound FX; `checkbox_hit_box`/`_label` in
+    `profiles.h`); the `coop/mvp-lobby` checkbox breaks the stock Audio controls.
+    `KeepRendererOnFocusLoss` was left out of the port plan (untested).
+  * `ConsoleKeyFix` (`console.c`, `client.exe 0x6dc9`/`0x700a`): the console key no longer
+    types its character (`'` on UK keyboards).
+  Port by hand onto a branch cut from `main`, not by merging: copy only these pieces of
+  `kpcfix.c`, `shell_layout.h`, `profiles.h` and `build.py`, leave out the window-shard
+  diagnostic, loading art, chat time, cutscene camera and server timeout, and adapt
+  `test_minstep.py`, `test_console.py` and `test_focus.py` to match. Build check: WSL has
+  gcc (15.2, not the CI's 13.3); Python 3.12 on Windows has Unicorn 2.1.4; fixtures are in
+  `C:\KPCTest\fixtures`. Once ported, drop the first draft's matching "known issues" from the
+  main README. The stock 60 FPS cap on `main` should only be lifted after
+  `LocalServerMinStepMs` is on `main`.
 
 ### Older open items (2026-11-12 triage)
 
