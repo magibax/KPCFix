@@ -35,7 +35,7 @@ class ManifestTests(unittest.TestCase):
         self.assertFalse(server_path('server-tools-source/tests/check_proxy.py'))
 
     def test_semver_archive_names(self):
-        self.assertEqual(archive_filename('client'), 'KPCFix-Windows-v1.1.1.zip')
+        self.assertEqual(archive_filename('client'), 'KPCFix-Windows-v1.1.2.zip')
         self.assertEqual(archive_filename('server'), 'KPCFix-Server-Tools-v1.0.1.zip')
 
     def test_semver_rejects_bad_versions(self):
