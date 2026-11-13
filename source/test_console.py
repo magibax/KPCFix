@@ -35,6 +35,17 @@ rig.tick = 10060; assert rig.invoke_address(drop, ()) == 0  # the next one is ty
 rig.tick = 20000; rig.invoke_address(key, ())
 rig.tick = 20400; assert rig.invoke_address(drop, ()) == 0  # a character long after the key: typed
 assert rig.invoke_address(drop, ()) == 0
+import fixture_layout
+if fixture_layout.REGION not in ('Europe', 'USA'):
+    # The chat-typing and window hooks below exist only for the Europe/USA
+    # shell layout; other editions log that and keep the original behaviour.
+    assert b'Chat typing: not verified for this cshell edition' in bytes(rig.logs)
+    assert b'Chat typing: key-bound actions' not in bytes(rig.logs)
+    rig0 = Rig(settings={'ConsoleKeyFix': 0}); rig0.factory(); assert not rig0.messages
+    assert bytes(rig0.u.mem_read(CLIENT + 0x6dc9, 5)) == bytes(rig0.initial_client[0x6dc9:0x6dce])
+    assert bytes(rig0.u.mem_read(CLIENT + 0x700a, 5)) == bytes.fromhex('83f8607445')
+    print(args.fixtures.name, 'passed console key; chat-typing and window hooks are Europe/USA only and stay off here')
+    sys.exit(0)
 # Chat typing (ChatBlocksActions): OnCommandOn vtable slot (cshell 0xff724)
 # drops every action while the message editor (shell+0x8c) is typing (+0x12ed).
 SHELLBASE, SHELL = 0x20000000, 0x5a0000
