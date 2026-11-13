@@ -34,7 +34,7 @@ Finished test rounds: [archive/TWO-PC-RESULTS-2026-11-13.md](archive/TWO-PC-RESU
 
   | Machine | Server Tools (`winmm.dll`) | Client `dinput.dll` | Backup of what was replaced |
   | --- | --- | --- | --- |
-  | Desktop `C:\Games\Psycho` (client, host, dedicated server) | `6448dadf`; `server.dll` is the original `83b7bce8` again | `9a7eef01` | `C:\KPCTest\backup\psycho-20261113-175417-before-6448dadf` (also holds the old `server.dll` proxy `dcc66b4c` and `server.original.dll`) |
+  | Desktop `C:\Games\Psycho` (client, host, dedicated server) | `6448dadf`; `server.dll` is the original `83b7bce8` again | `9a7eef01` | `C:\KPCTest\backup\psycho-20261113-175417-before-6448dadf` (also holds the old `server.dll` proxy `dcc66b4c` and `server.original.dll`). Reinstalled 2026-11-13 23:20 after the folder had been switched to the stable release (client `288bce4e`, no Server Tools): `C:\KPCTest\backup\psycho-20261113-232042-before-6448dadf` and `C:\KPCTest\backup\psycho-*-ini-before-reset` (the stable `KPCFix.ini`, `ScalePercent=200`). `KPCFix.ini` is now the repo file (`48789c94`); `KPCServerTools.ini` is a fresh copy of the default (`eae0e68f`) |
   | Laptop (second player, client only) | — | `1e97026a` (needs `pkg-client-9a7eef01`) | — |
   | `C:\KPCTest\smoke1\Psycho` (disposable smoke server) | `6448dadf` | — | `C:\KPCTest\backup\psycho-20261113-175538-before-6448dadf` |
 
