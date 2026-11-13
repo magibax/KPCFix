@@ -18,6 +18,6 @@ The Python checks use Unicorn 2.1.4 plus local copies of the original game files
 python3 source/verify.py --archive KPCFix-region-research-final.tar.gz --output verification-local
 ```
 
-The checked DLL is the package-root `dinput.dll`; the matching symbol map is `source/SYMBOLS.json`. To check a new build, copy both of those files from that build before running verification. The disassembly audit additionally requires `objdump`. Checks execute the proxy and original game code in an x86 emulator; Windows I/O, presentation, and socket services are simulated.
+The checked DLL is the package-root `dinput.dll`; the matching symbol map is `source/SYMBOLS.json`. To check a new build, copy both of those files from that build before running verification. The checks run in parallel, one per CPU by default (`--jobs N` to change), and a summary lists any failures; each check's output is in a `.log` file in the output folder. The disassembly audit additionally requires `objdump`; on a machine without it, add `--skip-audit` and run `audit_sites.py` where binutils is available. Checks execute the proxy and original game code in an x86 emulator; Windows I/O, presentation, and socket services are simulated.
 
 The client cinematic hook fits fullscreen Smacker playback to 4:3 and optionally smooths the movie. The edition-specific shell hooks scale the enemy frame, fill and label. At HUD scales other than 100%, the label uses the row midpoint and font height.

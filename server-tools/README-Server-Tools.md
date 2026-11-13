@@ -31,6 +31,9 @@ After setup, ordinary server starts no longer modify game binaries. The game can
 - Everyone sees **Cheats enabled** or **Cheats disabled** when permission changes. Player toggles announce **name toggled cheat ON/OFF** in chat only, without a centre-screen copy.
 - Player chat is mirrored to the server console. Patch messages have one `[KPCFix Server Tools]` prefix and preserve the command prompt and pending input.
 - Disabled cheat requests are rejected silently. A player's cheat state applies only to that player.
+- Real-time server timing. The original server runs game time about 25% fast and steps too finely for some AI, so the Ballbuster in R2M2A can get stuck in the garage door. On this experimental branch the fix applies during co-op sessions, as `[Coop] CoopServerFrameMs=16`; the stable release has it for every server as `ServerFrameMs`.
+
+**USA server note:** the server timing fix currently works only with the Europe/UK, German and Italian `server.dll`. A server running the USA `server.dll` keeps the original timing, so the R2M2A Ballbuster can still get stuck there. All other Server Tools features work on the USA build.
 
 ## Settings and removal
 

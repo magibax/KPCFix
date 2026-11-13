@@ -38,8 +38,8 @@ requirement, *not* either KPCFix product's release version.
 | Windows client | `kpcfix-vMAJOR.MINOR.PATCH` | `KPCFix-Windows-vMAJOR.MINOR.PATCH.zip` |
 | Server Tools | `server-tools-vMAJOR.MINOR.PATCH` | `KPCFix-Server-Tools-vMAJOR.MINOR.PATCH.zip` |
 
-The current pinned versions are **`kpcfix-v1.1.2`** and
-**`server-tools-v1.0.1`**. These names are pinned in
+The current pinned versions are **`kpcfix-v1.1.3`** and
+**`server-tools-v1.0.2`** (Server Tools v1.0.2 is pinned but not yet released; it awaits the Windows checks in TESTING.md). These names are pinned in
 `tools/release_versions.json`; they are **not published merely by editing main**.
 A future release must increment the relevant pinned version in that file
 *before* the verified, annotated tag is pushed. CI rejects tags not matching
@@ -49,18 +49,14 @@ Current releases (barebones packages, published 2026-11-13 from `main`):
 
 | Product | Tag | Installable asset |
 | --- | --- | --- |
-| Windows client | [`kpcfix-v1.1.2`](https://github.com/magibax/KPCFix/releases/tag/kpcfix-v1.1.2) | `KPCFix-Windows-v1.1.2.zip` |
+| Windows client | [`kpcfix-v1.1.3`](https://github.com/magibax/KPCFix/releases/tag/kpcfix-v1.1.3) | `KPCFix-Windows-v1.1.3.zip` (from `8f1d29a`; ZIP SHA-256 `26c3dbf30e3c11da…`) |
 | Server Tools | [`server-tools-v1.0.1`](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.1) | `KPCFix-Server-Tools-v1.0.1.zip` |
 
-Earlier releases:
-
-| Product | Tag | Installable asset |
-| --- | --- | --- |
-| Server Tools | [`server-tools-v1.0.0-r3`](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3) | `KPCFix-Server-Tools-1.0.0.zip` (kept as the fallback for v1.0.1) |
-
-The GitHub Releases of `kpcfix-v1.1.1`, `kpcfix-v1.1.0` and `kpcfix-1.13-r4`
-were removed; their tags remain. v1.1.0, v1.1.1 and v1.1.2 ship the same
-`dinput.dll`.
+No earlier releases are published. The GitHub Releases of `kpcfix-v1.1.2`,
+`kpcfix-v1.1.1`, `kpcfix-v1.1.0`, `kpcfix-1.13-r4` and `server-tools-v1.0.0-r3`
+were removed; their tags remain. v1.1.0, v1.1.1 and
+v1.1.2 ship the same `dinput.dll`. The release workflow takes `ddraw.dll` from
+the newest published `kpcfix-v*` release, so always keep at least one.
 
 Server Tools R3 was published from `a034fa6`. Its ZIP SHA-256 is
 `bb518c27864b59a41e9425e015071bc99cbf26d1a724532edf5fe944307c6646`.
@@ -165,4 +161,4 @@ An existing stable tag remains immutable, even if a later stable main
 commit updates launcher scripts or checksum manifests; such fixes
 require a **new** SemVer release after Windows acceptance.
 
-See [2026-11-11 audit remediation and unverified runtime gates](AUDIT-REMEDIATION.md) before publishing another release.
+Before publishing another release, complete the manual checks in [TESTING.md](TESTING.md), including its Windows acceptance matrix and the checks listed for new fixes.
