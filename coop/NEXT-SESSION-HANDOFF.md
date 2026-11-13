@@ -23,7 +23,8 @@ Finished test rounds: [archive/TWO-PC-RESULTS-2026-11-13.md](archive/TWO-PC-RESU
 ## Where things stand
 
 * **Branch:** `coop/mvp-lobby-untested` (untested fixes; `coop/mvp-lobby` holds confirmed
-  work, `main` the stable release). The commit with this handoff sits on `7623b69`. Not pushed.
+  work, `main` the stable release). Pushed; co-op CI passes again since `7c50ae8` (its
+  `CoopIntro` marker assertion was stale from `6d91b5b` until then).
 * **Server Tools now load as `winmm.dll`.** `dedicated.exe` imports `WINMM.dll`, so the DLL
   loads from the game folder like the client's `dinput.dll`, forwards every winmm function to
   the system DLL, and answers the server's `LoadLibraryA("server.dll")` itself; the original
@@ -148,7 +149,9 @@ until every member stands in it; (4) leave it and rely on `!goto`.
   `cshell.dll` builds, plus their `test_focus.py` runs. Check the other shell-UI hooks in
   `profiles.h` the same way. Server Tools has one `object.lto` (`3a03f879`) for every
   release, so the server fixes apply everywhere.
-* **Ported to `main` (2026-11-13, on `main`'s working tree, not yet committed or released):**
+* **Ported to `main` and released (2026-11-13):** client in `kpcfix-v1.1.3` (`8f1d29a`);
+  Server Tools pinned as v1.0.2 on `main` but not tagged until the user's Windows checks
+  (listed in `TESTING.md` on `main`, "Checks for the 2026-11-13 fixes"). Ported:
   `LocalServerMinStepMs=16` (client), `ConsoleKeyFix` (client), the co-op
   `CoopServerFrameMs` hook as stable Server Tools `[ServerTools] ServerFrameMs=16` (always on,
   not session-only), and the DDrawCompat default without the 60 FPS cap (VSync at the monitor
