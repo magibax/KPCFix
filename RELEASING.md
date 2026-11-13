@@ -49,8 +49,8 @@ For a subsequent revision, choose the next unused tag for the affected product. 
 - **Server:** `server-tools/server-tools-source/build_dll.py` must reproduce
   tracked `KPCServerTools.dll` and `SERVER_TOOLS_BUILD.json`.
 - **Third-party graphics dependency:** `ddraw.dll` is not kept in Git. The
-  workflow temporarily extracts the known DDrawCompat binary from the older
-  `kpcfix-1.13-r4` release and refuses any SHA-256 other than
+  workflow temporarily extracts the known DDrawCompat binary from the
+  `kpcfix-v1.1.0` release and refuses any SHA-256 other than
   `94895cf6ede8fd0f74ee1447fdc08b7044a9c65a1a25a49a4df893a0370975a3`.
   Replace this provenance source only as an explicit, independently tested
   dependency upgrade.

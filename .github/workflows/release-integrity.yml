@@ -58,8 +58,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p "${RUNNER_TEMP}/ddraw-input"
-          gh release download kpcfix-1.13-r4 -p KPCFix-Windows-1.13.zip -D "${RUNNER_TEMP}/ddraw-input"
-          unzip -p "${RUNNER_TEMP}/ddraw-input/KPCFix-Windows-1.13.zip" ddraw.dll > "${RUNNER_TEMP}/ddraw.dll"
+          gh release download kpcfix-v1.1.0 -p KPCFix-Windows-v1.1.0.zip -D "${RUNNER_TEMP}/ddraw-input"
+          unzip -p "${RUNNER_TEMP}/ddraw-input/KPCFix-Windows-v1.1.0.zip" ddraw.dll > "${RUNNER_TEMP}/ddraw.dll"
           echo "94895cf6ede8fd0f74ee1447fdc08b7044a9c65a1a25a49a4df893a0370975a3  ${RUNNER_TEMP}/ddraw.dll" | sha256sum -c
       - name: Run packaging tests
         run: python3 -m unittest discover -s tools -p 'test_*.py' -v
