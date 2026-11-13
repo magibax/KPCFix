@@ -29,6 +29,9 @@ After setup, ordinary server starts no longer modify game binaries. The game can
 - Everyone sees **Cheats enabled** or **Cheats disabled** when permission changes. Player toggles announce **name toggled cheat ON/OFF** in chat only, without a centre-screen copy.
 - Player chat is mirrored to the server console. Patch messages have one `[KPCFix Server Tools]` prefix and preserve the command prompt and pending input.
 - Disabled cheat requests are rejected silently. A player's cheat state applies only to that player.
+- Real-time server timing. The original server runs game time about 25% fast and steps too finely for some AI, so the Ballbuster in R2M2A can get stuck in the garage door. Server Tools fixes this with a minimum 16 ms server step (`ServerFrameMs`).
+
+**USA server note:** the server timing fix currently works only with the Europe/UK, German and Italian `server.dll`. A server running the USA `server.dll` keeps the original timing, so the R2M2A Ballbuster can still get stuck there. All other Server Tools features work on the USA build.
 
 ## Settings and removal
 
@@ -38,7 +41,10 @@ Setup creates `KPCServerTools.ini` if absent:
 [ServerTools]
 Enabled=1
 AllowCheats=0
+ServerFrameMs=16
 ```
+
+`ServerFrameMs` is the minimum server simulation step in milliseconds (1–50); `0` keeps the original engine timing. An existing `KPCServerTools.ini` without this key uses 16.
 
 `Enabled=0` makes the proxy pass calls through to the official engine without installing Server Tools hooks; restart the server after changing it. `AllowCheats` sets initial permission, which the graphical launcher updates from its checkbox. If an older INI lacks this key, the launcher inserts it under `[ServerTools]` while retaining the existing newline layout. It saves the file without a UTF-8 byte-order mark, which would hide `[ServerTools]` from the DLL. Use the console command for live changes. Chat logging and announcements are active whenever the tools are enabled. Startup/errors are also appended to `KPCServerTools.log`.
 

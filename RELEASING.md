@@ -38,8 +38,8 @@ requirement, *not* either KPCFix product's release version.
 | Windows client | `kpcfix-vMAJOR.MINOR.PATCH` | `KPCFix-Windows-vMAJOR.MINOR.PATCH.zip` |
 | Server Tools | `server-tools-vMAJOR.MINOR.PATCH` | `KPCFix-Server-Tools-vMAJOR.MINOR.PATCH.zip` |
 
-The current pinned versions are **`kpcfix-v1.1.2`** and
-**`server-tools-v1.0.1`**. These names are pinned in
+The current pinned versions are **`kpcfix-v1.1.3`** and
+**`server-tools-v1.0.2`** (Server Tools v1.0.2 is pinned but not yet released; it awaits the Windows checks in TESTING.md). These names are pinned in
 `tools/release_versions.json`; they are **not published merely by editing main**.
 A future release must increment the relevant pinned version in that file
 *before* the verified, annotated tag is pushed. CI rejects tags not matching

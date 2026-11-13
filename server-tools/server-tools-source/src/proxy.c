@@ -168,6 +168,49 @@ static int intercept_backend(void){
  }
  return 0;
 }
+/* ---- ServerFrameMs (default 16): minimum server simulation step ----
+ * Original Europe-family server.dll (backend_hashes[0], 83b7bce8): the
+ * interface Update (0x2358c) calls the frame function 0x2a05f(flags, time) at
+ * 0x235b0 (thiscall, ret 8, returns 1). 0x2a05f computes its own step:
+ *   [srv+0x214] = (time + [srv+0x1f8]) - [srv+0x218]; [srv+0x218] = time + [srv+0x1f8]
+ * and clamps it to [0.01, 0.2] (0x2a19c-0x2a1d0). dedicated.exe calls it about
+ * every 8 ms, so every frame simulated 10 ms: game time ran ~1.25x real time
+ * and physics/AI stepped in short 10 ms frames. Monster MoveTo stops each
+ * think tick while the ground test fails (object.lto 0x97fac), so the R2M2A
+ * Ballbuster stalls in the garage door (the KPCFix client's
+ * LocalServerMinStepMs fixes the same stall in single player).
+ * A call less than ServerFrameMs after the last simulated frame is skipped
+ * (returns 1, nothing runs); the timestamp was not advanced, so the next frame
+ * simulates the whole elapsed time. Frames are then >= the minimum and in real
+ * time. Network handling inside the frame runs at the same rate (62.5 Hz at
+ * 16 ms). The USA server.dll has other addresses and is left unchanged. */
+#define SERVER_FRAME_CALL_RVA 0x235b0u
+#define SERVER_FRAME_RVA 0x2a05fu
+static const U8 original_frame_call[5]={0xe8,0xaa,0x6a,0x00,0x00};
+static U32 frame_ms,frame_installed;
+typedef U32 (__attribute__((thiscall)) *ServerFrameFn)(void *,U32,float);
+static U32 __attribute__((thiscall)) server_frame(void *server,U32 flags,float time){
+ const U8 *srv=(const U8 *)server;float now,last,elapsed;
+ now=time+*(const float *)(srv+0x1f8u);last=*(const float *)(srv+0x218u);elapsed=now-last;
+ if(last>0.0f&&elapsed>=0.0f&&elapsed*1000.0f+0.5f<(float)frame_ms)return 1;
+ return ((ServerFrameFn)((U8 *)backend+SERVER_FRAME_RVA))(server,flags,time);
+}
+static void decimal(char *d,U32 *n,U32 v){char t[11];U32 k=0;do{t[k++]=(char)('0'+v%10u);v/=10u;}while(v);while(k)d[(*n)++]=t[--k];d[*n]=0;}
+static void install_server_frame(const U8 back_sha[32]){
+ U8 *site=(U8 *)backend+SERVER_FRAME_CALL_RVA,hooked[5];U32 rel,old,restore,n;char line[96];
+ const char *p="[KPCFix Server Tools] Minimum server frame installed, ServerFrameMs=";
+ if(frame_installed||!frame_ms)return;
+ if(!same(back_sha,backend_hashes[0],32)){log_file("[KPCFix Server Tools] ServerFrameMs is not supported for this server.dll (USA); server frames unchanged.");return;}
+ if(!same(site,original_frame_call,5)){log_file("[KPCFix Server Tools] ServerFrameMs: original bytes not found at server.dll 235b0; server frames unchanged.");return;}
+ rel=(U32)server_frame-((U32)site+5);hooked[0]=0xe8;copy(hooked+1,(const U8 *)&rel,4);
+ if(!VirtualProtect(site,5,0x40,&old)){log_file("[KPCFix Server Tools] ServerFrameMs: cannot unprotect server.dll 235b0; server frames unchanged.");return;}
+ copy(site,hooked,5);
+ if(!VirtualProtect(site,5,old,&restore)||!FlushInstructionCache(GetCurrentProcess(),site,5))
+  fatal("[KPCFix Server Tools] ERROR: could not finalize the server frame hook.");
+ frame_installed=1;
+ for(n=0;p[n];n++)line[n]=p[n];
+ decimal(line,&n,frame_ms);log_file(line);
+}
 static void initialize(void){
  U8 exe_sha[32],back_sha[32];int profile=-1,i;U32 pe_size;
  paths();
@@ -192,6 +235,9 @@ static void initialize(void){
   if(!intercept_backend())fatal("[KPCFix Server Tools] ERROR: could not install engine loading hook.");
   hooked=1;
  }
+ frame_ms=GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"ServerFrameMs",16,ini_path);
+ if(frame_ms>50u)frame_ms=50u;
+ if(active)install_server_frame(back_sha);
  log_file(active?"[KPCFix Server Tools] Dedicated DLL active.":"[KPCFix Server Tools] Original engine pass-through.");
 }
 I32 CDECL CreateServer(U32 version,const char *name,void **out){

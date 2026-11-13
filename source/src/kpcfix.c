@@ -4,6 +4,7 @@
 #include "ui.h"
 
 #include "shell_layout.h"
+#include "console.h"
 #define KPC_VERSION "KPCFix 1.13 for Windows"
 #define KPC_CLOCK_DEFAULT 1
 const ShellLayout *g_shell_layout;
@@ -39,6 +40,10 @@ U32 g_input_late_events,g_input_zero_intervals,g_input_first_late_delta;
 static int late_event_reported;
 void *g_original_ftol;
 double g_carries[8];
+/* Minimum local-server step (minstep_hook.S); 0 = Timing V3 clock_v2 only. */
+float g_min_step_seconds;
+static U32 min_step_ms;
+extern void local_server_min_step(void);
 static void (*const carry_helpers[8])(void)={carry_0,carry_1,carry_2,carry_3,carry_4,carry_5,carry_6,carry_7};
 
 static HMODULE self_module;
@@ -622,6 +627,12 @@ static int install_game_fixes(void){
     if(g_tooltip_percent<50||g_tooltip_percent>400){
         report_error("[Tooltip] ScalePercent must be 0 (follow HUD), or an integer from 50 to 400. No client changes were applied.");return 0;
     }
+    min_step_ms=GetPrivateProfileIntW(L"KPCFix",L"LocalServerMinStepMs",16,ini_path);
+    if(min_step_ms>50){
+        report_error("[KPCFix] LocalServerMinStepMs must be 0 (off) or an integer from 1 to 50. No client changes were applied.");return 0;
+    }
+    g_min_step_seconds=(float)min_step_ms*0.001f;
+    g_console_key_fix=GetPrivateProfileIntW(L"KPCFix",L"ConsoleKeyFix",1,ini_path)!=0;
     g_lock_input_rate=!stock_mouse && GetPrivateProfileIntW(L"KPCFix",L"LockInputRate",1,ini_path)!=0;
     g_hide_input_rate=g_lock_input_rate&&GetPrivateProfileIntW(L"KPCFix",L"HideInputRate",1,ini_path)!=0;
     normalize_configs_enabled=g_lock_input_rate&&GetPrivateProfileIntW(L"KPCFix",L"NormalizeInputRateConfigs",1,ini_path)!=0;
@@ -649,7 +660,13 @@ static int install_game_fixes(void){
         }
     }
     {
-        if(!add_edit(edits,&count,base+0x664b2,client_profile->clock,clock_v2,35)||
+        U8 clock_edit[35];
+        copy_bytes(clock_edit,clock_v2,35);
+        if(min_step_ms){
+            clock_edit[0]=0xe9;store32(clock_edit+1,(U32)local_server_min_step-((U32)base+0x664b2+5));
+            for(i=5;i<35;i++)clock_edit[i]=0x90;
+        }
+        if(!add_edit(edits,&count,base+0x664b2,client_profile->clock,clock_edit,35)||
            !add_edit(edits,&count,base+0x1396e,client_profile->limiter,limiter_v2,5))return 0;
         for(i=0;i<8;i++){
             near_call(replacement,base+animation_sites[i],carry_helpers[i]);
@@ -672,6 +689,19 @@ static int install_game_fixes(void){
     store32(after_iat,(U32)kpc_load_library_a);
     if(!add_edit(edits,&count,base+0x971f0,before_iat,after_iat,4))return 0;
     if(!queue_bind_fix(edits,&count,base)){report_error("Bind address patch validation failed. No client edits applied.");return 0;}
+    if(g_console_key_fix){
+        /* Console key: drop the character the toggle key types (console.c). */
+        static const U8 char_before[5]={0x83,0xf8,0x60,0x74,0x45};
+        U8 before[5];
+        near_call(before,base+0x6dc9,base+0x287a0);near_call(replacement,base+0x6dc9,kpc_console_key_entry);
+        if(!add_edit(edits,&count,base+0x6dc9,before,replacement,5)){
+            report_error("The original console key call differs. No client edits were applied.");return 0;
+        }
+        near_call(replacement,base+0x700a,kpc_console_char_entry);
+        if(!add_edit(edits,&count,base+0x700a,char_before,replacement,5)){
+            report_error("The original console character test differs. No client edits were applied.");return 0;
+        }
+    }
     if(!queue_net_trace(edits,&count,base)){report_error("Network trace import transaction could not be prepared. No client edits were applied.");return 0;}
     if(!GetModuleHandleExW(5,(const WCHAR *)self_module,&pinned)||pinned!=self_module){report_error("The portable module could not be pinned for safe callback lifetime. No fixes were applied.");return 0;}
     if(!commit_edits(edits,count)){report_error("Client patch transaction failed validation or protection/cache updates. Use the tested V3/V5 setup.");return 0;}
@@ -692,6 +722,8 @@ static int install_game_fixes(void){
     kpc_status|=TIMING_READY|ANIMATION_READY;
     kpc_status|=TIMING_RUNTIME|ANIMATION_RUNTIME;
     log_text("Timing V3: clock guard and 8 independent carries applied in memory.\r\n");
+    if(min_step_ms){log_text("LocalServerMinStepMs=");log_hex(min_step_ms);log_text(": minimum local-server step; shorter frames are carried, not simulated.\r\n");}
+    if(g_console_key_fix)log_text("Console key: the character typed by the console toggle key is not added to the console line.\r\n");
     log_text(input_clock_enabled?"Input clock v2: timeGetTime plus delayed/zero interval guards; no global clock hook.\r\n":"InputClock=0: original input clocks and intervals retained; Timing V3/Ground V5 remain enabled.\r\n");
     if(GetModuleHandleExW(0,L"cshell.dll",&loaded)){
         i=(U32)patch_shell(loaded);

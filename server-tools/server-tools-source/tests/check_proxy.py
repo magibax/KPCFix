@@ -1,5 +1,5 @@
 """Run the compiled proxy with mapped original images and mocked Win32 APIs.
-Usage: python check_proxy.py FIXTURE_DIRECTORY [--cheats] [--off] [--bad-object]
+Usage: python check_proxy.py FIXTURE_DIRECTORY [--cheats] [--off] [--bad-object] [--no-server-frame]
 SHA compression is accelerated with hashlib in this emulator; the same C SHA
 implementation is separately tested natively by the build validation workflow.
 """
@@ -87,7 +87,12 @@ functions['LoadLibraryW']=stub('LoadLibraryW',1,lambda a:engine if wstr(a[0])==p
 functions['DisableThreadLibraryCalls']=stub('DisableThreadLibraryCalls',1,lambda a:1)
 functions['GetCurrentProcess']=stub('GetCurrentProcess',0,lambda a:0xffffffff)
 functions['GetStdHandle']=stub('GetStdHandle',1,lambda a:99)
-functions['GetPrivateProfileIntW']=stub('GetPrivateProfileIntW',4,lambda a:(0 if '--off' in sys.argv else 1) if wstr(a[1])=='Enabled' else int('--cheats' in sys.argv))
+def profile_int(a):
+ key=wstr(a[1])
+ if key=='Enabled':return 0 if '--off' in sys.argv else 1
+ if key=='ServerFrameMs':return 0 if '--no-server-frame' in sys.argv else a[2]
+ return int('--cheats' in sys.argv)
+functions['GetPrivateProfileIntW']=stub('GetPrivateProfileIntW',4,profile_int)
 protect=[]
 def virtualprotect(a):
  protect.append(tuple(a[:3]));write(a[3],0x20 if obj<=a[0]<obj+0x117000 else 2);return 1
@@ -149,7 +154,7 @@ stop=scratch+0x1f0000
 def call(at,args,stdcall=False):
  sp=scratch+0x1df000;write(sp,stop)
  for i,v in enumerate(args):write(sp+4+i*4,v)
- u.reg_write(UC_X86_REG_ESP,sp);u.emu_start(at,stop,count=3000000)
+ u.reg_write(UC_X86_REG_ESP,sp);u.emu_start(at,stop,count=400000000)
  assert u.reg_read(UC_X86_REG_EIP)==stop,hex(u.reg_read(UC_X86_REG_EIP))
  assert u.reg_read(UC_X86_REG_ESP)==sp+4+(4*len(args) if stdcall else 0)
  return u.reg_read(UC_X86_REG_EAX)
@@ -158,6 +163,43 @@ call(proxy+ps['_DllMain'],[proxy,1,0],True)
 u.mem_write(scratch+0x90000,b'KPC\0')
 assert call(proxy+ps['_CreateServer'],[3,scratch+0x90000,scratch+0x90010])==17
 assert read(scratch+0x90010)==0x30080000 and setup_calls[0][0]==3
+# ServerFrameMs (default 16), Europe-family server.dll only: 235b0 (e8 aa 6a 00 00
+# -> frame 2a05f, thiscall(flags, float time), ret 8). A call sooner than 16 ms
+# after the last simulated frame returns 1 without running; the next one runs.
+frame_site=bytes(u.mem_read(engine+0x235b0,5))
+frame_text=b''.join(log).decode('latin1')
+if usa or '--off' in sys.argv or '--no-server-frame' in sys.argv:
+ if not usa:assert frame_site==bytes.fromhex('e8aa6a0000'),frame_site.hex()
+ assert 'Minimum server frame installed' not in frame_text
+ if usa and '--off' not in sys.argv and '--no-server-frame' not in sys.argv:assert 'ServerFrameMs is not supported for this server.dll (USA)' in frame_text
+ print('PASS server frames unchanged (USA, disabled or ServerFrameMs=0)')
+else:
+ assert frame_site[0]==0xe8 and frame_site!=bytes.fromhex('e8aa6a0000'),frame_site.hex()
+ frame_target=(engine+0x235b0+5+struct.unpack('<i',frame_site[1:5])[0])&0xffffffff
+ assert proxy<=frame_target<proxy+0x100000
+ assert 'Minimum server frame installed, ServerFrameMs=16' in frame_text
+ runs=[]
+ def server_frame():
+  sp=u.reg_read(UC_X86_REG_ESP);srv_=u.reg_read(UC_X86_REG_ECX)
+  t=struct.unpack('<f',struct.pack('<I',read(sp+8)))[0]+struct.unpack('<f',u.mem_read(srv_+0x1f8,4))[0]
+  runs.append((read(sp+4),round(t,4)));u.mem_write(srv_+0x218,struct.pack('<f',t))
+  u.reg_write(UC_X86_REG_EAX,1);u.reg_write(UC_X86_REG_ESP,sp+12);u.reg_write(UC_X86_REG_EIP,read(sp))
+ stubs[engine+0x2a05f]=server_frame
+ srv=scratch+0x95000;u.mem_write(srv+0x1f8,struct.pack('<f',0.0));u.mem_write(srv+0x218,struct.pack('<f',0.0))
+ f=lambda v:struct.unpack('<I',struct.pack('<f',v))[0]
+ def thiscall(at,this,args):
+  sp=scratch+0x1df000;write(sp,stop)
+  for i,v in enumerate(args):write(sp+4+i*4,v)
+  u.reg_write(UC_X86_REG_ECX,this);u.reg_write(UC_X86_REG_ESP,sp);u.emu_start(at,stop,count=100000)
+  assert u.reg_read(UC_X86_REG_EIP)==stop and u.reg_read(UC_X86_REG_ESP)==sp+4+4*len(args)
+  return u.reg_read(UC_X86_REG_EAX)
+ res=[thiscall(frame_target,srv,[7,f(t)]) for t in (1.000,1.008,1.016,1.024,1.032,1.040,1.048,2.000,1.990)]
+ assert all(r==1 for r in res),res
+ # First call runs (no previous frame), then every second 8 ms call; a long gap runs; time going back runs.
+ assert [t for _,t in runs]==[1.0,1.016,1.032,1.048,2.0,1.99],runs
+ assert all(fl==7 for fl,_ in runs),'flags forwarded'
+ del stubs[engine+0x2a05f]
+ print('PASS server frame: 8 ms calls simulated as 16 ms frames, long gaps and time resets run at once')
 # Locate the engine's original import slot, after initialization.
 pe=struct.unpack_from('<I',backend,60)[0];at=engine+read(engine+pe+24+96+8);slot=None
 while read(at+12):
