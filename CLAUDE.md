@@ -69,6 +69,11 @@ script builds and tests the wrong tree. The scripts without `-coop` in the name
 
 Builds are byte-identical across rebuilds: a hash change means a source change.
 
+Everything runs in parallel, one job per CPU: both builds compile their sources in parallel,
+`build-changed.sh` builds client and server at once, and `unit-coop.sh`, `suite-coop.sh`,
+`matrix-*.sh`, `suite-stable.sh` and `verify.py` run their cases in parallel (set `JOBS=<n>`, or
+`--jobs` for `verify.py`, to limit it). The `*.serial.sh` copies are the one-at-a-time versions.
+
 `tools/build-changed.sh` is the preferred build entry point. It hashes `source/` plus
 `KPCFix.ini` (client) and `server-tools/server-tools-source/` plus `legacy-object-patches.json`
 and `SERVER_TOOLS_SUPPORTED_BUILDS.json` (server), rebuilds only the component whose inputs
@@ -166,7 +171,7 @@ covers the client package only.
   (the `LoadLibraryA` hook covers the second case). Keep both paths working.
 * A feature is usually a `.c` file plus a `*_hook.S` bridge that preserves the game's
   calling convention, and a `source/test_<feature>.py` emulator test (Unicorn, real
-  fixtures). Add the test as a `run` line in `suite-coop.sh`.
+  fixtures). Add the test as a `<suite>|<extra arguments>` line in the case list in `suite-coop.sh`.
 * `source/SYMBOLS.json` and `source/BUILD_RESULT.json` are build outputs that are
   tracked and must match the root `dinput.dll`.
 

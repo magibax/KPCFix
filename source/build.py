@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Build the freestanding x86 Windows proxy with GCC and GNU binutils."""
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
+import os
 from pathlib import Path
 import struct
 import subprocess
@@ -102,12 +104,16 @@ def main():
         '-fno-unwind-tables','-fno-ident','-fshort-wchar','-mno-sse','-mno-mmx',
         '-mpreferred-stack-boundary=2','-mincoming-stack-boundary=2','-Wall','-Wextra',
         '-Wno-misleading-indentation','-I',str(ROOT/'src')]
-    conversions=[];objects=[]
-    for name in ('kpcfix.c','sha256.c','hud.c','ui.c','configs.c','cinematic.c','loading.c','console.c','camera.c','netwatch.c','netwatch_hook.S','focus.c','minstep_hook.S','cinematic_hook.S','timing.S','ground.S','input_interval.S','hud_hooks.S','ui_hooks.S'):
+    def compile_one(name):
         source=ROOT/'src'/name;obj=work/(source.stem+'.obj');elf=work/(source.stem+'.elf.o')
         if source.suffix=='.c':run(['gcc',*cflags,'-c',source,'-o',elf])
         else:run(['as','--32','-o',elf,source])
-        conversions.append(elf_to_coff(elf,obj));objects.append(obj)
+        return elf_to_coff(elf,obj),obj
+    # Each source compiles independently, so they run in parallel (one per CPU);
+    # map() keeps list order, so the link order and BUILD_RESULT.json stay the same.
+    with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:
+        built=list(pool.map(compile_one,('kpcfix.c','sha256.c','hud.c','ui.c','configs.c','cinematic.c','loading.c','console.c','camera.c','netwatch.c','netwatch_hook.S','focus.c','minstep_hook.S','cinematic_hook.S','timing.S','ground.S','input_interval.S','hud_hooks.S','ui_hooks.S')))
+    conversions=[c for c,_ in built];objects=[o for _,o in built]
     # Generate import libraries without copying or shipping any system DLL.
     # These build-only export stubs are never run and must never be deployed.
     (work/'api_stub.S').write_text('.text\n.global api_stub\napi_stub:\n ret\n')

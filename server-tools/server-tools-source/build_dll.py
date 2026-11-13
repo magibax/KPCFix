@@ -3,7 +3,8 @@ Usage: python server-tools-source/build_dll.py
 Requires gcc with -m32 support and GNU binutils.
 """
 from pathlib import Path
-import hashlib,json,struct,subprocess
+from concurrent.futures import ThreadPoolExecutor
+import hashlib,json,os,struct,subprocess
 from pe_build import elf_to_coff,run
 root=Path(__file__).resolve().parent;package=root.parent;work=root/'build';work.mkdir(exist_ok=True)
 # Assemble the previously tested object-relative runtime hooks.
@@ -76,12 +77,13 @@ w+='.global winmm_count\nwinmm_count:\n .long %d\n'%len(winmm)
 w+=''.join('wmn_%d: .asciz "%s"\n'%(i,v) for i,v in enumerate(winmm))
 (work/'winmm_stubs.S').write_text(w)
 flags=['-m32','-O2','-std=c11','-ffreestanding','-fno-builtin','-fno-pic','-fno-pie','-fno-stack-protector','-fstack-clash-protection','-fno-asynchronous-unwind-tables','-fno-unwind-tables','-fno-ident','-fshort-wchar','-mno-sse','-mno-mmx','-mpreferred-stack-boundary=2','-mincoming-stack-boundary=2','-Wall','-Wextra','-I',str(root/'src'),'-I',str(work)]
-objects=[]
-for name in ['proxy.c','sha256.c','runtime_print.S','winmm_stubs.S']:
+def compile_one(name):
  src=work/name if name.endswith('.S') else root/'src'/name;elf=work/(src.stem+'.elf.o');obj=work/(src.stem+'.obj')
  if name.endswith('.c'):run(['gcc',*flags,'-c',src,'-o',elf])
  else:run(['as','--32',src,'-o',elf])
- elf_to_coff(elf,obj);objects.append(obj)
+ elf_to_coff(elf,obj);return obj
+# Sources compile in parallel (one per CPU); map() keeps list order, so the link order is unchanged.
+with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:objects=list(pool.map(compile_one,['proxy.c','sha256.c','runtime_print.S','winmm_stubs.S']))
 # Import library generated from build-only stubs; no system DLL is shipped.
 (work/'stub.S').write_text('.text\n.global api_stub\napi_stub:\n ret\n')
 run(['as','--32',work/'stub.S','-o',work/'stub.o']);elf_to_coff(work/'stub.o',work/'stub.obj')

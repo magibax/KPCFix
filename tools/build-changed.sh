@@ -8,7 +8,8 @@
 # build/ and __pycache__) are excluded, so a build never triggers another build.
 #
 # Each build runs in a disposable copy under build/ with the pinned Docker image, as in
-# CLAUDE.md. Outputs are then copied back to the same places the manual steps use:
+# CLAUDE.md. When both components need building they build at the same time, and each
+# build compiles its source files in parallel (one per CPU). Outputs are then copied back to the same places the manual steps use:
 #   client: out/dinput.dll -> dinput.dll, SYMBOLS.json + BUILD_RESULT.json -> source/
 #   server: KPCServerTools.dll + SERVER_TOOLS_BUILD.json -> server-tools/
 #
@@ -180,8 +181,21 @@ package() {
 }
 
 status=0
-[ "$DO_CLIENT" = 1 ] && { build_client || status=1; }
-[ "$DO_SERVER" = 1 ] && { build_server || status=1; }
+if [ "$DO_CLIENT" = 1 ] && [ "$DO_SERVER" = 1 ]; then
+    # Separate containers and build folders, so both builds run at once; each one's
+    # output is held back and printed in order (client, then server) when it finishes.
+    out=$(mktemp -d)
+    (build_client || exit 1) > "$out/client" 2>&1 & client_pid=$!
+    (build_server || exit 1) > "$out/server" 2>&1 & server_pid=$!
+    wait "$client_pid" || status=1
+    cat "$out/client"
+    wait "$server_pid" || status=1
+    cat "$out/server"
+    rm -rf "$out"
+else
+    [ "$DO_CLIENT" = 1 ] && { build_client || status=1; }
+    [ "$DO_SERVER" = 1 ] && { build_server || status=1; }
+fi
 if [ "$status" = 0 ] && [ "$PACKAGE" = 1 ]; then package || status=1; fi
 if [ "$status" = 0 ] && [ "$INSTALL" = 1 ]; then
     flags=
