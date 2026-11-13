@@ -14,9 +14,16 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) for the product design and
 
 ## Current work
 
-* Branch **`coop/mvp-lobby`**: experimental co-op campaign (chat lobby, WORLDORDER
-  campaign, shared progress, per-player cheats, persistence). `main` holds the stable
-  release only; do not merge co-op work into it unless asked.
+* Branches: **`coop/mvp-lobby-untested`** takes new co-op fixes that have not been
+  playtested yet; **`coop/mvp-lobby`** holds co-op work confirmed in play (merge untested
+  work into it only after the user confirms it works in game); **`main`** holds the stable
+  release only (do not merge co-op work into it unless asked). The experimental co-op
+  campaign covers the chat lobby, WORLDORDER campaign, shared progress, per-player cheats
+  and persistence.
+* **Merging `main` into a co-op branch:** `main` has its own stable copies of shared files
+  (client and Server Tools source, DLLs, manifests, INIs). Keep the co-op version of code,
+  binaries and manifests, take documentation from `main`, and check the merge deletes no
+  co-op files before committing.
 * **Start every session with [coop/NEXT-SESSION-HANDOFF.md](coop/NEXT-SESSION-HANDOFF.md)**:
   what is installed, the two-PC test plan and its results, the triage table of
   playtest reports, open items. Session prompts live in `coop/NEXT-PROMPTS-*.md`.

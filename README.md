@@ -1,52 +1,94 @@
 # KPCFix
 
-KPCFix brings smooth mouse look, direct IP multiplayer fixes and optional high frame rates to the Windows version of *KISS: Psycho Circus — The Nightmare Child*. It supports the official **1.13** Europe, US, German and Italian Covermount builds.
+Fixes and improvements for *KISS: Psycho Circus — The Nightmare Child* on modern Windows PCs.
 
-KPCFix and Server Tools use independent semantic versions (for example, **v1.1.0** and **v1.0.1**). Those are project versions; **1.13** always refers to the supported game version.
+Works with the Europe, US, German and Italian Covermount editions, patched to **1.13**.
 
-- **Smooth mouse input.** Turning the camera and moving the menu cursor feel smoother, especially on a high-refresh display. The sensitivity slider gives finer control at low settings. To restore the original mouse behaviour and Input Rate slider, set `StockMouse=1` in `KPCFix.ini` and restart.
-- **Multiplayer from the main menu.** Direct IP now lets you query and join a server immediately after launching the game. This fixes the “No Response” that previously meant loading a local map before you could connect.
-- **Play above 60 FPS.** Timing and movement fixes. In playtesting, the game has generally been stable with FPS unlocked, and narration, camera pans and animations have typically kept their expected pace. Some scripted sequences may still be unstable (for now).
-- **Readable HUD at native resolution.** Menu cursor and tooltips follow the HUD scale. The default HUD scale is 150% at 1080p. For 1440p, select 2560×1440 in game and set `ScalePercent=200` under `[HUD]` in `KPCFix.ini`.
-- **4:3 cinematics.** Fullscreen movies are centred on widescreen displays. Movie smoothing is enabled by default. In the `[AspectRatio]` section of `KPCFix.ini`, set `CinematicFilter=0` for sharper movies or `Cinematics4x3=0` for the original stretched playback.
+## Features
 
-## Install the Windows client
+- **Smooth mouse input.** Camera turning and the menu cursor are smooth, especially on high-refresh displays, and the sensitivity slider gives finer control at low settings.
+- **Readable HUD.** The HUD, menu cursor and tooltips scale together. The default is 150%, sized for 1920×1080.
+- **Unlocked frame rate.** In the original game, running above 60 FPS broke a lot of things, including narration, scripted sequences, camera pans, animations and enemy movement. KPCFix fixes the game's timing, movement and AI, so everything keeps its normal pace at any frame rate. By default the game runs at your monitor's refresh rate with VSync, and you can turn VSync off for an unlimited frame rate (see [Frame rate](#frame-rate)).
+- **Join multiplayer games straight away.** You no longer need to load a local map first to join a multiplayer game.
 
-1. Patch a clean installation of your game to **1.13**, then close the game and launcher. Back up any existing local DLLs or INIs you are replacing.
-2. [Download the Windows client ZIP](https://github.com/magibax/KPCFix/releases). Extract its contents beside `Psycho.exe`, usually in `C:\Games\Psycho\`.
-3. Before launching the game, run `Check-KPCVersion.cmd` from that folder. Continue only if it reports **PASS** and identifies your region as a supported official 1.13 build.
-4. **Recommended for the first launch after patching:** run `Launch-KPCFix.cmd`. It applies the initial KPCFix setup and opens the shipped `Psycho.exe` launcher. In the launcher, open **Display** and choose your desired resolution. Start the game and save/select a profile with that same resolution. The initial preset is **1920×1080, VSync on at your monitor's refresh rate**.
-5. After that first setup, once the desired resolution is saved in both the launcher and your game profile, you can start the game directly with the shipped `Psycho.exe`. Run `Check-KPCVersion.cmd` again after replacing or repatching game files. Keyboard bindings are yours to configure in the game.
+KPCFix also includes smaller fixes, such as 4:3 cinematics on widescreen displays. Every fix and option is listed in the [configuration reference](https://github.com/magibax/KPCFix/blob/main/CONFIGURATION.md) and described in `KPCFix.ini`.
 
-## Unlock FPS
+## Install
 
-Edit these three lines in `DDrawCompat-CLIENT.ini` and restart the game. **Shift+F12** toggles the FPS display.
+1. Patch a clean installation to **1.13**, then close the game and launcher.
+2. If your game folder already has a `dinput.dll`, `ddraw.dll` or `DDrawCompat-CLIENT.ini` from another mod, back them up. KPCFix replaces them.
+3. [Download the latest Windows client ZIP](https://github.com/magibax/KPCFix/releases) and extract it beside `Psycho.exe` (usually `C:\Games\Psycho\`).
+4. Run `Check-KPCVersion.cmd`. Continue only if it reports **PASS** and names your edition.
 
-```ini
-FullscreenMode = exclusive(0)
-VSync = off
-FpsLimiter = off
-```
+Run `Check-KPCVersion.cmd` again whenever you replace or repatch game files.
 
-For a 165 FPS cap, use `FpsLimiter = flipend(165)`. If a scripted sequence misbehaves, try `FpsLimiter = flipend(60)` and replay it at 60 FPS, and report it.
+## First launch
 
-## Server Tools
+1. Run `Launch-KPCFix.cmd`. On its first run it sets your game configuration to **1920×1080** and opens the game launcher.
+2. In the launcher, open **Display** and choose your resolution.
+3. Start the game and create or select a profile with that **same resolution**.
 
-Hosting tools are a separate download: [KPCFix Server Tools](https://github.com/magibax/KPCFix/releases). The main KPCFix ZIP contains client fixes only, including the multiplayer browser connection fix.
+From then on you can start the game with `Psycho.exe` as usual. The game and launcher keep the resolution you chose.
 
-Server Tools includes a compact graphical launcher for all 59 maps, server-rule controls, live `kpc_cheats 0/1` permission and console chat logging. Campaign maps are experimental and may be buggy in multiplayer. Cheat announcements appear in chat only.
+`Launch-KPCFix.cmd` also sets `Developer` to `1` in the game configuration each time it runs. Set `ForceDeveloper=0` in `KPCFix.ini` to stop this. Any configuration file it changes is backed up first with a `.kpcfix-display.bak` extension.
 
-Extract the Server Tools ZIP into the game directory, close the game/server and run **Setup-KPCServerTools.cmd** once. Then use **KPC-Server-Launcher.cmd**. Its DLL preserves the original engine and leaves `object.lto` stock after migration. See the [Server Tools README](https://github.com/magibax/KPCFix/blob/main/server-tools/README-Server-Tools.md) for setup, upgrades and removal.
+## Frame rate
 
-## Building and testing
+By default the game runs in borderless mode with VSync, at your monitor's refresh rate (for example 60, 144 or 165 FPS). Press **Shift+F12** in game to show the frame rate.
 
-The release ZIP holds only what you need to play. Source, build instructions and the full documentation are in the [GitHub repository](https://github.com/magibax/KPCFix): [client build instructions](https://github.com/magibax/KPCFix/blob/main/source/BUILD.md), [architecture](https://github.com/magibax/KPCFix/blob/main/ARCHITECTURE.md), [configuration reference](https://github.com/magibax/KPCFix/blob/main/CONFIGURATION.md) and [verification procedures](https://github.com/magibax/KPCFix/blob/main/TESTING.md).
+To change this, edit `DDrawCompat-CLIENT.ini` and restart the game:
 
-For edition fingerprints, see [compatibility notes](https://github.com/magibax/KPCFix/blob/main/COMPATIBILITY-NOTES.md). Maintainers can find the packaging and tag procedure in the [release guide](https://github.com/magibax/KPCFix/blob/main/RELEASING.md). Experimental campaign hosting is tracked in [co-op research](https://github.com/magibax/KPCFix/tree/coop/mvp-lobby/coop).
+| To… | Set |
+|---|---|
+| Cap at 60 FPS (the default in earlier releases) | `FpsLimiter = flipend(60)` |
+| Use a different cap, such as 120 FPS | `FpsLimiter = flipend(120)` |
+| Remove VSync and every limit | `FullscreenMode = exclusive(0)`, `VSync = off`, `FpsLimiter = off` |
 
-## Graphics research
+Exclusive fullscreen without VSync may tear. If a scripted sequence misbehaves at a high frame rate, cap at 60 FPS and replay it.
 
-- Engine performance optimisation: Inspect the engine for opportunities to improve FPS, reduce rendering overhead and optimise performance without introducing instability.
-- Anisotropic filtering & antialiasing: Investigate enabling or improving anisotropic filtering and antialiasing, including within the game's menus.
-- Graphics configuration: Investigate c_GlobalDetail, GibDetail, LodOffset and other graphics settings to understand their behaviour, performance impact and sensible defaults for modern hardware.
-- Graphics fidelity improvements: Investigate engine-level methods to improve rendering quality, texture filtering, model detail, draw distances and other visual effects.
+## Settings
+
+Edit `KPCFix.ini` and restart the game. Each option is described in the file, and the [configuration reference](https://github.com/magibax/KPCFix/blob/main/CONFIGURATION.md) lists them all with common tweaks, such as HUD size for 1440p or the original mouse.
+
+## Uninstall
+
+1. Close the game.
+2. Optionally, restore the configuration files changed by the first launch. This returns them to how they were before KPCFix, so any later changes to those files are lost:
+   ```
+   powershell -ExecutionPolicy Bypass -File Setup-KPCFix.ps1 -Restore
+   ```
+3. Delete the files KPCFix added: `dinput.dll`, `ddraw.dll`, `KPCFix.ini`, `KPCFix.log`, `DDrawCompat-CLIENT.ini`, `Launch-KPCFix.cmd`, `Setup-KPCFix.ps1`, `Check-KPCVersion.cmd`, `Check-KPCVersion.ps1`, `SUPPORTED_BUILDS.json`, `SHA256SUMS`, `README.md`, `LICENSE`, the `LICENSES` folder and `KPCFix-Display-Preset.applied`. If you skipped step 2, also delete `KPCFix-Display-Backups.json` and any `.kpcfix-display.bak` files.
+4. Restore any DLLs or INIs you backed up during install.
+
+## Hosting a server
+
+Server hosting tools are a separate download: [KPCFix Server Tools](https://github.com/magibax/KPCFix/releases). The client ZIP already includes the multiplayer fix for joining servers.
+
+Server Tools adds a graphical launcher covering all 59 maps, server-rule settings, a live `kpc_cheats 0/1` switch and console chat logging. Campaign maps can be hosted but are experimental in multiplayer.
+
+The next Server Tools release (v1.0.2) adds real-time server timing, which also stops the R2M2A Ballbuster getting stuck in the garage door. It will work only with the Europe/UK, German and Italian server files at first; a server using the USA `server.dll` will keep the original timing.
+
+Extract the Server Tools ZIP into the game folder, close the game and any server, run `Setup-KPCServerTools.cmd` once, then start servers with `KPC-Server-Launcher.cmd`. The original server engine is kept and can be restored at any time. See the [Server Tools README](https://github.com/magibax/KPCFix/blob/main/server-tools/README-Server-Tools.md) for details, upgrades and removal.
+
+## Roadmap
+
+**Co-op campaign.** Experimental multiplayer co-op through the whole campaign is in development. It is not part of the stable release. Work tested in play is on the [`coop/mvp-lobby`](https://github.com/magibax/KPCFix/tree/coop/mvp-lobby) branch, and the newest, not yet tested, fixes are on [`coop/mvp-lobby-untested`](https://github.com/magibax/KPCFix/tree/coop/mvp-lobby-untested).
+
+**Graphics.** Ongoing research covers engine performance, anisotropic filtering and antialiasing (including in menus), sensible modern defaults for graphics settings such as `c_GlobalDetail`, `GibDetail` and `LodOffset`, and engine-level improvements to texture filtering, model detail and draw distance.
+
+## For developers
+
+The release ZIP contains only what you need to play. Source code and full documentation are in the [GitHub repository](https://github.com/magibax/KPCFix):
+
+- [Building the client](https://github.com/magibax/KPCFix/blob/main/source/BUILD.md)
+- [Architecture](https://github.com/magibax/KPCFix/blob/main/ARCHITECTURE.md)
+- [Configuration reference](https://github.com/magibax/KPCFix/blob/main/CONFIGURATION.md)
+- [Testing and verification](https://github.com/magibax/KPCFix/blob/main/TESTING.md)
+- [Edition fingerprints and compatibility notes](https://github.com/magibax/KPCFix/blob/main/COMPATIBILITY-NOTES.md)
+- [Release procedure](https://github.com/magibax/KPCFix/blob/main/RELEASING.md)
+
+KPCFix and Server Tools have their own version numbers (for example, client v1.1.3 and Server Tools v1.0.1). “1.13” always means the supported game patch.
+
+## Credits and licence
+
+KPCFix is released under the [MIT licence](LICENSE). The bundled `ddraw.dll` is [DDrawCompat](https://github.com/narzoul/DDrawCompat) by narzoul, licensed under 0BSD (see `LICENSES/`).
