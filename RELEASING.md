@@ -49,18 +49,19 @@ Current releases (barebones packages, published 2026-11-13 from `main`):
 
 | Product | Tag | Installable asset |
 | --- | --- | --- |
-| Windows client | [`kpcfix-v1.1.2`](https://github.com/magibax/KPCFix/releases/tag/kpcfix-v1.1.2) | `KPCFix-Windows-v1.1.2.zip` |
+| Windows client | [`kpcfix-v1.1.3`](https://github.com/magibax/KPCFix/releases/tag/kpcfix-v1.1.3) | `KPCFix-Windows-v1.1.3.zip` (from `8f1d29a`; ZIP SHA-256 `26c3dbf30e3c11da…`) |
 | Server Tools | [`server-tools-v1.0.1`](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.1) | `KPCFix-Server-Tools-v1.0.1.zip` |
 
-Earlier releases:
+Earlier releases still published:
 
 | Product | Tag | Installable asset |
 | --- | --- | --- |
-| Server Tools | [`server-tools-v1.0.0-r3`](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3) | `KPCFix-Server-Tools-1.0.0.zip` (kept as the fallback for v1.0.1) |
+| Windows client | [`kpcfix-v1.1.2`](https://github.com/magibax/KPCFix/releases/tag/kpcfix-v1.1.2) | `KPCFix-Windows-v1.1.2.zip` |
 
-The GitHub Releases of `kpcfix-v1.1.1`, `kpcfix-v1.1.0` and `kpcfix-1.13-r4`
-were removed; their tags remain. v1.1.0, v1.1.1 and v1.1.2 ship the same
-`dinput.dll`.
+The GitHub Releases of `kpcfix-v1.1.1`, `kpcfix-v1.1.0`, `kpcfix-1.13-r4` and
+`server-tools-v1.0.0-r3` were removed; their tags remain. v1.1.0, v1.1.1 and
+v1.1.2 ship the same `dinput.dll`. The release workflow takes `ddraw.dll` from
+the newest published `kpcfix-v*` release, so always keep at least one.
 
 Server Tools R3 was published from `a034fa6`. Its ZIP SHA-256 is
 `bb518c27864b59a41e9425e015071bc99cbf26d1a724532edf5fe944307c6646`.
