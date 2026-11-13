@@ -45,11 +45,19 @@ A future release must increment the relevant pinned version in that file
 *before* the verified, annotated tag is pushed. CI rejects tags not matching
 the pinned version, and produces candidate ZIPs using the pinned version.
 
-These historical releases are retained unchanged as provenance:
+Current releases (barebones packages, published 2026-11-13 from `main`):
 
-| Product | Previous tag | Previous installable asset |
+| Product | Tag | Installable asset |
 | --- | --- | --- |
-| Windows client | [`kpcfix-1.13-r4`](https://github.com/magibax/KPCFix/releases/tag/kpcfix-1.13-r4) | `KPCFix-Windows-1.13.zip` |
+| Windows client | [`kpcfix-v1.1.1`](https://github.com/magibax/KPCFix/releases/tag/kpcfix-v1.1.1) | `KPCFix-Windows-v1.1.1.zip` |
+| Server Tools | [`server-tools-v1.0.1`](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.1) | `KPCFix-Server-Tools-v1.0.1.zip` |
+
+Earlier releases:
+
+| Product | Tag | Installable asset |
+| --- | --- | --- |
+| Windows client | [`kpcfix-v1.1.0`](https://github.com/magibax/KPCFix/releases/tag/kpcfix-v1.1.0) | `KPCFix-Windows-v1.1.0.zip` (also the source of the pinned `ddraw.dll`) |
+| Windows client | `kpcfix-1.13-r4` (tag only; its GitHub Release was removed) | `KPCFix-Windows-1.13.zip` |
 | Server Tools | [`server-tools-v1.0.0-r3`](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3) | `KPCFix-Server-Tools-1.0.0.zip` |
 
 Server Tools R3 was published from `a034fa6`. Its ZIP SHA-256 is
