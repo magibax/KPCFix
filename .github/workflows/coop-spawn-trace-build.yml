@@ -205,12 +205,12 @@ jobs:
           cat > dist/README-FIRST.txt <<'TXT'
           EXPERIMENTAL KPCFIX CO-OP MVP (kpc-coop/1). NOT A STABLE RELEASE.
           Feature-branch build of KPCFix Server Tools with a chat lobby and the
-          fixed R1M2B -> R1M2C -> R1M3A route. Not Windows-gameplay-tested by the
+          co-op campaign (host: !campaign in chat). Not Windows-gameplay-tested by the
           developers; follow TEST-INSTRUCTIONS.md and report the logs.
           Back up server.dll, server.original.dll, winmm.dll, KPCServerTools.dll,
           SERVER_TOOLS_BUILD.json and KPCServerTools.ini first. Extract the ZIP
           into the game folder, run Setup-KPCServerTools.cmd, then start
-          KPC-Server-Launcher.cmd and tick the EXPERIMENTAL co-op box.
+          KPC-Server-Launcher.cmd and choose Co-op campaign.
           Verify: Get-FileHash .\KPCServerTools.dll equals proxy_sha256 in
           SERVER_TOOLS_BUILD.json and the "build=coop-session-v2 ... sha256="
           line at the top of KPCServerTools.log.

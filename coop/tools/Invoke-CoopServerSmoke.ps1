@@ -172,7 +172,9 @@ $serverHash=(Get-FileHash -LiteralPath (Join-Path $GameDir 'server.dll') -Algori
 $loaderHash=(Get-FileHash -LiteralPath (Join-Path $GameDir 'winmm.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
 # Windows PowerShell 5.1 does not quote array arguments; quote paths explicitly.
 $workerArgs='-NoProfile -ExecutionPolicy Bypass -File "'+(Join-Path $GameDir 'Start-KPC-Selected-Server.ps1')+'" -Map "'+$map+'" -Cheats Disabled'
-if($Mode -eq 'Coop'){$workerArgs+=' -Coop'}
+# The Coop checks follow the fixed test route (nextlevel R1M2B > R1M2C > R1M3A), so ask the
+# worker for that mode; a plain -Coop now starts the campaign (CoopCampaign=1).
+if($Mode -eq 'Coop'){$workerArgs+=' -Coop -CoopMode Route'}
 $events=New-Object System.Collections.Generic.List[string]
 $screen=''
 $exitCode=$null

@@ -15,7 +15,7 @@ Earlier releases installed the tools as `server.dll` and kept the official engin
 1. Close the game and dedicated server for this one-time setup. Back up your game folder.
 2. Extract this package into the game directory, normally `C:\Games\Psycho\`, beside `Psycho.exe`, `dedicated.exe`, `server.dll` and `object.lto`. Keep the package's supporting files together.
 3. Run **Setup-KPCServerTools.cmd**. It installs the tools as `winmm.dll`, leaves the official `server.dll` unchanged, and restores recognized earlier Server Tools patches to the exact original `object.lto`. Unsupported files are rejected.
-4. Run **KPC-Server-Launcher.cmd** to choose from the single all-maps list, adjust server rules and initial cheat permission, then start the server. The compact GUI keeps the campaign disclaimer at the top. Its launcher terminal remains visible; VBScript is not required. Clients should discover it in their game browser.
+4. Run **KPC-Server-Launcher.cmd**. Set the server name, port, player limit and initial cheat permission, choose **Deathmatch** (map from the single all-maps list, frag and time limits, start items) or **Co-op campaign** (development builds), then click **Start server**. The launcher remembers your choices in `kpc-gui-settings.json`, and its buttons open `KPCServerTools.ini` and `KPCServerTools.log`. The server runs in its own console window; VBScript is not required. Clients should discover it in their game browser.
 
 Do not rename or overwrite the original `server.dll`; nothing needs it any more. `KPCServerTools.dll` is the supplied payload, which setup copies to `winmm.dll`. Setup refuses to replace a `winmm.dll` from another mod.
 
@@ -69,7 +69,7 @@ Server Tools uses its own README, license, checksums, compatibility checker, bui
 
 ## Unreleased co-op MVP session (experimental)
 
-Development builds include an opt-in chat lobby and a fixed route (R1M2B → R1M2C → R1M3A). Tick **EXPERIMENTAL co-op session** in the launcher; players type `!ready` and the host types `!start`. Lobby, Start and a host `!next` change were tested live with one client; natural exits and two clients are not yet Windows-tested. See [coop/COOP-MVP.md](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/COOP-MVP.md) for the test protocol and limitations.
+Development builds include an experimental co-op campaign for up to three players. Choose **Co-op campaign** in the launcher: the server starts on a random deathmatch map as the lobby and turns on `CoopSession`, `CoopCampaign` and `CoopIntro` in `KPCServerTools.ini` for that run. The host types `!campaign full`, or `!campaign water` / `earth` / `air` / `fire` / `nightmare`, in chat; `!abort` returns everyone to the lobby. **Test logging** also turns on `TraceScripts` and `TraceTiming`. A deathmatch start turns `CoopSession` off again. See [coop/COOP-MVP.md](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/COOP-MVP.md) for the test protocol and limitations.
 
 ## Unreleased co-op diagnostics and spawn-point instrumentation
 

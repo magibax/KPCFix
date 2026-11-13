@@ -23,12 +23,14 @@ original bytes, and fail closed when the bytes differ.
 
 ## Playing
 
-1. **Server:** start the server tools launcher with the co-op checkbox, or run
+1. **Server:** start the server tools launcher and choose **Co-op campaign**, or run
    `Start-KPC-Selected-Server.ps1 -Map random -Cheats Enabled -Coop`.
    `-Coop` executes `kpc-coop-server.cfg` (your GUI config plus the co-op map list
-   `kpc-coop-maps.txt` and no start armour) and sets `CoopSession=1`. Set
-   `CoopCampaign=1` and `CoopIntro=1` in `KPCServerTools.ini [Coop]` for the
-   campaign.
+   `kpc-coop-maps.txt` and no start armour) and writes `CoopSession=1`,
+   `CoopCampaign=1`, `CoopIntro=1` and `CoopLobbyWorld` to `KPCServerTools.ini [Coop]`.
+   `-CoopMode Route` (smoke test) writes `CoopCampaign=0` for the fixed route instead;
+   `-TestLogging On|Off` (the launcher's **Test logging** box) writes `TraceScripts`
+   and `TraceTiming`.
 2. **Clients:** install the KPCFix client (`dinput.dll`, `KPCFix.ini`) on every PC and
    join the server from the multiplayer browser. Everyone arrives in the lobby, a
    deathmatch map (PM01–PM10). One player can start alone (`CoopMinPlayers=1`).

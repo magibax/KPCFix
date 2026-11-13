@@ -18,6 +18,8 @@ $testDir=Join-Path ([IO.Path]::GetTempPath()) ('kpc-ini-'+[guid]::NewGuid().ToSt
 $logic=$logic.Replace('Join-Path $PSScriptRoot','Join-Path $testDir')
 $apply=[scriptblock]::Create($logic)
 $Coop=$false
+$CoopMode='Campaign'
+$TestLogging='Keep'
 $Map='worlds\deathmatch\PM01'
 $iniPath=Join-Path $testDir 'KPCServerTools.ini'
 try {
@@ -69,22 +71,39 @@ try {
  $Cheats='Disabled';$Coop=$true
  & $apply
  $actual=[IO.File]::ReadAllText($iniPath)
- if($actual -ne "[ServerTools]`r`nEnabled=1`r`nAllowCheats=0`r`n[Coop]`r`nCoopLobbyWorld=worlds\deathmatch\PM01`r`nCoopSession=1`r`nTraceCampaign=0`r`n"){throw "Co-op insertion failed: $actual"}
+ if($actual -ne "[ServerTools]`r`nEnabled=1`r`nAllowCheats=0`r`n[Coop]`r`nCoopSession=1`r`nCoopCampaign=1`r`nCoopIntro=1`r`nCoopLobbyWorld=worlds\deathmatch\PM01`r`nTraceCampaign=0`r`n"){throw "Co-op insertion failed: $actual"}
  # A later normal launch rewrites the existing key to 0 (never inherits co-op).
  $Coop=$false
  & $apply
  $actual=[IO.File]::ReadAllText($iniPath)
- if($actual -ne "[ServerTools]`r`nEnabled=1`r`nAllowCheats=0`r`n[Coop]`r`nCoopLobbyWorld=worlds\deathmatch\PM01`r`nCoopSession=0`r`nTraceCampaign=0`r`n"){throw "Co-op reset failed: $actual"}
+ if($actual -ne "[ServerTools]`r`nEnabled=1`r`nAllowCheats=0`r`n[Coop]`r`nCoopSession=0`r`nCoopCampaign=1`r`nCoopIntro=1`r`nCoopLobbyWorld=worlds\deathmatch\PM01`r`nTraceCampaign=0`r`n"){throw "Co-op reset failed: $actual"}
  # Co-op without any [Coop] section appends one, LF preserved.
  [IO.File]::WriteAllText($iniPath,"[ServerTools]`nEnabled=1`nAllowCheats=0",([Text.UTF8Encoding]::new($false)))
  $Coop=$true
  & $apply
  $actual=[IO.File]::ReadAllText($iniPath)
- if($actual -ne "[ServerTools]`nEnabled=1`nAllowCheats=0`n[Coop]`nCoopLobbyWorld=worlds\deathmatch\PM01`nCoopSession=1`n"){throw "Co-op section append failed: $actual"}
+ if($actual -ne "[ServerTools]`nEnabled=1`nAllowCheats=0`n[Coop]`nCoopSession=1`nCoopCampaign=1`nCoopIntro=1`nCoopLobbyWorld=worlds\deathmatch\PM01`n"){throw "Co-op section append failed: $actual"}
  # Normal launch without a CoopSession key leaves the file byte-identical.
  [IO.File]::WriteAllText($iniPath,"[ServerTools]`nEnabled=1`nAllowCheats=0`n",([Text.UTF8Encoding]::new($false)))
  $Coop=$false
  & $apply
  if([IO.File]::ReadAllText($iniPath) -ne "[ServerTools]`nEnabled=1`nAllowCheats=0`n"){throw 'Normal launch changed INI without CoopSession'}
- Write-Host 'PASS: Windows INI insertion, CRLF, BOM removal/Unicode, fail-closed missing section and CoopSession mode'
+ # Route mode (smoke test): CoopCampaign=0, CoopIntro untouched; existing keys rewritten in place.
+ [IO.File]::WriteAllText($iniPath,"[ServerTools]`nAllowCheats=0`n[Coop]`nCoopSession=0`nCoopIntro=0`nCoopCampaign=1`nCoopLobbyWorld=`n",([Text.UTF8Encoding]::new($false)))
+ $Coop=$true;$CoopMode='Route'
+ & $apply
+ $actual=[IO.File]::ReadAllText($iniPath)
+ if($actual -ne "[ServerTools]`nAllowCheats=0`n[Coop]`nCoopSession=1`nCoopIntro=0`nCoopCampaign=0`nCoopLobbyWorld=worlds\deathmatch\PM01`n"){throw "Route mode failed: $actual"}
+ # Test logging On/Off writes both trace keys; a commented ;TraceTiming line is left alone.
+ [IO.File]::WriteAllText($iniPath,"[ServerTools]`nAllowCheats=0`n[Coop]`nTraceScripts=0`n;TraceTiming=1`n",([Text.UTF8Encoding]::new($false)))
+ $Coop=$false;$CoopMode='Campaign';$TestLogging='On'
+ & $apply
+ $actual=[IO.File]::ReadAllText($iniPath)
+ if($actual -ne "[ServerTools]`nAllowCheats=0`n[Coop]`nTraceTiming=1`nTraceScripts=1`n;TraceTiming=1`n"){throw "Test logging On failed: $actual"}
+ $TestLogging='Off'
+ & $apply
+ $actual=[IO.File]::ReadAllText($iniPath)
+ if($actual -ne "[ServerTools]`nAllowCheats=0`n[Coop]`nTraceTiming=0`nTraceScripts=0`n;TraceTiming=1`n"){throw "Test logging Off failed: $actual"}
+ $TestLogging='Keep'
+ Write-Host 'PASS: Windows INI insertion, CRLF, BOM removal/Unicode, fail-closed missing section, co-op campaign/route modes and test logging'
 }finally {if([IO.Directory]::Exists($testDir)){[IO.Directory]::Delete($testDir,$true)}}

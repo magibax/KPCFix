@@ -3,7 +3,13 @@ param(
  [ValidateSet('Enabled','Disabled')][string]$Cheats='Disabled',
  # EXPERIMENTAL co-op (feature branch DLL only). With -Coop, -Map random picks the
  # lobby from the shipped deathmatch maps (PM01-PM10); an explicit world is used as is.
- [switch]$Coop
+ [switch]$Coop,
+ # Co-op only. Campaign (default): the 48-world campaign the host picks with !campaign
+ # (writes CoopCampaign=1 and CoopIntro=1). Route: the fixed test route
+ # R1M2B > R1M2C > R1M3A (CoopCampaign=0; used by the smoke test).
+ [ValidateSet('Campaign','Route')][string]$CoopMode='Campaign',
+ # Keep: leave TraceScripts/TraceTiming as they are. On/Off: write both (test logging).
+ [ValidateSet('Keep','On','Off')][string]$TestLogging='Keep'
 )
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
@@ -33,41 +39,43 @@ try {
 # The DLL reads this file with GetPrivateProfileIntW, which does not skip a
 # UTF-8 BOM: a BOM hides a first-line [ServerTools] section. Write UTF-8 without one.
 if($iniEncoding -is [Text.UTF8Encoding]){$iniEncoding=[Text.UTF8Encoding]::new($false)}
-$value=if($Cheats -eq 'Enabled'){'1'}else{'0'}
 $nl=if($ini.Contains("`r`n")){"`r`n"}elseif($ini.Contains("`r")){"`r"}else{"`n"}
-if($ini -notmatch '(?im)^[ \t]*AllowCheats[ \t]*=') {
- $header=[regex]::Match($ini,'(?im)^[ \t]*\[ServerTools\][ \t]*(?:\r\n|\n|\r|$)')
- if(-not $header.Success){throw 'Missing [ServerTools] section in KPCServerTools.ini.'}
- $separator=if($header.Value.EndsWith("`n") -or $header.Value.EndsWith("`r")){''}else{$nl}
- $ini=$ini.Insert($header.Index+$header.Length,$separator+'AllowCheats='+$value+$nl)
-}else{
- $ini=[regex]::Replace($ini,'(?im)^[ \t]*AllowCheats[ \t]*=[^\r\n]*',('AllowCheats='+$value))
-}
-# CoopSession follows the launcher mode, so a normal launch never inherits a
-# previous co-op session. Only an existing key is rewritten when co-op is off.
-$coopValue=if($Coop){'1'}else{'0'}
-if($ini -match '(?im)^[ \t]*CoopSession[ \t]*=') {
- $ini=[regex]::Replace($ini,'(?im)^[ \t]*CoopSession[ \t]*=[^\r\n]*',('CoopSession='+$coopValue))
-}elseif($Coop){
- $coopHeader=[regex]::Match($ini,'(?im)^[ \t]*\[Coop\][ \t]*(?:\r\n|\n|\r|$)')
- if($coopHeader.Success){
-  $separator=if($coopHeader.Value.EndsWith("`n") -or $coopHeader.Value.EndsWith("`r")){''}else{$nl}
-  $ini=$ini.Insert($coopHeader.Index+$coopHeader.Length,$separator+'CoopSession=1'+$nl)
- }else{
-  $tail=if($ini.Length -gt 0 -and -not ($ini.EndsWith("`n") -or $ini.EndsWith("`r"))){$nl}else{''}
-  $ini=$ini+$tail+'[Coop]'+$nl+'CoopSession=1'+$nl
+# Set-IniKey <text> <section> <key> <value> [-IfPresent] returns the INI text with the key set.
+# An existing key line is rewritten in place (commented ';Key=' lines are left alone); a
+# missing key goes directly under its section header, and a missing section is appended
+# (except [ServerTools], which must exist). -IfPresent only rewrites an existing key.
+function Set-IniKey([string]$Text,[string]$Section,[string]$Key,[string]$Value,[switch]$IfPresent) {
+ $line=$Key+'='+$Value
+ $pattern='(?im)^[ \t]*'+[regex]::Escape($Key)+'[ \t]*=[^\r\n]*'
+ if($Text -match $pattern){return [regex]::Replace($Text,$pattern,{param($m) $line})}
+ if($IfPresent){return $Text}
+ $header=[regex]::Match($Text,'(?im)^[ \t]*\['+[regex]::Escape($Section)+'\][ \t]*(?:\r\n|\n|\r|$)')
+ if($header.Success){
+  $separator=if($header.Value.EndsWith("`n") -or $header.Value.EndsWith("`r")){''}else{$nl}
+  return $Text.Insert($header.Index+$header.Length,$separator+$line+$nl)
  }
+ if($Section -eq 'ServerTools'){throw 'Missing [ServerTools] section in KPCServerTools.ini.'}
+ $tail=if($Text.Length -gt 0 -and -not ($Text.EndsWith("`n") -or $Text.EndsWith("`r"))){$nl}else{''}
+ return $Text+$tail+'['+$Section+']'+$nl+$line+$nl
 }
-# Co-op: the lobby world (after completion or !abort) is the map this run starts on.
+$ini=Set-IniKey $ini 'ServerTools' 'AllowCheats' $(if($Cheats -eq 'Enabled'){'1'}else{'0'})
 if($Coop){
- $lobbyLine='CoopLobbyWorld='+$Map
- if($ini -match '(?im)^[ \t]*CoopLobbyWorld[ \t]*=') {
-  $ini=[regex]::Replace($ini,'(?im)^[ \t]*CoopLobbyWorld[ \t]*=[^\r\n]*',{param($m) $lobbyLine})
- }else{
-  $coopHeader=[regex]::Match($ini,'(?im)^[ \t]*\[Coop\][ \t]*(?:\r\n|\n|\r|$)')
-  $separator=if($coopHeader.Value.EndsWith("`n") -or $coopHeader.Value.EndsWith("`r")){''}else{$nl}
-  $ini=$ini.Insert($coopHeader.Index+$coopHeader.Length,$separator+$lobbyLine+$nl)
- }
+ # A co-op start writes every switch its mode needs, so a fresh default INI works.
+ # Campaign: !campaign needs CoopCampaign=1, and the campaign needs CoopIntro=1 (each
+ # world's intro script also loads its other scripts, e.g. the R1M1A lever's).
+ # (Missing keys go directly under [Coop], so they are set last to first.)
+ # The lobby world (after completion or !abort) is the map this run starts on.
+ $ini=Set-IniKey $ini 'Coop' 'CoopLobbyWorld' $Map
+ if($CoopMode -eq 'Campaign'){$ini=Set-IniKey $ini 'Coop' 'CoopIntro' '1'}
+ $ini=Set-IniKey $ini 'Coop' 'CoopCampaign' $(if($CoopMode -eq 'Campaign'){'1'}else{'0'})
+ $ini=Set-IniKey $ini 'Coop' 'CoopSession' '1'
+}else{
+ # A normal launch never inherits a previous co-op session; only an existing key changes.
+ $ini=Set-IniKey $ini 'Coop' 'CoopSession' '0' -IfPresent
+}
+if($TestLogging -ne 'Keep'){
+ $trace=if($TestLogging -eq 'On'){'1'}else{'0'}
+ foreach($key in 'TraceScripts','TraceTiming'){$ini=Set-IniKey $ini 'Coop' $key $trace}
 }
 [IO.File]::WriteAllText($iniPath,$ini,$iniEncoding)
 # Write to this console's input buffer, not the active desktop window.
@@ -108,7 +116,12 @@ public static class KPCConsoleStart {
 }
 '@
 Write-Host "[KPCFix Server Tools] Starting $Map; GameSpy reporting disabled."
-if ($Coop) { Write-Host '[KPCFix Co-op] EXPERIMENTAL co-op session: host types !campaign full (or !campaign earth, ...) to start, or everyone !ready and the host !start. See coop/COOP-MVP.md.' -ForegroundColor Yellow }
+if ($Coop -and $CoopMode -eq 'Campaign') {
+ Write-Host '[KPCFix Co-op] EXPERIMENTAL co-op campaign. In chat the host types !campaign full, or !campaign water / earth / air / fire / nightmare; !abort returns everyone to the lobby.' -ForegroundColor Yellow
+ Write-Host '[KPCFix Co-op] Server console: kpc_cheats 0/1, changelevel <world>.' -ForegroundColor Yellow
+} elseif ($Coop) {
+ Write-Host '[KPCFix Co-op] EXPERIMENTAL co-op test route R1M2B > R1M2C > R1M3A: everyone types !ready, then the host !start.' -ForegroundColor Yellow
+}
 $ServerCfg = 'kpc-gui-server.cfg'
 if ($Coop) {
  # Co-op: no start armour, so the realm armour pickups (R1M1A gauntlets, belt,
