@@ -17,9 +17,9 @@
 #      server-tools/SHA256SUMS-Server-Tools from the working tree;
 #   2. tools/package_release.py writes the full release ZIPs to dist/, each checked
 #      file by file against its manifest:
-#        dist/KPCFix-Server-Tools-1.0.0.zip  DLL, launcher and setup scripts, default INI, cfg,
+#        dist/KPCFix-Server-Tools-v<ver>.zip DLL, launcher and setup scripts, default INI, cfg,
 #                                            maps, legacy patch data, README, licence
-#        dist/KPCFix-Windows-1.13.zip        dinput.dll, KPCFix.ini, DDrawCompat-CLIENT.ini,
+#        dist/KPCFix-Windows-v<ver>.zip     dinput.dll, KPCFix.ini, DDrawCompat-CLIENT.ini,
 #                                            ddraw.dll, setup and check scripts, README, licences
 #      (barebones: the lists are CLIENT_FILES / SERVER_FILES in package_release.py)
 #      The client ZIP needs the pinned DDrawCompat ddraw.dll, which is not in git:
