@@ -44,4 +44,9 @@ The release ZIP holds only what you need to play. Source, build instructions and
 
 For edition fingerprints, see [compatibility notes](https://github.com/magibax/KPCFix/blob/main/COMPATIBILITY-NOTES.md). Maintainers can find the packaging and tag procedure in the [release guide](https://github.com/magibax/KPCFix/blob/main/RELEASING.md). Experimental campaign hosting is tracked in [co-op research](https://github.com/magibax/KPCFix/tree/coop/mvp-lobby/coop).
 
-Future graphics investigations are tracked separately in the [graphics research roadmap](https://github.com/magibax/KPCFix/blob/main/GRAPHICS-RESEARCH.md).
+## Graphics research
+
+- Engine performance optimisation: Inspect the engine for opportunities to improve FPS, reduce rendering overhead and optimise performance without introducing instability.
+- Anisotropic filtering & antialiasing: Investigate enabling or improving anisotropic filtering and antialiasing, including within the game's menus.
+- Graphics configuration: Investigate c_GlobalDetail, GibDetail, LodOffset and other graphics settings to understand their behaviour, performance impact and sensible defaults for modern hardware.
+- Graphics fidelity improvements: Investigate engine-level methods to improve rendering quality, texture filtering, model detail, draw distances and other visual effects.
