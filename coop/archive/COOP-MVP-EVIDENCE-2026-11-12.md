@@ -13,7 +13,7 @@
   subtitles, camera and the window smash no longer run ahead of the narration
   (`CoopScriptClock`, [section D](#d-script-clock-cadence-narration-versus-subtitles)).
 * **Open after that test, fixes built but NOT yet tested with clients** (DLL `1b8816cb…`, commit
-  `aa9949c`; emulator- and native-server-tested only):
+  `5a07895`; emulator- and native-server-tested only):
   * narrator cut off after "…will be a useful ally for you": a server sound timer on engine
     time ([section E](#e-narrator-cut-off-after-will-be-a-useful-ally-for-you-sound-timer));
   * no enemy health bars: the server never sends them in multiplayer
@@ -23,7 +23,7 @@
   * new request, the stock scoreboard from `!start` until the cinematic
     ([section H](#h-stock-scoreboard-from-start-until-the-cinematic-coopstartscoreboard)).
   * Resume from [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md).
-* **Campaign (2026-11-11, later):** the opt-in `CoopCampaign=1` (commit `1524fb6`, DLL
+* **Campaign (2026-11-11, later):** the opt-in `CoopCampaign=1` (commit `abeebbb`, DLL
   `009eacd6…`) replaces the fixed route with the 48-world WORLDORDER graph and host realm
   selection. It is emulator- and native-server-tested only. See
   [CAMPAIGN-ARCHITECTURE.md](CAMPAIGN-ARCHITECTURE.md) and
@@ -396,7 +396,7 @@ Confirmed by static analysis of the stock 1.13 `object.lto` (`3a03f879…`) and 
 | Client OnEnterWorld | vtable slot 8, `0xc7d20` | Closes the screen only if state ≠ 5, so not after a level change |
 | Client `0x1a` MID_PLAYER_ADDED | `0xcb26f` | In multiplayer: state 5 → 1. Then, if the screen is none or 2 **and** client interface `vtbl+0x230` returns non-NULL (inferred: `GetClientObject`), it closes the screen (`0xad3c0`) and calls `0xc6f30(0,0,0)`. The server sends it from its client-enter code (`0xfbe20`, callers `0xfeb86`/`0xfebf0`/`0xfec35`). This likely arrives before the client object exists, which would explain the second appearance (inference) |
 
-**Fix (build `565dec76…`, commit `c5ce65a`; emulator-tested and native server smoke-tested; NOT yet tested with a client):** with the new default
+**Fix (build `565dec76…`, commit `8917a76`; emulator-tested and native server smoke-tested; NOT yet tested with a client):** with the new default
 `[Coop] CoopIntermission=0`, the session no longer calls `0x100760`. It sets the shell's native
 pending-NextLevel flag `+0x1ae9`, which the server update consumes on the next frame through
 the hooked NextLevel. This is the native post-intermission path without the scoreboard
@@ -427,7 +427,7 @@ native intermission is already active. `CoopIntermission=1` restores the stock b
 * After `!start`, the reloading client receives it while still loading and hears about one
   bar. That the client's own world switch then stops it is still an inference.
 
-**Fix: `[Coop] CoopMusic=1` (default in sessions; commits `db7649c`, `872de1e`, DLL
+**Fix: `[Coop] CoopMusic=1` (default in sessions; commits `853e65c`, `a225ef6`, DLL
 `e17c150f…`):**
 * When `WorldProperties` creates the event, the session snapshots its fields: `+0x108` song,
   `+0x188` play, `+0x189` intensity, `+0x18a` groove, `+0x18b` transition, `+0x18c` fadeout.
@@ -481,7 +481,7 @@ loads further level scripts, plays four camera paths with subtitles and fog fade
 intensity 3` at 47.7 s, triggers `spawn6`, briefly disables AI, and releases at 51.7 s
 (letterbox off, user input on, camera reset). Its ending script is `cathedral1astart.scr`.
 
-**Implementation (commit `23c68f4`, DLL `13ca1d0a…`):**
+**Implementation (commit `219d461`, DLL `13ca1d0a…`):**
 * `[Coop] CoopIntro=1` (default 0) arms the intro when the R1M3A route world loads in a started
   session. The proof-of-concept allowlist is R1M3A only.
 * The session stays in `INTRO_PENDING` until every present member has spawned in the new epoch,
@@ -642,7 +642,7 @@ about 1.5 s before the smash.
   only when the intro is aborted (`0xc5499` → `0xc5340`), not on normal completion
   (`0xc569b` → `0xc56a6`). The live log shows the normal timeline to 53 s and "finished".
 
-**Fix `[Coop] CoopSoundClock`** (default = `CoopScriptClock`, commit `aa9949c`):
+**Fix `[Coop] CoopSoundClock`** (default = `CoopScriptClock`, commit `5a07895`):
 * the call `server.dll 0x2a1fc` (`e8 0a fd ff ff`) goes to the proxy;
 * the proxy forwards `min(engine dt, unpaid wall time)` to `0x29f0b`, with its own instance of
   the script-clock governor (unit-tested arithmetic);
@@ -817,7 +817,7 @@ profiles).
 | Emulator, compiled DLL: `!start` sends `0x48` to both clients, change held, shown again after each spawn, `0x69` to both before `c5340`; nothing on natural exits | PASS |
 | What the players see | **NOT TESTED** |
 
-### I. Two-PC test of `bc6ecc1` (server `641ca756…`, client `66774c29…`) and the fixes
+### I. Two-PC test of `035ce17` (server `641ca756…`, client `66774c29…`) and the fixes
 
 **User report** (desktop host + laptop, campaign mode):
 
@@ -825,7 +825,7 @@ profiles).
 | --- | --- | --- | --- |
 | 1 | Only the host saw the loading PCX; the laptop loaded with no picture | **Not confirmed.** Most likely the laptop still ran the earlier `dinput.dll` (`3d702051…`, no loading art), or a German/Italian `cshell.dll`, where loading art is not verified and is logged as such. Nothing was logged per load | Each load now logs `Loading world: <world> (picture shown \| stock: <reason>)`; install check on both PCs (`Startup client edits`, `Campaign loading art`) |
 | 2 | During the 5 s picture the player was already in the world, stuck and attackable | The minimum only kept the picture up. The server creates the player on the client's reply to `0x17` (shell `0xbea70`: `0xbeadc` → `0xbf300` 0x17, `0xbeae3` → `0xbf400` 0x15 INITVARS), which was sent right after the load | `CampaignLoadingHoldSpawn=1`: both replies held while the picture is under its minimum, sent in order from the draw hook (minimum / closed / replaced / 30 s cap). The server then spawns the player when the picture ends |
-| 3 | Audio after minimise better but not exact | Pause skipped since `bc6ecc1`, but streamed narration starves while the window procedure restarts the renderer, so it falls behind | `ResyncAudioOnFocus=1`: 300 ms after regain, the per-frame sound update (`0x13bcd`) runs PauseAll `0x74c90` + ResumeAll `0x74ce0`. The update then restarts every instance at duration − remaining (`0x70db0`), i.e. at its real-time position. (The other PauseAll/ResumeAll pair at `0x137d8`/`0x137df` is the `SoundEnable` console variable, not focus.) |
+| 3 | Audio after minimise better but not exact | Pause skipped since `035ce17`, but streamed narration starves while the window procedure restarts the renderer, so it falls behind | `ResyncAudioOnFocus=1`: 300 ms after regain, the per-frame sound update (`0x13bcd`) runs PauseAll `0x74c90` + ResumeAll `0x74ce0`. The update then restarts every instance at duration − remaining (`0x70db0`), i.e. at its real-time position. (The other PauseAll/ResumeAll pair at `0x137d8`/`0x137df` is the `SoundEnable` console variable, not focus.) |
 | 4 | `!campaign earth realm fire` always started R1M0 | The parser took at most two argument words; a third made the whole line "not a command" (silently), so `!start` ran the default full route | Simpler commands that start at once: `!campaign full` or `!campaign <realm>`, which plays that realm onward to the end. Unknown input gets the help reply |
 | 5 | `!abort` needed `CoopCampaign=1`; returned to R1M0 | Gate in the command; the lobby came from `CoopLobbyWorld=R1M0` (handoff recipe), otherwise `route[0]` | Gate removed; the default lobby is R1M2B |
 | 6 | R1M1A used the map's deathmatch starts | R1M1A has 9 GameType-1 starts, so the multiplayer strategy (`f12be` → `f1070`) succeeded; R1M2B has none and always fell back to the single-player start (`f08a0` with game type 0). Path 2 `f15d0` calls `f08a0` with the live game type (`0xf15f2`) | `CoopSinglePlayerStart=1`: `f12be` returns none (the engine's own fallback runs), `f15f2` runs `f08a0` with game type 0, restored |
@@ -844,7 +844,7 @@ profiles).
 
 | Observed | Cause | Fix (server `414ae75c…`, client `bee32234…`) |
 | --- | --- | --- |
-| First connect hung on "Connecting…" with R1M2B's water ambience | The spawn hold was released only from the shell's screen draw, which the menu's connect dialog never reaches | Released every frame from the client update (`0x13876` → `0x13bb0`); in the pushed client `0215f16d` (commit `7c09079`) |
+| First connect hung on "Connecting…" with R1M2B's water ambience | The spawn hold was released only from the shell's screen draw, which the menu's connect dialog never reaches | Released every frame from the client update (`0x13876` → `0x13bb0`); in the pushed client `0215f16d` (commit `8443e81`) |
 | R1M0: after the picture the player stood in the room, then Madam Raven started after a pause | Intro settle 6000 ms after the last spawn (campaign default from when the picture did not hold the spawn) | Campaign settle default 500 ms |
 | R1M1A: "Intro skipped", no opening sequence | Only R?M0 and R1M3A were allowed to play their `starting_cinematic` | `CoopIntroAll` defaults to on in campaign mode |
 | R1M1A lever does nothing (issue 8) | **Confirmed by script content:** `r1m1a_intro.scr` starts with `scriptload` of `r1m1a_bigdoor.scr` (and the gauntlets, doorbust, doorknock, zero, microphone and victory scripts). With the intro skipped they were never loaded, so `c5340` refused them | Fixed by playing the intro (above); to be confirmed with `TraceScripts=1` |

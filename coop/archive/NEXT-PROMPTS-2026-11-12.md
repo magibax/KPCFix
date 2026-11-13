@@ -1,4 +1,4 @@
-# Next session prompts (playtest 2026-11-12, after commit `6a564a1`)
+# Next session prompts (playtest 2026-11-12, after commit `53b9751`)
 
 Two independent sessions: **A (client, `source/`, `dinput.dll`)** and **B (server, `server-tools/`,
 `KPCServerTools.dll`)**. They touch different DLLs and can run in parallel on branch `coop/mvp-lobby`
@@ -8,7 +8,7 @@ expected bytes; every change gets tests (client: `source/test_*.py` + `audit_sit
 `suite-coop.sh`; server: `unit-coop.sh`, `matrix-coop.sh`). Install for testing per
 [UPGRADE-TEST-INSTALL.md](../UPGRADE-TEST-INSTALL.md). Commit on the branch; don't push.
 
-**Status:** Prompt B is done (`f37135a`, Server Tools `7dbba5eb`, installed; results go in the
+**Status:** Prompt B is done (`5c8363f`, Server Tools `7dbba5eb`, installed; results go in the
 handoff's test plan). Prompt A runs in worktree branch `claude/zealous-cori-401c64`.
 
 ---
@@ -53,7 +53,7 @@ Record findings in the playtest table of `coop/NEXT-SESSION-HANDOFF.md`. Items, 
 
 1. **Non-hosts don't trigger monster spawners / events.** In R4M1A the spawner room is triggered by
    walking through a threshold; as a non-host nothing happened, as the host it fired. Cause:
-   `CoopHostSequences` (row 3, `9e7103e`) keeps every `CTriggerCommand` armed for the host only.
+   `CoopHostSequences` (row 3, `71fb1df`) keeps every `CTriggerCommand` armed for the host only.
    Only triggers that lead to a level change (exit, victory/ending script → `trigger_generic CExitTrigger*`)
    should be host-gated. Restrict the gate to triggers whose command list (or the script it starts)
    reaches an exit, and let every player fire the rest. `proxy.c` already has `coop_commands_reach_exit`

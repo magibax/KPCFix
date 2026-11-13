@@ -27,7 +27,7 @@ Tags: **[C]** confirmed by disassembly or data, **[I]** inferred.
 | Milestone | State | Evidence |
 | --- | --- | --- |
 | M0 inventory: world order, transitions, R?M0 intros, Nightmare, loading backgrounds | **DONE** | [CAMPAIGN-MAP-INVENTORY.md](CAMPAIGN-MAP-INVENTORY.md); `check_campaign_table.py` PASS against the installed REZ |
-| M1 campaign graph, host selection, completion/abort to the lobby (`CoopCampaign=1`) | **IMPLEMENTED** (commit `1524fb6`, DLL `009eacd6…`) | unit tests (64/32-bit), emulator 34/34, native server smoke. **No client has played it** |
+| M1 campaign graph, host selection, completion/abort to the lobby (`CoopCampaign=1`) | **IMPLEMENTED** (commit `abeebbb`, DLL `009eacd6…`) | unit tests (64/32-bit), emulator 34/34, native server smoke. **No client has played it** |
 | M2 loading screen and client-ready ACK | **RESEARCHED, designed below, not implemented** | static RE only |
 | M3 15 s wall-clock hold, gameplay freeze, music pre-roll, realm-intro entry | **RESEARCHED, designed below, not implemented**. The R?M0 intros are already allowed (M1) | static RE only |
 | M4 realm-by-realm gameplay validation | NOT STARTED (needs two-PC play) | — |

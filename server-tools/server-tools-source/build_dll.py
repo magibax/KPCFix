@@ -113,25 +113,25 @@ previous_proxies=[
     # coop-session-v1 262b6ead: native Windows server smoke and live one-client
     # lobby/!start/!next test on 2026-11-11 (C:\KPCTest\smoke1).
     '262b6ead146e2ca33639d5ecf6435e67b9e42033de7fa1aae57bc06891bc0f5d',
-    # coop-session-v2 0018a3f8 (9b01c2f): live natural R1M2B -> R1M2C and
+    # coop-session-v2 0018a3f8 (c681e38): live natural R1M2B -> R1M2C and
     # R1M2C mirror -> R1M3A transitions with one client on 2026-11-11.
     '0018a3f8b655bb616cf07be8737378716855365045b643946ee9db97ec143557',
-    # coop-session-v2 565dec76 (c5ce65a): live scoreboard-free natural
+    # coop-session-v2 565dec76 (8917a76): live scoreboard-free natural
     # transitions R1M2B -> R1M2C -> R1M3A with one client on 2026-11-11.
     '565dec766967ceede2a010969a9f851f2232b2e7d213f2d2878f887c18c67758',
-    # coop-session-v2 e17c150f (872de1e): live per-player DirectMusic, also
+    # coop-session-v2 e17c150f (a225ef6): live per-player DirectMusic, also
     # on a second laptop joining an active server (2026-11-11).
     'e17c150ff920aa9865fe06c8e0109bad9426215cfb1fdf943115af67be7dbf27',
-    # coop-session-v2 13ca1d0a (23c68f4): live two-client R1M3A intro
+    # coop-session-v2 13ca1d0a (219d461): live two-client R1M3A intro
     # (desktop + laptop, 2026-11-11); narration trailed the script clock.
     '13ca1d0a7c17986dcbdc3f360bf82f92084584864824b623854fb57b1f10364b',
-    # coop-session-v2 e86bb352 (5843fa9): CoopScriptClock; desktop + laptop
+    # coop-session-v2 e86bb352 (2b76ef4): CoopScriptClock; desktop + laptop
     # confirmed the subtitle/narration cadence fix (2026-11-11).
     'e86bb352df4a726c2a6c0d689df93ce39414cd5cc8206b959892add58f2e257d',
-    # coop-session-v2 1b8816cb (aa9949c): pass 2 (sound clock, health bars,
+    # coop-session-v2 1b8816cb (5a07895): pass 2 (sound clock, health bars,
     # spawners, start scoreboard); native server smoke only, installed in smoke3.
     '1b8816cbeafb48ca9e058bda48363847c807d47d1982bd17a4eb40615097f523',
-    # coop-session-v2 009eacd6 (1524fb6): campaign graph; the user played
+    # coop-session-v2 009eacd6 (abeebbb): campaign graph; the user played
     # the realm intros (R1M0 intro exit to R1M1A logged in smoke3), 2026-11-11.
     '009eacd65ebc03627389a0bcac901193e33393b3188d1445d70d3d130546ab71',
 ]

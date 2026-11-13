@@ -12,23 +12,23 @@ items to "Live-confirmed").
 
 ## Where things stand
 
-* **Branch:** `coop/mvp-lobby` (local commits since `6966363` are not pushed; `main`
+* **Branch:** `coop/mvp-lobby` (local commits since `417876e` are not pushed; `main`
   untouched).
-  * `f37135a` Server Tools: spawner radius from the nearest player, cheat keybinds,
+  * `5c8363f` Server Tools: spawner radius from the nearest player, cheat keybinds,
     inventory persistence, pickup respawn, powerup re-send, `!kill` `!all` `!class`
     `!changelevel` (prompt B of [archive/NEXT-PROMPTS-2026-11-12.md](archive/NEXT-PROMPTS-2026-11-12.md)).
-  * `d00dee5` and the following docs commit: findings, install, this handoff, `CLAUDE.md`.
+  * `2539a18` and the following docs commit: findings, install, this handoff, `CLAUDE.md`.
   * Prompt A (client: Audio checkbox state and position) runs in its own session on
     worktree branch `claude/zealous-cori-401c64` (`.claude/worktrees/zealous-cori-401c64`),
-    started at `6966363`. Not merged here. Its build needs a new laptop package. Both
+    started at `417876e`. Not merged here. Its build needs a new laptop package. Both
     branches edit this file: expect a small merge conflict.
 * **Installed** (desktop `C:\Games\Psycho` = game client + host + dedicated server;
   `C:\KPCTest\smoke1\Psycho` = disposable smoke server):
 
   | Part | Hash | Commit | Backup of what it replaced |
   | --- | --- | --- | --- |
-  | Server Tools `server.dll` | `7dbba5eb` | `f37135a` | `C:\KPCTest\backup\games-psycho-20261112-before-7dbba5eb` (previous `035f23a2` files; the moved proxy as `server.dll.active-moved`); smoke1: `C:\KPCTest\backup\smoke1-20261112-before-7dbba5eb` |
-  | Client `dinput.dll` | `2ab53bd7` | `2b50501` | `C:\KPCTest\backup\games-psycho-20261112-before-2ab53bd7` |
+  | Server Tools `server.dll` | `7dbba5eb` | `5c8363f` | `C:\KPCTest\backup\games-psycho-20261112-before-7dbba5eb` (previous `035f23a2` files; the moved proxy as `server.dll.active-moved`); smoke1: `C:\KPCTest\backup\smoke1-20261112-before-7dbba5eb` |
+  | Client `dinput.dll` | `2ab53bd7` | `ea4d168` | `C:\KPCTest\backup\games-psycho-20261112-before-2ab53bd7` |
 
   **Update, 2026-11-12 23:14 (desktop only; uncommitted working tree):** `tools/install_game.py`
   installed Server Tools `7d01059a` as `server.dll` and client `cf896d63` as `dinput.dll`, and added
@@ -180,7 +180,7 @@ static analysis. **fixed** = committed, unit and emulator tested, not yet two-PC
 
 | # | Report | Cause | Status |
 | --- | --- | --- | --- |
-| 1 | Player 2 teleported in front of the camera when the host took an armour piece; again with the demon gauntlets | `ee900` (IsPlayer) takes a *pointer* to the HOBJECT; the activator hook stored the pointer, so it never matched and every personal `player` command went to the first player (log: `-> first player` everywhere). The second report was still on the old DLL `9ff661bf` | **fixed** in `9e7103e` (cutscene, camera and invulnerability for everyone; teleport/animate/lookat only for the picker) |
+| 1 | Player 2 teleported in front of the camera when the host took an armour piece; again with the demon gauntlets | `ee900` (IsPlayer) takes a *pointer* to the HOBJECT; the activator hook stored the pointer, so it never matched and every personal `player` command went to the first player (log: `-> first player` everywhere). The second report was still on the old DLL `9ff661bf` | **fixed** in `71fb1df` (cutscene, camera and invulnerability for everyone; teleport/animate/lookat only for the picker) |
 | 2 | Unsheathe sound plays at the touch, not near the end of the cutscene | armour touch `c8340`: multiplayer sets the give flag `0x1013e1b8` to 1 (`c8348`), single player uses ReallyGiveArmor (false) and leaves it to the script's `giveitem` | **fixed** (`c8348` gate reads 0 with CoopScriptEvents; armour shared only when actually given at the touch) |
 | 3 | Non-hosts start level-ending sequences (R1M1A victory). Follow-up: in R4M1A the spawner room did nothing for a non-host | walk-in `CTriggerCommand1` → `r1m1a_victory.scr` → `trigger_generic CExitTrigger0`; only the exit itself was host-gated, so the cutscene played and then the exit was refused | **fixed** for `CTriggerCommand` (`CoopHostSequences`): the trigger stays armed for the host. Switches/levers (`CSwitch` `44dd6`) and other command-list owners are not gated yet. The R4M1A report was **not** this gate (the gate already uses `coop_commands_reach_exit`; no `sequence-refused` line in the log): see row 22 |
 | 4 | After a refused non-host mirror click the host's click did nothing | mirror = `CModelDeco` use command `trigger_generic Gubba`; the deco marks itself used (`+0x1a1`) before the exit refusal | **fixed** (deco re-armed when its exit is refused) |
@@ -192,7 +192,7 @@ static analysis. **fixed** = committed, unit and emulator tested, not yet two-PC
 | 10 | Secrets/collectables HUD shows the deathmatch player list | cshell stats panel (vtable `0xff3c0`, draw `0xa4150`): `0xa41c8` calls the multiplayer test `0xcab80`; multiplayer jumps to the player list `0xa42cd`, otherwise it draws seven counters (`0xa06e0`) from globals `0x201c4cf0`–`0x201c4d08`. Their writer is not located (no direct stores; filled through a pointer or copy) | open. Patch plan: replace the `0xa41c8` call with "multiplayer and not a campaign world" (`kpc_campaign_world`, loading.c) once the counters are known to be filled in co-op (likely needs the server to send the secret/collectable message to every member) |
 | 11 | Golden mirror invisible in the R1M1B lever cutscene | `camera_path` moves only the first player's server view position (`c2c9c` → `ef920`), so other clients are not sent what the camera sees | **fixed (probable cause)**: view position applied to every player |
 | 12 | Breakables missing on one client until minimise/restore (doorway in R1M1A) | unknown, client side (object creation during the spawn hold?) | open |
-| 13 | Chat typing triggers bound keys (`I` invulnerability) | the `OnCommandOn` filter (6d59bfe) was active in the playtest, but Invuln never goes through it: stock cshell Invuln (`0xc3a00`) is `ret`; the **server** polls `IsCommandOn(client, 93)` (object.lto `0xef1b4`, NoTarget 91 at `0xef204`) from the command bits client.exe sends every update | **fixed** in the client: client.exe's command update reads input-enabled (`0x23c84`, `[cm+0x1014]`) as 0 while the message editor types, so the frame's command buffer is cleared (no movement, fire or cheat reaches shell or server). `test_console.py` |
+| 13 | Chat typing triggers bound keys (`I` invulnerability) | the `OnCommandOn` filter (6d91b5b) was active in the playtest, but Invuln never goes through it: stock cshell Invuln (`0xc3a00`) is `ret`; the **server** polls `IsCommandOn(client, 93)` (object.lto `0xef1b4`, NoTarget 91 at `0xef204`) from the command bits client.exe sends every update | **fixed** in the client: client.exe's command update reads input-enabled (`0x23c84`, `[cm+0x1014]`) as 0 while the message editor types, so the frame's command buffer is cleared (no movement, fire or cheat reaches shell or server). `test_console.py` |
 | 14 | Ammo: pickups for everyone, consumption personal | — | **fixed**: received amount shared per pickup |
 | 15 | Keep audio when minimised, always; option in the Audio menu (spare space) | sound pause `0x6d5c`/`0x6cdb`; music pause/resume in OnEvent 4/3 (cshell `0xc80e2` → `0xd9ad0`, `0xc80ba` → `0xd9b00`); local server paused through the active-window test `0x157c5` (stock `alwaysfocused` overrides only that). Pausing only the audio in single player would let narration run ahead of the paused script, so nothing pauses | **fixed**: with `KeepAudioOnFocusLoss` on (console variable, INI default 1) nothing pauses in any mode; Setup > Audio > "Keep Running When Minimised" checkbox below Sound Quality. The Audio screen's 8-widget array is full (`+0x64`..`+0x80`, selection `+0x84`, fixed index tables `0x109d18`), so the box is a KPCFix-owned instance of the game's checkbox class (`0xd060`, images `0xd1b0`) driven from the screen's vtable slots (`0xfd264` +8..+0x18); mouse only, no keyboard selection. `test_focus.py`. **Needs an in-game look** (position, label font, click) |
 | 16 | Lobby: random deathmatch map with its own spawn points | — | **fixed**: launcher `-Map random` → PM01–PM10, `CoopLobbyWorld`; stock spawns in deathmatch worlds |
