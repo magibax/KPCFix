@@ -2,7 +2,7 @@
 """Update a KPCFix test install (a real game folder) from this checkout.
 
 Follows coop/UPGRADE-TEST-INSTALL.md:
-  * refuses to run while client.exe or dedicated.exe is running;
+  * refuses to run while client.exe, dedicated.exe or Psycho.exe is running;
   * backs up every file it is about to change;
   * copies only files that differ;
   * never touches original game files, server.original.dll or the user's
@@ -15,11 +15,11 @@ version has and the installed file lacks are added (with their comment lines);
 every existing line and value stays as it is.
 
 Server (--server): the files of the Server Tools release package are copied to
-the game folder (source and tests are not). The active server.dll is replaced by the new
-KPCServerTools.dll only when it is a Server Tools proxy already (it carries the
-"[KPCFix Server Tools]" marker, and server.original.dll exists and is not a
-proxy). Otherwise it is left alone and you are told to run
-Setup-KPCServerTools.cmd.
+the game folder (source and tests are not). Server Tools run as winmm.dll beside the
+unchanged server.dll: winmm.dll is replaced by the new KPCServerTools.dll only when
+it is a Server Tools build already (it carries the "[KPCFix Server Tools]" marker).
+An earlier install (proxy as server.dll) or a folder without Server Tools is left
+alone and you are told to run Setup-KPCServerTools.cmd.
 """
 import argparse
 import datetime
@@ -47,7 +47,7 @@ def running_game():
         out = subprocess.run(['tasklist', '/FO', 'CSV', '/NH'], capture_output=True, text=True).stdout.lower()
     except OSError:
         return []
-    return [name for name in ('client.exe', 'dedicated.exe') if f'"{name}"' in out]
+    return [name for name in ('client.exe', 'dedicated.exe', 'psycho.exe') if f'"{name}"' in out]
 
 
 # ---- INI merge: add what is missing, keep everything that is there ----------
@@ -171,17 +171,20 @@ def plan(game, client, server):
         for name in SERVER_FILES:
             copy_if_differs(ROOT / 'server-tools' / name, game / name, 'server')
         new_dll = ROOT / 'server-tools' / 'KPCServerTools.dll'
-        active, original = game / 'server.dll', game / 'server.original.dll'
-        if not active.is_file() or not original.is_file():
-            notes.append('server.dll NOT updated: no active server.dll or no server.original.dll; run Setup-KPCServerTools.cmd in the game folder.')
-        elif sha(active) == sha(new_dll):
+        # Server Tools load as winmm.dll beside the unchanged server.dll. An
+        # earlier install (proxy as server.dll, engine as server.original.dll)
+        # is moved over only by Setup-KPCServerTools.cmd.
+        loader, active = game / 'winmm.dll', game / 'server.dll'
+        if is_proxy(active):
+            notes.append('winmm.dll NOT installed: server.dll is an earlier Server Tools install; run Setup-KPCServerTools.cmd in the game folder to move it to winmm.dll.')
+        elif not loader.is_file():
+            notes.append('winmm.dll NOT installed: Server Tools are not set up in this folder; run Setup-KPCServerTools.cmd in the game folder.')
+        elif sha(loader) == sha(new_dll):
             pass
-        elif sha(active) == sha(original):
-            notes.append('server.dll NOT updated: it is the official engine; run Setup-KPCServerTools.cmd in the game folder.')
-        elif not is_proxy(active) or is_proxy(original):
-            notes.append('server.dll NOT updated: the active server.dll is not a Server Tools build (or server.original.dll is one); run Setup-KPCServerTools.cmd.')
+        elif not is_proxy(loader):
+            notes.append('winmm.dll NOT updated: the winmm.dll in the game folder is not a Server Tools build.')
         else:
-            copies.append((new_dll, active, 'server proxy (active server.dll)'))
+            copies.append((new_dll, loader, 'Server Tools (winmm.dll)'))
     return copies, merges, notes
 
 

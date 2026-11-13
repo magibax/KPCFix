@@ -91,14 +91,30 @@ def window_handler(u, at, size, user):
     handled.append((u.reg_read(x.UC_X86_REG_ECX),) + tuple(read(u, sp + 4 + 4 * i) for i in range(3)))
     u.reg_write(x.UC_X86_REG_EIP, read(u, sp)); u.reg_write(x.UC_X86_REG_ESP, sp + 16)
 rig.u.hook_add(uc.UC_HOOK_CODE, window_handler, begin=SHELLBASE + 0x5bd30, end=SHELLBASE + 0x5bd30)
+# HideBrokenWindow: after the shards, FLAG_VISIBLE is cleared through the client
+# API [cshell+0x1c8dfc] +0x290 GetObjectFlags / +0x294 SetObjectFlags (cdecl).
+API, APICODE, flag_calls = 0x5ba000, 0x5bb000, []
+def api_stub(slot, nargs, result):
+    def run(u, at, size, user):
+        sp = u.reg_read(x.UC_X86_REG_ESP)
+        flag_calls.append((slot,) + tuple(read(u, sp + 4 + 4 * i) for i in range(nargs)))
+        u.reg_write(x.UC_X86_REG_EAX, result); u.reg_write(x.UC_X86_REG_EIP, read(u, sp)); u.reg_write(x.UC_X86_REG_ESP, sp + 4)
+    rig.u.mem_write(API + slot, pack(APICODE + slot)); rig.u.mem_write(APICODE + slot, bytes([0xc3]))
+    rig.u.hook_add(uc.UC_HOOK_CODE, run, begin=APICODE + slot, end=APICODE + slot)
+api_stub(0x290, 1, 0x2001 | 0x40); api_stub(0x294, 2, 0)
+saved_api = read(rig.u, SHELLBASE + 0x1c8dfc); rig.u.mem_write(SHELLBASE + 0x1c8dfc, pack(API))
 REF, MANAGER = 0x5b9000, SHELLBASE + 0x19e6c0
 rig.u.mem_write(REF, pack(0x1234))
 rig.invoke_address(rig.dllbase + syms['_kpc_window_break'], (REF, 0x4b, 0x777), this=MANAGER)
 rig.u.mem_write(REF, pack(0))
 rig.invoke_address(rig.dllbase + syms['_kpc_window_break'], (REF, 0x4b, 0x777), this=MANAGER)
 assert handled == [(MANAGER, REF, 0x4b, 0x777)] * 2, handled
+assert flag_calls == [(0x290, 0x1234), (0x294, 0x1234, 0x2040)], flag_calls   # only the present window, visible bit cleared
+rig.u.mem_write(SHELLBASE + 0x1c8dfc, pack(saved_api))
 assert b'Window break message 1: window object present' in bytes(rig.logs)
 assert b'Window break message 2: window object MISSING' in bytes(rig.logs)
 rigw = Rig(settings={'Multiplayer.LogWindowBreaks': 0}); rigw.factory(); assert not rigw.messages
+assert read(rigw.u, SHELLBASE + 0xfe184) == rigw.dllbase + syms['_kpc_window_break']   # still hides
+rigw = Rig(settings={'Multiplayer.LogWindowBreaks': 0, 'Multiplayer.HideBrokenWindow': 0}); rigw.factory(); assert not rigw.messages
 assert read(rigw.u, SHELLBASE + 0xfe184) == SHELLBASE + 0x5bd30
-print(args.fixtures.name, 'passed console key: toggle character dropped within 250 ms, later characters kept, chat typing drops actions and clears the command state, window-break log, disabled')
+print(args.fixtures.name, 'passed console key: toggle character dropped within 250 ms, later characters kept, chat typing drops actions and clears the command state, window-break log, broken window hidden at once, disabled')

@@ -21,6 +21,7 @@ static const ShellProfile shell_profiles[]={
             .audio_vtable = 0xfd264, .audio_init = 0x7360, .audio_term = 0x7cc0, .audio_draw = 0x7d00,
             .audio_move = 0x7d40, .audio_event = 0x7e70, .checkbox_ctor = 0xd060, .checkbox_images = 0xd1b0,
             .checkbox_checked = 0x109de8, .checkbox_unchecked = 0x109e04,
+            .checkbox_hit_box = 0xd370, .checkbox_hit_label = 0xd400,
             .window_break_slot = 0xfe184, .window_break = 0x5bd30,
             .command_slot = 0xff724, .command_on = 0xc9d80, .chat_editor = 0x8c, .chat_editing = 0x12ed,
             .camera_set_call = 0xab104, .camera_set = 0xa8f30, .camera_global = 0x1c49dc,

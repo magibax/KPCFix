@@ -69,7 +69,13 @@ static void test_respawn_policy(void){
  /* Progression items and markers never do. */
  assert(!coop_item_respawnable(0x19)&&!coop_item_respawnable(0x1c)&&!coop_item_respawnable(0x23));
  assert(!coop_item_respawnable(0x24)&&!coop_item_respawnable(0x25));
- for(id=0x26;id<=0x2e;id++)assert(!coop_item_respawnable(id));
+ assert(!coop_item_respawnable(0x26)&&!coop_item_respawnable(0x2d)&&!coop_item_respawnable(0x2e));
+ /* Armour pieces ("armor shards" in the game) respawn; a respawned one is picked up quietly. */
+ for(id=0x27;id<=0x2c;id++)assert(coop_item_respawnable(id));
+ assert(coop_armour_quiet(0x29,0,0,0)==0);                     /* first pickup: stock cutscene */
+ assert(coop_armour_quiet(0x29,1,0,0)==1);                     /* respawned, player lacks it */
+ assert(coop_armour_quiet(0x29,1,1,0)==2&&coop_armour_quiet(0x29,1,0,1)==2);   /* has it / dead */
+ assert(coop_armour_quiet(0x1e,1,0,0)==0);                     /* not an armour piece */
  assert(!coop_item_respawnable(0)&&!coop_item_respawnable(1)&&!coop_item_respawnable(0xf)&&!coop_item_respawnable(0x10));
  assert(!coop_item_respawnable(0x15)&&!coop_item_respawnable(0x16)&&!coop_item_respawnable(0x100));
 }
@@ -110,13 +116,25 @@ static void test_class_swap(void){
  assert(coop_inv_class_swap(B(5),0,0)==0&&coop_inv_class_swap(B(5),c,4)==0);
 #undef B
 }
+static void test_ammo_excess(void){
+ /* RT3: 197 saved; the restore's weapon gives pushed it to 200 -> take 3 back. */
+ CoopInvState saved;unsigned int base[4]={0,0,0,0},now[4]={200,200,50,0},out[4];
+ memset(&saved,0,sizeof saved);saved.ammo[0]=197;saved.ammo[1]=200;saved.ammo[2]=120;saved.ammo[3]=0;
+ coop_inv_ammo_excess(&saved,base,now,out);
+ assert(out[0]==3&&out[1]==0&&out[2]==0&&out[3]==0);   /* below saved: given later, never taken */
+ /* The spawn's own start ammo stays: base above saved. */
+ base[3]=40;now[3]=90;coop_inv_ammo_excess(&saved,base,now,out);assert(out[3]==50);
+ now[3]=30;coop_inv_ammo_excess(&saved,base,now,out);assert(out[3]==0);
+ /* No snapshot: only the base counts. */
+ coop_inv_ammo_excess(0,base,now,out);assert(out[0]==200&&out[3]==0);
+}
 static void test_fresh_start(void){
  /* A start from the lobby forgets the saved inventory; every other change keeps it. */
  assert(!coop_inv_keep_through_change(1));
  assert(coop_inv_keep_through_change(0));
 }
 int main(void){
- test_plan();test_classes();test_respawn_policy();test_spot();test_class_swap();test_fresh_start();
- printf("PASS coop inventory: restore plan order and growth only, classes, respawnable items, spot test, class-change weapons, fresh start\n");
+ test_plan();test_classes();test_respawn_policy();test_spot();test_class_swap();test_fresh_start();test_ammo_excess();
+ printf("PASS coop inventory: restore plan order and growth only, classes, respawnable items, spot test, class-change weapons, fresh start, ammo trim after weapon gives\n");
  return 0;
 }

@@ -63,9 +63,21 @@ runtime_broadcast:
  pop ebp
  ret
 '''%(symbols['console_line'],symbols['broadcast_only']))
+# winmm.dll forwarding (proxy.c winmm_attach): one jump stub per named export
+# of the system winmm.dll, through a slot table filled at load. A name the
+# system DLL lacks keeps winmm_missing (returns 0).
+winmm=[v.strip() for v in (root/'winmm_exports.txt').read_text().splitlines() if v.strip() and not v.startswith('#')]
+assert len(winmm)==len(set(winmm)) and all(v.isidentifier() for v in winmm)
+w='.intel_syntax noprefix\n.code32\n.text\n.global winmm_missing\nwinmm_missing:\n xor eax,eax\n ret\n'
+for i,_ in enumerate(winmm):w+='.global kpcwm_%d\nkpcwm_%d:\n jmp DWORD PTR [winmm_slots+%d]\n'%(i,i,4*i)
+w+='.data\n.balign 4\n.global winmm_slots\nwinmm_slots:\n'+''.join(' .long winmm_missing\n' for _ in winmm)
+w+='.global winmm_names\nwinmm_names:\n'+''.join(' .long wmn_%d\n'%i for i,_ in enumerate(winmm))
+w+='.global winmm_count\nwinmm_count:\n .long %d\n'%len(winmm)
+w+=''.join('wmn_%d: .asciz "%s"\n'%(i,v) for i,v in enumerate(winmm))
+(work/'winmm_stubs.S').write_text(w)
 flags=['-m32','-O2','-std=c11','-ffreestanding','-fno-builtin','-fno-pic','-fno-pie','-fno-stack-protector','-fstack-clash-protection','-fno-asynchronous-unwind-tables','-fno-unwind-tables','-fno-ident','-fshort-wchar','-mno-sse','-mno-mmx','-mpreferred-stack-boundary=2','-mincoming-stack-boundary=2','-Wall','-Wextra','-I',str(root/'src'),'-I',str(work)]
 objects=[]
-for name in ['proxy.c','sha256.c','runtime_print.S']:
+for name in ['proxy.c','sha256.c','runtime_print.S','winmm_stubs.S']:
  src=work/name if name.endswith('.S') else root/'src'/name;elf=work/(src.stem+'.elf.o');obj=work/(src.stem+'.obj')
  if name.endswith('.c'):run(['gcc',*flags,'-c',src,'-o',elf])
  else:run(['as','--32',src,'-o',elf])
@@ -73,10 +85,11 @@ for name in ['proxy.c','sha256.c','runtime_print.S']:
 # Import library generated from build-only stubs; no system DLL is shipped.
 (work/'stub.S').write_text('.text\n.global api_stub\napi_stub:\n ret\n')
 run(['as','--32',work/'stub.S','-o',work/'stub.o']);elf_to_coff(work/'stub.o',work/'stub.obj')
-apis=['GetModuleHandleW','GetModuleFileNameW','LoadLibraryW','GetProcAddress','DisableThreadLibraryCalls','GetCurrentProcess','VirtualProtect','VirtualQuery','FlushInstructionCache','CreateFileW','GetFileSizeEx','ReadFile','WriteFile','CloseHandle','GetPrivateProfileIntW','GetPrivateProfileStringW','GetStdHandle','ExitProcess','GetTickCount']
+apis=['GetModuleHandleW','GetModuleFileNameW','LoadLibraryW','GetProcAddress','DisableThreadLibraryCalls','GetCurrentProcess','VirtualProtect','VirtualQuery','FlushInstructionCache','CreateFileW','GetFileSizeEx','ReadFile','WriteFile','CloseHandle','GetPrivateProfileIntW','GetPrivateProfileStringW','GetStdHandle','ExitProcess','GetTickCount','GetSystemDirectoryW']
 (work/'KERNEL32.def').write_text('LIBRARY KERNEL32.dll\nEXPORTS\n'+''.join(' '+v+'=api_stub\n' for v in apis))
 run(['ld','-m','i386pe','--dll','--entry','_api_stub','--no-insert-timestamp','--out-implib',work/'KERNEL32.a','-o',work/'KERNEL32.build-only.dll',work/'stub.obj',work/'KERNEL32.def'])
-(work/'server.def').write_text('LIBRARY server.dll\nEXPORTS\n CreateServer=CreateServer @1\n DeleteServer=DeleteServer @2\n')
+(work/'server.def').write_text('LIBRARY server.dll\nEXPORTS\n CreateServer=CreateServer @1\n DeleteServer=DeleteServer @2\n'+
+ ''.join(' %s=kpcwm_%d @%d\n'%(v,i,i+3) for i,v in enumerate(winmm)))
 common=['ld','-m','i386pe','--dll','--entry','_DllMain','--image-base','0x69000000','--dynamicbase','--nxcompat','--enable-reloc-section','--exclude-all-symbols','--subsystem','windows','--major-os-version','5','--minor-os-version','1','--major-subsystem-version','5','--minor-subsystem-version','1','--no-insert-timestamp']
 out=package/'KPCServerTools.dll'
 run([*common,'--strip-all','-o',out,*objects,work/'server.def',work/'KERNEL32.a'])
@@ -137,6 +150,6 @@ previous_proxies=[
 ]
 if new_hash in previous_proxies:
  raise SystemExit('Current proxy SHA-256 unexpectedly appears in the previous allowlist')
-report=dict(previous_proxy_hashes=previous_proxies,proxy_sha256=new_hash,proxy_bytes=out.stat().st_size,proxy_symbols=proxy_symbols,hook_symbols=symbols,patches=patches,hook_bytes=len(code),exports=['CreateServer','DeleteServer'])
+report=dict(previous_proxy_hashes=previous_proxies,proxy_sha256=new_hash,proxy_bytes=out.stat().st_size,proxy_symbols=proxy_symbols,hook_symbols=symbols,patches=patches,hook_bytes=len(code),exports=['CreateServer','DeleteServer'],winmm_exports=len(winmm))
 (package/'SERVER_TOOLS_BUILD.json').write_text(json.dumps(report,indent=2)+'\n')
 print(out,report['proxy_bytes'],report['proxy_sha256'])

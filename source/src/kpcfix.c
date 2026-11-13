@@ -553,8 +553,8 @@ static int queue_chat_actions(Edit edits[EDIT_CAP],U32 *count,U8 *base){
 /* Window-shard diagnostic: the shard manager's handler slot (console.c). */
 static int queue_window_watch(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     const ShellLayout *L=g_shell_layout;U8 before[4],after[4];
-    if(!g_window_watch)return 1;
-    if(!L->window_break_slot){g_window_watch=0;return 1;}
+    if(!g_window_watch&&!g_window_hide)return 1;
+    if(!L->window_break_slot){g_window_watch=0;g_window_hide=0;return 1;}
     g_window_shell=base;
     store32(before,(U32)(base+L->window_break));store32(after,(U32)kpc_window_break);
     return add_edit(edits,count,base+L->window_break_slot,before,after,4);
@@ -746,8 +746,10 @@ static int install_game_fixes(void){
     g_console_key_fix=GetPrivateProfileIntW(L"KPCFix",L"ConsoleKeyFix",1,ini_path)!=0;
     g_chat_blocks_actions=GetPrivateProfileIntW(L"Multiplayer",L"ChatBlocksActions",1,ini_path)!=0;
     g_window_watch=GetPrivateProfileIntW(L"Multiplayer",L"LogWindowBreaks",1,ini_path)!=0;
+    g_window_hide=GetPrivateProfileIntW(L"Multiplayer",L"HideBrokenWindow",1,ini_path)!=0;
     g_camera_smooth=GetPrivateProfileIntW(L"Multiplayer",L"SmoothCutsceneCamera",1,ini_path)!=0;
     g_focus_resync=g_focus_enabled&&GetPrivateProfileIntW(L"Multiplayer",L"ResyncAudioOnFocus",1,ini_path)!=0;
+    g_focus_keep_render=GetPrivateProfileIntW(L"Multiplayer",L"KeepRendererOnFocusLoss",1,ini_path)!=0;
     g_focus_log=kpc_log_text;
     g_loading_enabled=GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingArt",1,ini_path)!=0;
     g_loading_min_ms=GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingMinimumMs",5000,ini_path);
@@ -837,6 +839,19 @@ static int install_game_fixes(void){
         if(!add_edit(edits,&count,base+0x157c5,before,replacement,5)){
             report_error("The original local-server focus test differs. No client edits were applied.");return 0;
         }
+        if(g_focus_keep_render){
+            static const U32 world_sites[2]={0x158e3,0x15922};
+            near_call(before,base+0x6c97,base+0x534f0);near_call(replacement,base+0x6c97,kpc_focus_init_render);
+            if(!add_edit(edits,&count,base+0x6c97,before,replacement,5)){
+                report_error("The original focus-regain render restart call differs. No client edits were applied.");return 0;
+            }
+            for(i=0;i<2;i++){
+                near_call(before,base+world_sites[i],base+0x287b0);near_call(replacement,base+world_sites[i],kpc_focus_world_active);
+                if(!add_edit(edits,&count,base+world_sites[i],before,replacement,5)){
+                    report_error("The original client-world focus test differs. No client edits were applied.");return 0;
+                }
+            }
+        }
         if(g_focus_resync){
             near_call(before,base+0x13bcd,base+0x73bb0);near_call(replacement,base+0x13bcd,kpc_sound_update);
             if(!add_edit(edits,&count,base+0x13bcd,before,replacement,5)){
@@ -915,6 +930,7 @@ static int install_game_fixes(void){
     if(g_focus_enabled){log_text("Focus loss: KeepAudioOnFocusLoss default=");log_hex(g_focus_default);log_text(" (1: sounds, music and a local game keep running in every mode; console variable and Setup > Audio).\r\n");}
     if(g_chat_blocks_actions)log_text("Chat typing: no command (movement, fire, invulnerability...) is sent to the server while a message is being typed.\r\n");
     if(g_console_key_fix)log_text("Console key: the character typed by the console toggle key is not added to the console line.\r\n");
+    if(g_focus_enabled)log_text(g_focus_keep_render?"Focus loss: KeepRendererOnFocusLoss=1 (with KeepAudioOnFocusLoss on, the renderer and client world keep running; input is released).\r\n":"Focus loss: KeepRendererOnFocusLoss=0 (stock renderer shutdown on focus loss).\r\n");
     if(g_focus_resync)log_text("Focus regain: kept sounds re-synchronised to real time 300 ms after the window returns.\r\n");
     if(g_net_timeout_enabled){log_text("Server timeout: in-world multiplayer connection seconds=");log_hex((U32)g_net_timeout_seconds);log_text(" (stock 120 s elsewhere).\r\n");}
     log_text(input_clock_enabled?"Input clock v2: timeGetTime plus delayed/zero interval guards; no global clock hook.\r\n":"InputClock=0: original input clocks and intervals retained; Timing V3/Ground V5 remain enabled.\r\n");

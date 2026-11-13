@@ -15,8 +15,17 @@
  * its only early exit is a null window object ("Tried to break a window that
  * is not in the PVS!", 0x5bdaf, on-screen debug text only). The handler is
  * wrapped to log, for the first breaks of a session, whether the window
- * object was present, so the next playtest shows which case it is. */
-U32 g_window_watch;
+ * object was present, so the next playtest shows which case it is.
+ *
+ * HideBrokenWindow ([Multiplayer], default 1): Server Tools' CoopWindowShards
+ * keeps a broken window visible on the server for 200 ms so that remote
+ * clients still have it when the shard message arrives; the window then stayed
+ * on screen while its shards flew (two-PC test RT8). Once the stock handler
+ * has built the shards, the window is hidden on this client at once: the
+ * client API's GetObjectFlags [api+0x290] / SetObjectFlags [api+0x294]
+ * (cdecl; api = [cshell+0x1c8dfc], as cshell's own flag updates 0x59ab5 /
+ * 0x59adc) with FLAG_VISIBLE (bit 0) cleared. The server's own hide follows. */
+U32 g_window_watch,g_window_hide;
 U8 *g_window_shell;
 static U32 window_breaks,window_missing;
 typedef void (__attribute__((thiscall)) *WindowFn)(void *,void *,U32,U32);
@@ -26,7 +35,7 @@ static void watch_decimal(char *b,U32 *at,U32 n){
 void __attribute__((thiscall)) kpc_window_break(void *manager,void *object,U32 type,U32 message){
     U32 present=object&&*(const U32 *)object;
     window_breaks++;if(!present)window_missing++;
-    if(g_focus_log&&window_breaks<=32){
+    if(g_window_watch&&g_focus_log&&window_breaks<=32){
         char line[96];U32 at=0;const char *p="Window break message ";
         while(*p)line[at++]=*p++;
         watch_decimal(line,&at,window_breaks);
@@ -35,6 +44,14 @@ void __attribute__((thiscall)) kpc_window_break(void *manager,void *object,U32 t
         line[at]=0;g_focus_log(line);
     }
     ((WindowFn)(g_window_shell+g_shell_layout->window_break))(manager,object,type,message);
+    if(g_window_hide&&present&&g_shell_layout->enemy_api){
+        typedef U32 (__attribute__((cdecl)) *GetFlagsFn)(U32);
+        typedef void (__attribute__((cdecl)) *SetFlagsFn)(U32,U32);
+        const U8 *api=*(U8 *const *)(g_window_shell+g_shell_layout->enemy_api);
+        U32 h=*(const U32 *)object;
+        if(api&&*(const U32 *)(api+0x290)&&*(const U32 *)(api+0x294))
+            ((SetFlagsFn)*(const U32 *)(api+0x294))(h,((GetFlagsFn)*(const U32 *)(api+0x290))(h)&~1u);
+    }
 }
 U32 kpc_window_breaks(void){return window_breaks;}
 U32 kpc_window_missing(void){return window_missing;}

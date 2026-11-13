@@ -38,6 +38,7 @@ typedef struct {
      * zero = no checkbox. */
     U32 audio_vtable, audio_init, audio_term, audio_draw, audio_move, audio_event;
     U32 checkbox_ctor, checkbox_images, checkbox_checked, checkbox_unchecked;
+    U32 checkbox_hit_box, checkbox_hit_label;   /* thiscall hit tests (AL = 1 under the mouse) */
     /* Window-shard diagnostic (console.c): manager vtable slot and handler. */
     U32 window_break_slot, window_break;
 } ShellLayout;

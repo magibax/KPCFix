@@ -109,6 +109,19 @@ static void coop_inv_plan(const CoopInvState *saved,const CoopInvState *now,Coop
  for(k=0;k<4u;k++)if(saved->ammo[k]>now->ammo[k])COOP_INV_ADD(COOP_INV_AMMO_FIRST+k,saved->ammo[k]-now->ammo[k]);
 #undef COOP_INV_ADD
 }
+/* Ammo a restore must take back (two-PC test RT3, "Ammo Issue": 197 water
+ * ammo came back as 200 after a world change). Giving a weapon also gives its
+ * stock ammo: f3440 -> f34b7 gives definition +0xc4 rounds of ammo id def+4.
+ * base = the player's ammo before the restore's weapon gives (the spawn's own
+ * start ammo), now = after them. Nothing goes below max(saved, base); only
+ * what the restore's weapon gives added above that is returned. */
+static void coop_inv_ammo_excess(const CoopInvState *saved,const unsigned int base[4],const unsigned int now[4],unsigned int out[4]){
+ unsigned int k;
+ for(k=0;k<4u;k++){
+  unsigned int keep=saved&&saved->ammo[k]>base[k]?saved->ammo[k]:base[k];
+  out[k]=now[k]>keep?now[k]-keep:0u;
+ }
+}
 /* Short summary for the log: "class=Demon weapons=5 armour=3 shards=10 ammo=100/0/50/0". */
 static const char *coop_class_name(unsigned int cls){
  static const char *const names[COOP_INV_CLASSES]={"Starbearer","Beast King","Celestial","Demon"};
@@ -142,15 +155,27 @@ static int coop_class_parse(const char *w){
  * Time +0xb8, float seconds). The item update counts +0x7c down (cbfe6, while
  * +0x81 is set) and calls cc080 (cbfff), which makes it visible and touchable
  * again. Campaign worlds author Respawn=false, so taken items were removed.
- * Respawning in co-op: weapons, ammo, armour shards, health and the other
- * charms/power-ups. Progression items never respawn: pamphlets 0x19, the
- * pickup trigger 0x1c, the ultimate weapon 0x23, keys 0x24, tickets 0x25 and
- * the armour pieces 0x27-0x2c (each has its own cutscene). */
+ * Respawning in co-op: weapons, ammo, BlackDiamonds 0x1e, health, the other
+ * charms/power-ups and the armour pieces 0x27-0x2c (the game calls them
+ * "armor shards"). A respawned armour piece is picked up quietly: no
+ * cutscene and no script, and only by a player who lacks it (proxy
+ * coop_armour_pickup, coop_armour_quiet). Progression items never respawn:
+ * pamphlets 0x19, the pickup trigger 0x1c, the ultimate weapon 0x23, keys
+ * 0x24, tickets 0x25 and the ARMOR_START marker 0x26. */
 static int coop_item_respawnable(unsigned int id){
  if(id<COOP_INV_WEAPON_FIRST||id>0x2cu)return 0;
  if(id==0xfu||id==0x10u||id==0x15u||id==0x16u)return 0;   /* table markers */
- if(id==0x19u||id==0x1cu||id==0x23u||id==0x24u||id==0x25u||id>=0x26u)return 0;
+ if(id==0x19u||id==0x1cu||id==0x23u||id==0x24u||id==0x25u||id==0x26u)return 0;
  return 1;
+}
+/* Touch of an armour piece the respawn has brought back (Respawn +0xb4 set:
+ * campaign worlds author it false, so only the co-op respawn sets it):
+ *   0 = stock pickup (first pickup: cutscene, script, shared with everyone),
+ *   1 = quiet pickup (give the piece to this player only, hide, count again),
+ *   2 = ignore (the player already has it, or is dead). */
+static int coop_armour_quiet(unsigned int id,int respawn_flag,int has_piece,int dead){
+ if(!coop_inv_armour(id)||!respawn_flag)return 0;
+ return has_piece||dead?2:1;
 }
 /* Half extents of the boxes for the "player on the spot" test: the player's
  * server bounds (-20,-46,-20)..(20,46,20) (GENERAL-ALLOCATOR.md) and a pickup

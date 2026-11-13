@@ -29,7 +29,21 @@ def wstr(a):
   if x==b'\0\0':break
   b+=x
  return bytes(b).decode('utf-16-le')
-console=[];log=[];file_handles={};hash_states={};stubs={};stub_index=0
+class StubTable(dict):
+ """Stub address -> handler. Each address gets its own one-address code hook
+ the first time it is set (Unicorn checks ranged hooks when it translates a
+ block, so code elsewhere runs without a Python call per instruction). The
+ hook looks the handler up on every hit, so replacing or deleting an entry
+ keeps working; a deleted entry's hook does nothing."""
+ def __init__(self):
+  super().__init__();self.hooked=set()
+ def __setitem__(self,at,handler):
+  super().__setitem__(at,handler)
+  if at not in self.hooked:
+   self.hooked.add(at)
+   u.hook_add(UC_HOOK_CODE,lambda uc,a,size,data:self[a]() if a in self else None,begin=at,end=at)
+   u.ctl_remove_cache(at,at+1)   # in case the block at this address was already translated
+console=[];log=[];file_handles={};hash_states={};stubs=StubTable();stub_index=0
 class Stopped(Exception):pass
 def stub(name,argc,fn,address=None,cdecl=False):
  global stub_index
@@ -77,15 +91,37 @@ dedicated=(fixtures/'dedicated.exe').read_bytes();backend=(fixtures/'server.dll'
 load(dedicated,exe);load(backend,engine);load(object_file,obj);load(dll,proxy)
 pe=struct.unpack_from('<I',dedicated,60)[0];usa=struct.unpack_from('<I',dedicated,pe+8)[0]==0x3a942fb8
 prefix='C:\\Games\\Psycho\\'
-paths={None:prefix+'dedicated.exe',exe:prefix+'dedicated.exe',proxy:prefix+'server.dll',engine:prefix+'server.original.dll',obj:prefix+'object.lto'}
-files={prefix+'dedicated.exe':dedicated,prefix+'server.original.dll':backend,prefix+'object.lto':object_file}
+# --winmm: the default install. The DLL is winmm.dll (dedicated.exe imports
+# WINMM.dll) and the original engine keeps its name server.dll. Without it the
+# earlier install: the DLL is server.dll and the engine server.original.dll.
+winmm_mode='--winmm' in sys.argv
+engine_name='server.dll' if winmm_mode else 'server.original.dll'
+paths={None:prefix+'dedicated.exe',exe:prefix+'dedicated.exe',proxy:prefix+('winmm.dll' if winmm_mode else 'server.dll'),engine:prefix+engine_name,obj:prefix+'object.lto'}
+files={prefix+'dedicated.exe':dedicated,prefix+engine_name:backend,prefix+'object.lto':object_file}
+SYSWINMM=0x6f000000;sysdir='C:\\Windows\\system32'
+winmm_loads=[]
 if '--bad-object' in sys.argv:files[prefix+'object.lto']=object_file[:-1]+bytes([object_file[-1]^1])
 def getfilename(a):
  s=paths.get(a[0],paths[None]);b=s.encode('utf-16-le')+b'\0\0';u.mem_write(a[1],b);return len(s)
 functions['GetModuleFileNameW']=stub('GetModuleFileNameW',3,getfilename)
 functions['GetModuleHandleW']=stub('GetModuleHandleW',1,lambda a:exe if not a[0] else api)
 functions['GetModuleHandleA']=stub('GetModuleHandleA',1,lambda a:exe if not a[0] else api)
-functions['LoadLibraryW']=stub('LoadLibraryW',1,lambda a:engine if wstr(a[0])==prefix+'server.original.dll' else 0)
+def loadlibraryw(a):
+ name=wstr(a[0]);winmm_loads.append(name)
+ if name==prefix+engine_name:return engine
+ if name==sysdir+'\\winmm.dll':return SYSWINMM
+ if name==paths[proxy]:return proxy
+ return 0
+functions['LoadLibraryW']=stub('LoadLibraryW',1,loadlibraryw)
+def sysdirectory(a):
+ u.mem_write(a[0],sysdir.encode('utf-16-le')+b'\0\0');return len(sysdir)
+functions['GetSystemDirectoryW']=stub('GetSystemDirectoryW',2,sysdirectory)
+other_loads=[]
+def loadlibrarya(a):other_loads.append(cstr(a[0]));return 0x5555
+functions['LoadLibraryA']=stub('LoadLibraryA',1,loadlibrarya)
+# System winmm exports: timeGetTime answers 0x1234 (stdcall, no arguments).
+sys_time=stub('sys_timeGetTime',0,lambda a:0x1234)
+sys_other=stub('sys_winmm_other',0,lambda a:0)
 functions['DisableThreadLibraryCalls']=stub('DisableThreadLibraryCalls',1,lambda a:1)
 functions['GetCurrentProcess']=stub('GetCurrentProcess',0,lambda a:0xffffffff)
 functions['GetStdHandle']=stub('GetStdHandle',1,lambda a:99)
@@ -195,6 +231,7 @@ def getproc(a):
  s=cstr(name)
  if module==engine:return {'CreateServer':create_at,'DeleteServer':delete_at}.get(s,0)
  if module==obj:return obj+0xfdab0 if s=='ObjectDLLSetup' else 0
+ if module==SYSWINMM:return sys_time if s=='timeGetTime' else sys_other
  return functions.get(s,0)
 functions['GetProcAddress']=stub('GetProcAddress',2,getproc)
 # Bind imported system pointers in all modules; backend's GetProcAddress is then
@@ -207,9 +244,6 @@ stub('sha_update',3,lambda a:hash_states[a[0]].extend(u.mem_read(a[1],a[2])),pro
 stub('sha_final',2,lambda a:u.mem_write(a[1],hashlib.sha256(hash_states[a[0]]).digest()),proxy+ps['_kpc_sha_final'],cdecl=True)
 # Native editor state used by the installed assembly console logger.
 con=exe+(0x16028 if usa else 0x12f70);write(con+0x58,2);write(con+0x5c,6);u.mem_write(con+4,b'status\0');u.mem_write(con+0x64,b'>\0')
-def code(uc,a,size,data):
- if a in stubs:stubs[a]()
-u.hook_add(UC_HOOK_CODE,code)
 stop=scratch+0x1f0000
 
 def call(at,args,stdcall=False):
@@ -247,7 +281,7 @@ def coop_scenario():
         0xfdfdb:(6,'ff90f0000000'),0xc8348:(6,'8b88d0010000'),0x409bb:(5,'e870380800'),0xb676f:(5,'e8cccc0300'),
         0xc2c9c:(5,'e87fcc0200'),0xc2c56:(5,'e8f5cc0200'),
         0xd51fb:(6,'ff90d0010000'),0xfead7:(5,'e834ceffff'),0xcc29e:(5,'e8cd020000'),0xcbfff:(5,'e87c000000'),
-        0x48413:(6,'ff91fc010000')}
+        0x48413:(6,'ff91fc010000'),0xc837b:(5,'e8a03d0000')}
  music_flag='--no-music' not in sys.argv
  intro_flag='--intro' in sys.argv
  trace_timing='--trace-timing' in sys.argv
@@ -259,7 +293,7 @@ def coop_scenario():
  spawner_nearest='--no-spawner-nearest' not in sys.argv;cheat_keys='--no-cheat-keys' not in sys.argv
  item_respawn='--no-item-respawn' not in sys.argv;keep_inv='--no-keep-inventory' not in sys.argv
  hooked_optional[0xd51fb]=spawner_nearest;hooked_optional[0xfead7]=cheat_keys
- hooked_optional[0xcc29e]=hooked_optional[0xcbfff]=item_respawn
+ hooked_optional[0xcc29e]=hooked_optional[0xcbfff]=hooked_optional[0xc837b]=item_respawn
  window_shards='--no-window-shards' not in sys.argv;hooked_optional[0x48413]=window_shards
  bars='--no-health-bars' not in sys.argv
  for rva in (0xea6d2,0xea7c3,0xeaa10,0xeab11):hooked_optional[rva]=bars
@@ -684,9 +718,10 @@ def coop_scenario():
   assert any('not the next world of the selected route' in m for m in said[n:]),said[n:]
   exit_trigger('worlds/realm2/r2m1a',activator=0xa1);assert changes()==2
   next_level();spawn(alice)
-  # Host abort returns everybody to the lobby world (CoopLobbyWorld, else R1M2B).
+  # Host abort returns everybody to the lobby: CoopLobbyWorld when it is a
+  # deathmatch map, else a random deathmatch map PM01-PM10 (never a campaign world).
   out=chat(alice,'!abort');lobby='--lobby=' in ' '.join(sys.argv)
-  assert any(('-> lobby PM01' if lobby else 'Host aborted -> lobby R1M2B') in m for m in out),out
+  assert any(('-> lobby PM01' in m) if lobby else re.search(r'Host aborted -> lobby PM(0[1-9]|10)',m) for m in out),out
   assert changes()==3
   next_level()
   assert any('LOBBY' in m for m in chat(alice,'!coop')),'back in the lobby phase'
@@ -965,9 +1000,37 @@ def coop_scenario():
     it=nb+0x400+i*0x100;d=nb+0x1000+i*0x10;u.mem_write(it,bytes(0x100));write(it+0x54,d);write(d,iid);write(it+8,0x1e0+i)
     u.mem_write(it+0xe4,bytes([e4]));return it
    it=item_of(0,9);call_regs(target[0xcc29e],[0],{UC_X86_REG_ECX:it},4);assert hides[-1]==(it,0,1,15.0,1),hides
-   for i,(iid,force,e4) in enumerate(((0x19,0,0),(0x27,0,0),(9,1,0),(0x11,0,1))):   # pamphlet, armour piece, forced, expiring
+   for i,(iid,force,e4) in enumerate(((0x19,0,0),(0x26,0,0),(9,1,0),(0x11,0,1))):   # pamphlet, ARMOR_START marker, forced, expiring
     it2=item_of(i+1,iid,e4);call_regs(target[0xcc29e],[force],{UC_X86_REG_ECX:it2},4);assert hides[-1][2]==0,(iid,hides[-1])
-   it3=item_of(5,0x1e);call_regs(target[0xcc29e],[0],{UC_X86_REG_ECX:it3},4);assert hides[-1][2]==1   # armour shard
+   it3=item_of(5,0x1e);call_regs(target[0xcc29e],[0],{UC_X86_REG_ECX:it3},4);assert hides[-1][2]==1   # BlackDiamond
+   # Armour pieces (the game's "armor shards", 0x27-0x2c) now respawn too.
+   arm=item_of(6,0x29);call_regs(target[0xcc29e],[0],{UC_X86_REG_ECX:arm},4);assert hides[-1]==(arm,0,1,15.0,1),hides
+   # Their touch c8340 -> cc120 (site c837b): the first pickup is stock; a
+   # returned piece is given quietly to a player who lacks it, then hidden again.
+   saved={k:stubs.get(obj+k) for k in (0xcc120,0xee7d0,0xf25f0,0xf3440)}
+   picks=[];gives=[];has={}
+   pl={0xa1:nb+0x2000,0xb2:nb+0x2400};vt=nb+0x2800;alive=nb+0x2900
+   stubs[alive]=tcall(0,lambda this,a:0);write(vt+0x60,alive)
+   for h,p in pl.items():
+    u.mem_write(p,bytes(0x300));write(p,vt);u.mem_write(p+0x1e8,(b'Alice' if h==0xa1 else b'Bob')+b'\0')
+   stubs[obj+0xcc120]=tcall(2,lambda this,a:picks.append((this,a[0])) or 1)
+   stubs[obj+0xee7d0]=ccall(1,lambda a:pl.get(read(a[0]),0))
+   stubs[obj+0xf25f0]=tcall(1,lambda this,a:has.get((this,a[0]),0))
+   stubs[obj+0xf3440]=tcall(3,lambda this,a:gives.append((this,a[0],a[1])) or 1)
+   first=item_of(7,0x29);n=len(hides)
+   call_regs(target[0xc837b],[0xa1,0],{UC_X86_REG_ECX:first},8)
+   assert picks==[(first,0xa1)] and gives==[] and len(hides)==n,'first pickup: stock path (cutscene, script)'
+   write(first+0xb4,1)                                                    # brought back by the respawn
+   has[(pl[0xa1],0x29)]=1
+   call_regs(target[0xc837b],[0xa1,0],{UC_X86_REG_ECX:first},8)
+   assert len(picks)==1 and gives==[] and len(hides)==n and u.reg_read(UC_X86_REG_EAX)&0xff==0,'Alice has it: walks over it'
+   call_regs(target[0xc837b],[0xb2,0],{UC_X86_REG_ECX:first},8)
+   assert len(picks)==1 and gives==[(pl[0xb2],0x29,1)] and hides[-1]==(first,0,1,15.0,1),(gives,hides[-1:])
+   assert 'quiet pickup item=Belt by Bob' in logtext() or 'quiet pickup item=' in logtext(),logtext()[-300:]
+   other=item_of(8,9);call_regs(target[0xc837b],[0xb2,0],{UC_X86_REG_ECX:other},8);assert picks[-1]==(other,0xb2),'not armour: stock'
+   for k,v in saved.items():
+    if v is None:stubs.pop(obj+k,None)
+    else:stubs[obj+k]=v
    pos[0x1e0]=(0.0,0.0,0.0);u.mem_write(it+0x7c,struct.pack('<f',-0.01))
    call_regs(target[0xcbfff],[],{UC_X86_REG_ECX:it},0)
    assert spawned==[] and fl(it+0x7c)==0.5,'Alice stands on it: wait and retry'
@@ -975,7 +1038,7 @@ def coop_scenario():
    pos[0xa1]=(0.0,0.0,0.0)
    assert 'item-respawn scheduled item=ZeroCannon' in logtext() and 'item-respawn respawned item=ZeroCannon' in logtext()
    del stubs[obj+0xcc570];del stubs[obj+0xcc080]
-   print('PASS co-op pickup respawn: weapons/shards scheduled, progression/forced/expiring items not, spot must be clear')
+   print('PASS co-op pickup respawn: weapons, BlackDiamonds and armour pieces scheduled, returned armour picked up quietly, progression/forced/expiring items not, spot must be clear')
   else:assert 'effective CoopItemRespawnSec=0' in logtext()
   # Window break (483cc): the hide at 48413 keeps the visible bit until the
   # shard message 0x39 has gone out; the frame hook clears it 200 ms later.
@@ -1155,7 +1218,36 @@ def coop_scenario():
  print('PASS co-op log budget: per map epoch, one notice, renewed by the next world')
  print('PASS co-op session hooks:',len(said),'broadcasts,',len(ends),'native end-level requests,',len(nextlevels),'NextLevel calls, telefrag skipped')
 
-call(proxy+ps['_DllMain'],[proxy,1,0],True)
+def import_slot(data,base,function):
+ p=struct.unpack_from('<I',data,60)[0];at=base+read(base+p+24+96+8)
+ while read(at+12):
+  names=read(at) or read(at+16);iat=read(at+16);i=0
+  while read(base+names+i*4):
+   v=read(base+names+i*4)
+   if not v&0x80000000 and cstr(base+v+2)==function:return base+iat+i*4
+   i+=1
+  at+=20
+def export(name):
+ p=struct.unpack_from('<I',dll,60)[0];d=read(proxy+p+24+96);n=read(proxy+d+24)
+ names,ords,funcs=read(proxy+d+32),read(proxy+d+36),read(proxy+d+28)
+ for i in range(n):
+  if cstr(proxy+read(proxy+names+i*4))==name:
+   return proxy+read(proxy+funcs+struct.unpack('<H',u.mem_read(proxy+ords+i*2,2))[0]*4)
+loadlib_slot=import_slot(dedicated,exe,'LoadLibraryA')
+write(loadlib_slot,functions['LoadLibraryA'])   # only this dedicated.exe import is bound
+assert read(loadlib_slot)==functions['LoadLibraryA']
+assert call(proxy+ps['_DllMain'],[proxy,1,0],True)==1
+assert report['winmm_exports']>=190 and export('timeGetTime') and export('mciSendCommandA') and export('CreateServer')
+if winmm_mode:
+ assert winmm_loads[0]==sysdir+'\\winmm.dll',winmm_loads
+ assert call(export('timeGetTime'),[],True)==0x1234,'winmm export forwarded to the system DLL'
+ assert read(loadlib_slot)==proxy+ps['_server_load_a'],'dedicated.exe LoadLibraryA redirected'
+ u.mem_write(scratch+0x90100,b'other.dll\0');assert call(read(loadlib_slot),[scratch+0x90100],True)==0x5555 and other_loads==['other.dll']
+ u.mem_write(scratch+0x90100,b'.\\SERVER.DLL\0');assert call(read(loadlib_slot),[scratch+0x90100],True)==proxy,'server.dll answered by Server Tools'
+ assert winmm_loads[-1]==paths[proxy] and other_loads==['other.dll']
+ print('PASS winmm.dll mode: system winmm forwarding, dedicated.exe server.dll redirect, original server.dll loaded unrenamed')
+else:
+ assert read(loadlib_slot)==functions['LoadLibraryA'] and not winmm_loads,'server.dll mode: no winmm load, no redirect'
 u.mem_write(scratch+0x90000,b'KPC\0')
 assert call(proxy+ps['_CreateServer'],[3,scratch+0x90000,scratch+0x90010])==17
 # CoopSoundClock: server.dll call site 2a1fc (e8 0a fd ff ff -> sound-track

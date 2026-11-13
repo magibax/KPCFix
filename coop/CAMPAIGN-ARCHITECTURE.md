@@ -4,8 +4,7 @@ Goal: a co-op campaign as close as possible to the shipped single player. The fl
 * lobby;
 * realm/campaign selection;
 * per-map loading screen;
-* every client confirmed loaded;
-* a common 15-second real-time, music-playing wait;
+* every client confirmed loaded (the client holds its spawn behind the loading picture);
 * the original scripted intro or world unlock;
 * natural progression through all realms and Nightmare;
 * completion, then back to the lobby.
@@ -29,7 +28,7 @@ Tags: **[C]** confirmed by disassembly or data, **[I]** inferred.
 | M0 inventory: world order, transitions, R?M0 intros, Nightmare, loading backgrounds | **DONE** | [CAMPAIGN-MAP-INVENTORY.md](CAMPAIGN-MAP-INVENTORY.md); `check_campaign_table.py` PASS against the installed REZ |
 | M1 campaign graph, host selection, completion/abort to the lobby (`CoopCampaign=1`) | **IMPLEMENTED** (commit `abeebbb`, DLL `009eacd6…`) | unit tests (64/32-bit), emulator 34/34, native server smoke. **No client has played it** |
 | M2 loading screen and client-ready ACK | **RESEARCHED, designed below, not implemented** | static RE only |
-| M3 15 s wall-clock hold, gameplay freeze, music pre-roll, realm-intro entry | **RESEARCHED, designed below, not implemented**. The R?M0 intros are already allowed (M1) | static RE only |
+| M3 15 s wall-clock hold, gameplay freeze, music pre-roll | **DROPPED (2026-11-13)**: the loading process works well without it (client spawn hold behind the loading picture, intro on the last spawn). Will not be implemented; §6 kept as reference only. Realm-intro entry is covered by M1 | — |
 | M4 realm-by-realm gameplay validation | NOT STARTED (needs two-PC play) | — |
 | M5 two-PC acceptance at 60/165 FPS, packaging | PENDING (user) | — |
 
@@ -208,9 +207,9 @@ settle" covered exactly that gap and is to be replaced.
 Fallback (heuristic, documented as such): the first `MID_PLAYER_UPDATE 0x11` (sent at about
 15 Hz by `0xc8650`) arriving at least RTT + 200 ms after `0x69`.
 
-## 6. 15-second hold, freeze and music (M3 design, not implemented)
+## 6. 15-second hold, freeze and music (M3, dropped)
 
-> **Status (2026-11-12): never built; superseded.** No 15-second countdown exists in any build. The shipped flow is the client spawn hold behind the loading picture (client `CampaignLoadingHoldSpawn`) and an intro that starts with the last spawn (`CoopIntroSettleMs`, campaign default 0). The freeze evidence below is still the planned way to stop the world running behind the loading picture (playtest item 9 in [the handoff](NEXT-SESSION-HANDOFF.md)): pause the server while members are loading, without the countdown.
+> **Status (2026-11-13): dropped; will not be implemented.** No 15-second countdown, gameplay freeze or music pre-roll exists in any build, and none is planned: the loading process works well as shipped, with the client spawn hold behind the loading picture (client `CampaignLoadingHoldSpawn`) and an intro that starts with the last spawn (`CoopIntroSettleMs`, campaign default 0). The reverse-engineering notes below are kept for reference only.
 
 **Freeze: the server pause flag [C].**
 * `g_pServerDE` `+0x2c` GetServerFlags and `+0x30` SetServerFlags (cdecl). Bit 0 sets mgr
@@ -291,5 +290,5 @@ Existing bounded lines:
 
 Selection changes appear as `say` lines.
 
-Planned (M2/M3): `ready client=… epoch=… stage=enter|init|echo`, `hold start/remaining/release`
-(once per second at most), and `pause on/off`.
+Planned (M2): `ready client=… epoch=… stage=enter|init|echo`. (The M3 `hold …` and `pause on/off`
+lines were dropped with M3.)

@@ -66,7 +66,7 @@ static void test_selection_commands(void){
  cmd(&s,A,"!campaign earth, fire");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Use:"));
  assert(strlen(r.msg)<COOP_MSG_MAX&&s.sel_mode==COOP_SEL_FULL);
  cmd(&s,A,"!ready now");assert(r.action==COOP_ACT_NONE&&coop_ready_count(&s)==0); /* arguments only for !campaign */
- cmd(&s,A,"!help");assert(strstr(r.msg,"!campaign full|water")&&strlen(r.msg)<COOP_MSG_MAX);
+ cmd(&s,A,"!help");assert(strstr(r.msg,"!campaign <realm|full>")&&strstr(r.msg,"!goto !back")&&strlen(r.msg)<COOP_MSG_MAX);
  /* Minimum players applies; readiness does not. */
  {CoopSession one;coop_session_init(&one,2,3);coop_session_enable_campaign(&one);spawn(&one,A,"Alice",0);
   cmd(&one,A,"!campaign earth");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Need 2 players")&&one.phase==COOP_PHASE_LOBBY&&!one.started);}
@@ -139,21 +139,21 @@ static void test_realm_completion_and_abort(void){
  coop_session_exit(&s,"worlds/realm2/r1m4c",9000,&r);assert(r.action!=COOP_ACT_CHANGE_WORLD);   /* not the successor */
  s.reject_reply_epoch=0;
  coop_session_exit(&s,"worlds/realm2/r2m0",9000,&r);
- assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&strstr(r.msg,"route complete -> lobby R1M2B"));
- assert(s.completed==1&&s.lobby_pending&&!strcmp(coop_target_world(&s,COOP_TARGET_LOBBY),"realm1/r1m2b"));
- load(&s,"worlds\\realm1\\R1M2B",10000);
+ assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&strstr(r.msg,"route complete -> lobby PM01"));
+ assert(s.completed==1&&s.lobby_pending&&!strcmp(coop_target_world(&s,COOP_TARGET_LOBBY),"deathmatch/pm01"));
+ load(&s,"worlds\\deathmatch\\PM01",10000);
  assert(s.phase==COOP_PHASE_LOBBY&&!s.started&&s.generation==2&&coop_present_count(&s)==2&&coop_ready_count(&s)==0);
  assert(s.sel_mode==COOP_SEL_REALM&&s.sel_realm==1);                          /* selection persists */
- /* Abort: host only; from the lobby world it resets the lobby in place. */
+ /* Abort: host only; (a campaign never uses a campaign world as its lobby: random PM01-PM10, seed = time); from the lobby world it resets the lobby in place. */
  cmd(&s,A,"!ready");coop_session_select(&s,COOP_SEL_FROM,3);
- cmd(&s,A,"!abort");assert(r.action==COOP_ACT_ANNOUNCE&&strstr(r.msg,"Lobby reset (R1M2B)"));
+ cmd(&s,A,"!abort");assert(r.action==COOP_ACT_ANNOUNCE&&strstr(r.msg,"Lobby reset (PM01)"));
  assert(coop_ready_count(&s)==0&&s.sel_mode==COOP_SEL_FULL&&s.phase==COOP_PHASE_LOBBY);
  cmd(&s,A,"!campaign earth");assert(r.action==COOP_ACT_CHANGE_WORLD);
  load(&s,"worlds\\realm2\\R2M0",20000);spawn(&s,A,"Alice",20100);
  cmd(&s,B,"!abort");assert(strstr(r.msg,"Only the host"));
- cmd(&s,A,"!abort");assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&strstr(r.msg,"Host aborted -> lobby R1M2B"));
- load(&s,"worlds\\realm1\\R1M2B",20500);assert(s.phase==COOP_PHASE_LOBBY);
- cmd(&s,A,"!status");assert(strstr(r.msg,"LOBBY R1M2B"));
+ cmd(&s,A,"!abort");assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&strstr(r.msg,"Host aborted -> lobby PM01"));
+ load(&s,"worlds\\deathmatch\\PM01",20500);assert(s.phase==COOP_PHASE_LOBBY);
+ cmd(&s,A,"!status");assert(strstr(r.msg,"LOBBY PM01"));
  /* CoopLobbyWorld still overrides the default. */
  cmd(&s,A,"!campaign full");load(&s,"worlds\\realm1\\R1M0",20600);spawn(&s,A,"Alice",20700);
  memcpy(s.lobby_world,"deathmatch/pm01",16);
@@ -191,13 +191,13 @@ static void test_test_start_and_legacy(void){
 /* !abort resets everything back to the lobby from any state. */
 static void test_abort_any_state(void){
  CoopSession s;
- /* In play: back to R1M2B, readiness cleared, selection back to full. */
+ /* In play: back to a deathmatch lobby, readiness cleared, selection back to full. */
  lobby(&s);cmd(&s,A,"!campaign fire");load(&s,"worlds\\realm4\\R4M0",1000);spawn(&s,A,"Alice",1100);
  assert(s.sel_mode==COOP_SEL_FROM&&s.sel_realm==4);
- cmd(&s,A,"!abort");assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&strstr(r.msg,"Host aborted -> lobby R1M2B"));
+ cmd(&s,A,"!abort");assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&strstr(r.msg,"Host aborted -> lobby PM01"));
  assert(s.sel_mode==COOP_SEL_FULL&&s.lobby_pending);
  cmd(&s,A,"!abort");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Already returning"));
- load(&s,"worlds\\realm1\\R1M2B",2000);assert(s.phase==COOP_PHASE_LOBBY&&!s.started);
+ load(&s,"worlds\\deathmatch\\PM01",2000);assert(s.phase==COOP_PHASE_LOBBY&&!s.started);
  {CoopResult a;coop_session_after_load(&s,2100,&a);assert(a.action==COOP_ACT_NONE);}
  /* During a world change (here the !start load): deferred until it has loaded. */
  lobby(&s);cmd(&s,A,"!campaign earth");assert(s.phase==COOP_PHASE_TRANSITION);
@@ -205,8 +205,8 @@ static void test_abort_any_state(void){
  cmd(&s,A,"!abort");assert(r.action==COOP_ACT_ANNOUNCE&&strstr(r.msg,"once this world has loaded")&&s.abort_after_load);
  load(&s,"worlds\\realm2\\R2M0",3000);
  {CoopResult a;coop_session_after_load(&s,3100,&a);
-  assert(a.action==COOP_ACT_CHANGE_WORLD&&a.target_pos==COOP_TARGET_LOBBY&&strstr(a.msg,"lobby R1M2B")&&!s.abort_after_load);}
- load(&s,"worlds\\realm1\\R1M2B",4000);assert(s.phase==COOP_PHASE_LOBBY&&!s.started&&s.sel_mode==COOP_SEL_FULL);
+  assert(a.action==COOP_ACT_CHANGE_WORLD&&a.target_pos==COOP_TARGET_LOBBY&&strstr(a.msg,"lobby PM01")&&!s.abort_after_load);}
+ load(&s,"worlds\\deathmatch\\PM01",4000);assert(s.phase==COOP_PHASE_LOBBY&&!s.started&&s.sel_mode==COOP_SEL_FULL);
  /* Nothing pending: after_load does nothing. */
  {CoopResult a;coop_session_after_load(&s,4100,&a);assert(a.action==COOP_ACT_NONE);}
  /* The campaign can start again straight away. */
@@ -303,12 +303,42 @@ static void test_changelevel(void){
  coop_session_init(&s,1,3);spawn(&s,A,"Alice",0);
  cmd(&s,A,"!changelevel R1M2A");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"needs CoopCampaign=1"));
 }
+/* Lobby pick (campaign without a deathmatch CoopLobbyWorld) and the
+ * dedicated console's "changelevel" (server authority). */
+static void test_lobby_pick_and_console(void){
+ CoopSession s;CoopResult x;
+ lobby(&s);
+ strcpy(s.world_label,"R2M0");coop_session_pick_lobby(&s,7);assert(!strcmp(s.lobby_pick,"deathmatch/pm08"));
+ coop_session_pick_lobby(&s,19);assert(!strcmp(s.lobby_pick,"deathmatch/pm10"));
+ strcpy(s.world_label,"PM08");coop_session_pick_lobby(&s,7);assert(!strcmp(s.lobby_pick,"deathmatch/pm09"));   /* never the loaded one */
+ /* A campaign world as CoopLobbyWorld is not used; a deathmatch one is fixed. */
+ strcpy(s.lobby_world,"realm1/r1m2b");assert(!coop_lobby_fixed(&s));
+ assert(!strcmp(coop_target_world(&s,COOP_TARGET_LOBBY),"deathmatch/pm09"));
+ strcpy(s.lobby_world,"deathmatch/pm03");assert(coop_lobby_fixed(&s));
+ coop_session_pick_lobby(&s,1);assert(!strcmp(coop_target_world(&s,COOP_TARGET_LOBBY),"deathmatch/pm03"));
+ /* MVP route keeps its lobby. */
+ coop_session_init(&s,1,3);coop_session_pick_lobby(&s,5);assert(!s.lobby_pick[0]&&!strcmp(coop_target_world(&s,COOP_TARGET_LOBBY),"realm1/r1m2b"));
+ /* Console: no host and no player minimum needed. */
+ coop_session_init(&s,2,3);coop_session_enable_campaign(&s);
+ coop_session_console_changelevel(&s,"",1000,&x);assert(x.action==COOP_ACT_REPLY&&strstr(x.msg,"Use: changelevel"));
+ coop_session_console_changelevel(&s,"R9M9Z",1000,&x);assert(x.action==COOP_ACT_REPLY&&strstr(x.msg,"Unknown world"));
+ coop_session_console_changelevel(&s,"worlds\\realm1\\R1M2A",1000,&x);
+ assert(x.action==COOP_ACT_CHANGE_WORLD&&strstr(x.msg,"Server changed level")&&strstr(x.msg,"-> R1M2A")&&s.start_pending);
+ coop_session_console_changelevel(&s,"R1M3A",1000,&x);assert(x.action==COOP_ACT_REPLY&&strstr(x.msg,"already in progress"));
+ load(&s,"worlds\\realm1\\R1M2A",2000);spawn(&s,A,"Alice",2100);
+ coop_session_console_changelevel(&s,"r4m1a",3000,&x);assert(x.action==COOP_ACT_CHANGE_WORLD&&strstr(x.msg,"-> R4M1A")&&!s.start_pending);
+ /* The help lists !goto and !back. */
+ cmd(&s,A,"!help");assert(strstr(r.msg,"!goto !back"));
+ /* Chat !changelevel still needs the host. */
+ lobby(&s);cmd(&s,B,"!changelevel R1M2A");assert(strstr(r.msg,"Only the host"));
+}
 int main(void){
+ test_lobby_pick_and_console();
  test_changelevel();
  test_difficulty_and_host_exits();
  test_host_sequences_and_exit_names();
  test_abort_any_state();
  test_table();test_selection_commands();test_full_route_and_exits();test_realm_completion_and_abort();test_test_start_and_legacy();
- printf("PASS coop campaign graph: WORLDORDER table, selection commands, exits, realm completion, abort, lobby return, test start, legacy route\n");
+ printf("PASS coop campaign graph: WORLDORDER table, selection commands, exits, realm completion, abort, lobby return, deathmatch lobby pick, console changelevel, test start, legacy route\n");
  return 0;
 }

@@ -9,7 +9,7 @@ KPCFix: unofficial fixes for **KISS Psycho Circus: The Nightmare Child 1.13** (L
 | Product | DLL | Patches | Source |
 | --- | --- | --- | --- |
 | Client fix | `dinput.dll` (repo root) | `client.exe`, `cshell.dll` (`703813a4`) | `source/` (`src/*.c`, `*.S`, `profiles.h` per edition) |
-| Server Tools | `server-tools/KPCServerTools.dll`, installed as `server.dll` | `object.lto` (`3a03f879`), `server.dll` (original kept as `server.original.dll`) | `server-tools/server-tools-source/` (`src/proxy.c`, `logging.S`, `src/coop_*.h`) |
+| Server Tools | `server-tools/KPCServerTools.dll`, installed as `winmm.dll` (earlier installs: as `server.dll`, engine kept as `server.original.dll`) | `object.lto` (`3a03f879`), `server.dll` (unchanged; loaded by the DLL) | `server-tools/server-tools-source/` (`src/proxy.c`, `logging.S`, `src/coop_*.h`) |
 
 Read [ARCHITECTURE.md](ARCHITECTURE.md) for the product design and
 [coop/COOP-MVP.md](coop/COOP-MVP.md) for the co-op campaign.

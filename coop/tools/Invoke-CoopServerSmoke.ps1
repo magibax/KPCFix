@@ -42,7 +42,7 @@ param(
 )
 $ErrorActionPreference='Stop'
 $GameDir=(Resolve-Path -LiteralPath $GameDir).Path
-foreach($required in 'dedicated.exe','server.dll','server.original.dll','KPCServerTools.dll','KPCServerTools.ini','server-template.cfg','Start-KPC-Selected-Server.ps1'){
+foreach($required in 'dedicated.exe','server.dll','winmm.dll','KPCServerTools.dll','KPCServerTools.ini','server-template.cfg','Start-KPC-Selected-Server.ps1'){
  if(-not (Test-Path -LiteralPath (Join-Path $GameDir $required))){throw "Missing $required in $GameDir; install Server Tools in a disposable copy first."}
 }
 # Another server (for example a player's test server in a different copy) may
@@ -169,6 +169,7 @@ if($Mode -eq 'PassThrough'){
 
 $hash=(Get-FileHash -LiteralPath (Join-Path $GameDir 'KPCServerTools.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
 $serverHash=(Get-FileHash -LiteralPath (Join-Path $GameDir 'server.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
+$loaderHash=(Get-FileHash -LiteralPath (Join-Path $GameDir 'winmm.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
 # Windows PowerShell 5.1 does not quote array arguments; quote paths explicitly.
 $workerArgs='-NoProfile -ExecutionPolicy Bypass -File "'+(Join-Path $GameDir 'Start-KPC-Selected-Server.ps1')+'" -Map "'+$map+'" -Cheats Disabled'
 if($Mode -eq 'Coop'){$workerArgs+=' -Coop'}
@@ -234,7 +235,9 @@ $buildLine=@($lines | Where-Object { $_ -match 'build=coop-session-v[0-9]+ ' }) 
 if($Mode -eq 'PassThrough'){
  Check 'no co-op or hook lines in pass-through' (-not @($lines | Where-Object { $_ -match 'Co-op\]|hooks installed' }).Count)
 }else{
- Check 'server.dll is the installed proxy' ($hash -eq $serverHash)
+ Check 'winmm.dll is the installed Server Tools' ($hash -eq $loaderHash)
+ Check 'server.dll is not a Server Tools build' ($hash -ne $serverHash)
+ Check 'loaded as winmm.dll' (@($lines | Where-Object { $_ -match 'Loaded as winmm\.dll; original server\.dll unchanged' }).Count -ge 1)
  if($Mode -eq 'Coop'){
   Check 'build line names the loaded DLL hash' ([bool]$buildLine -and $buildLine.EndsWith("sha256=$hash"))
   Check 'effective CoopSession=1' ([bool]@($lines | Where-Object { $_ -eq '[KPCFix Co-op] effective CoopSession=1' }).Count)
@@ -250,7 +253,7 @@ $result=[ordered]@{
  mode=$Mode; map=$map; date=(Get-Date).ToString('o'); os=[Environment]::OSVersion.VersionString
  result=$(if($failed){'FAIL'}else{'PASS'}); checks=$checks; events=$events; worker_exit=$exitCode
  kpcservertools_dll_sha256=$hash; server_dll_sha256=$serverHash
- server_original_dll_sha256=(Get-FileHash -LiteralPath (Join-Path $GameDir 'server.original.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
+ winmm_dll_sha256=$loaderHash
  object_lto_sha256=(Get-FileHash -LiteralPath (Join-Path $GameDir 'object.lto') -Algorithm SHA256).Hash.ToLowerInvariant()
  dedicated_exe_sha256=(Get-FileHash -LiteralPath (Join-Path $GameDir 'dedicated.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
  log=$lines; console=$screen

@@ -94,6 +94,7 @@ typedef struct {
  unsigned int completed;            /* routes completed in this server run */
  char world_label[16];              /* loaded world, e.g. R1M2B */
  char lobby_world[COOP_WORLD_MAX];  /* normalised lobby world or empty = route start */
+ char lobby_pick[COOP_WORLD_MAX];   /* campaign: random deathmatch lobby picked at !abort / route end */
  unsigned int intro_settle_ms;      /* barrier settle after the last spawn (default 3000) */
 } CoopSession;
 
@@ -172,10 +173,22 @@ static const char *coop_route_label(const CoopSession *s,unsigned int pos){
  return pos<s->route_len?s->route[pos].label:"?";
 }
 /* World a CHANGE_WORLD result targets: a route world or the lobby world. */
+/* Campaign: the lobby is a deathmatch world, never a campaign world (its
+ * scripts and sequences would run in the lobby: two-PC test 2026-11-13).
+ * A CoopLobbyWorld that is not a campaign world is used as is; otherwise
+ * !abort and the end of a route pick a random deathmatch map PM01-PM10
+ * (coop_session_pick_lobby). Until the first pick the launcher's world
+ * counts as the lobby. */
+static int coop_lobby_fixed(const CoopSession *s){
+ return s->lobby_world[0]&&(!s->campaign||coop_campaign_find(s->lobby_world)<0);
+}
 static const char *coop_target_world(const CoopSession *s,unsigned int target){
  /* Lobby: CoopLobbyWorld, else always R1M2B (the co-op lobby world the
   * launcher starts; it is in every maplist the launcher writes). */
- if(target==COOP_TARGET_LOBBY)return s->lobby_world[0]?s->lobby_world:COOP_DEFAULT_LOBBY;
+ if(target==COOP_TARGET_LOBBY){
+  if(s->campaign&&!coop_lobby_fixed(s)&&s->lobby_pick[0])return s->lobby_pick;
+  return s->lobby_world[0]?s->lobby_world:COOP_DEFAULT_LOBBY;
+ }
  return target<s->route_len?s->route[target].world:"";
 }
 /* Upper-case last path component without ".dat", bounded (e.g. R1M2B). */
@@ -186,6 +199,22 @@ static void coop_world_label(const char *world,char out[16]){
  for(i=0;w[i];i++)if(w[i]=='/')start=i+1;
  for(i=start;w[i]&&n<15;i++)out[n++]=(w[i]>='a'&&w[i]<='z')?(char)(w[i]-32):w[i];
  out[n]=0;
+}
+/* Campaign without a fixed deathmatch lobby: pick deathmatch/pmNN (01-10)
+ * from seed, never the world that is loaded now. */
+#define COOP_LOBBY_MAPS 10u
+static void coop_session_pick_lobby(CoopSession *s,unsigned int seed){
+ unsigned int k,n=0,pick=1,start;
+ if(!s->campaign||coop_lobby_fixed(s))return;
+ start=seed%COOP_LOBBY_MAPS;
+ for(k=0;k<COOP_LOBBY_MAPS;k++){
+  char l[8];unsigned int v=(start+k)%COOP_LOBBY_MAPS+1u;
+  l[0]='P';l[1]='M';l[2]=(char)('0'+v/10u);l[3]=(char)('0'+v%10u);l[4]=0;
+  pick=v;
+  if(!coop_word(s->world_label,l))break;
+ }
+ {const char *pre="deathmatch/pm";for(k=0;pre[k];k++)s->lobby_pick[n++]=pre[k];}
+ s->lobby_pick[n++]=(char)('0'+pick/10u);s->lobby_pick[n++]=(char)('0'+pick%10u);s->lobby_pick[n]=0;
 }
 /* Global WORLDORDER index of route position pos, or -1 for the MVP table. */
 static int coop_campaign_index(const CoopSession *s,unsigned int pos){
@@ -497,6 +526,7 @@ static int coop_in_lobby_world(const CoopSession *s){
 }
 static void coop_abort_change(CoopSession *s,unsigned int now,CoopResult *r){
  s->start_pending=0;s->lobby_pending=1;s->abort_after_load=0;
+ coop_session_pick_lobby(s,now);
  coop_session_lobby_reset(s);
  coop_begin_change(s,COOP_TARGET_LOBBY,now,r,"Host aborted");
 }
@@ -506,17 +536,20 @@ static void coop_abort_change(CoopSession *s,unsigned int now,CoopResult *r){
  * exits lead to its successor; !abort returns to the lobby and the default
  * selection. The change is the same server-side world change as an exit
  * (loading picture, spawn hold, !abort during the load). */
-static void coop_session_changelevel(CoopSession *s,int me,const char *arg,unsigned int now,CoopResult *r){
+/* console = 1: the dedicated server console's "changelevel <world>" (server
+ * authority: no host test and no player minimum). */
+static void coop_session_changelevel_as(CoopSession *s,int me,int console,const char *arg,unsigned int now,CoopResult *r){
  int g;unsigned int m=0,present=coop_present_count(s),k;
  char why[COOP_MSG_MAX];
  if(!s->campaign){coop_result(r,COOP_ACT_REPLY,"[Co-op] !changelevel needs CoopCampaign=1");return;}
  while(*arg==' '||*arg=='\t')arg++;
- if(!*arg){coop_result(r,COOP_ACT_REPLY,"[Co-op] Use: !changelevel <world>, e.g. !changelevel R1M2A or worlds\\realm1\\R1M2A (host)");return;}
+ if(!*arg){coop_result(r,COOP_ACT_REPLY,console?"[Co-op] Use: changelevel <world>, e.g. changelevel R1M2A or worlds\\realm1\\R1M2A":
+                                         "[Co-op] Use: !changelevel <world>, e.g. !changelevel R1M2A or worlds\\realm1\\R1M2A (host)");return;}
  g=coop_campaign_find(arg);
  if(g<0){coop_result(r,COOP_ACT_REPLY,"[Co-op] Unknown world. Use a campaign world R1M0..R5M1B: !changelevel R1M2A or worlds\\realm1\\R1M2A");return;}
- if(me<0||me!=s->host){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can change the level");return;}
+ if(!console&&(me<0||me!=s->host)){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can change the level");return;}
  if(s->phase==COOP_PHASE_TRANSITION||s->phase==COOP_PHASE_WORLD_LOADING){coop_result(r,COOP_ACT_REPLY,"[Co-op] A world change is already in progress");return;}
- if(s->phase==COOP_PHASE_LOBBY&&present<s->min_players){
+ if(!console&&s->phase==COOP_PHASE_LOBBY&&present<s->min_players){
   r->action=COOP_ACT_REPLY;r->msg[0]=0;
   coop_append(r->msg,&m,"[Co-op] Need ");coop_append_uint(r->msg,&m,s->min_players);
   coop_append(r->msg,&m," players to start, ");coop_append_uint(r->msg,&m,present);coop_append(r->msg,&m," here");
@@ -529,9 +562,16 @@ static void coop_session_changelevel(CoopSession *s,int me,const char *arg,unsig
   s->started=1;s->start_pending=1;
  }else s->start_pending=0;
  s->lobby_pending=0;s->abort_after_load=0;
- why[0]=0;coop_append(why,&m,"Host changed level (campaign continues from ");
+ why[0]=0;coop_append(why,&m,console?"Server changed level (campaign continues from ":"Host changed level (campaign continues from ");
  coop_append(why,&m,coop_route_label(s,0));coop_append(why,&m,")");
  coop_begin_change(s,0,now,r,why);
+}
+static void coop_session_changelevel(CoopSession *s,int me,const char *arg,unsigned int now,CoopResult *r){
+ coop_session_changelevel_as(s,me,0,arg,now,r);
+}
+static void coop_session_console_changelevel(CoopSession *s,const char *arg,unsigned int now,CoopResult *r){
+ coop_result(r,COOP_ACT_NONE,"");
+ coop_session_changelevel_as(s,-1,1,arg?arg:"",now,r);
 }
 /* Chat command from a known member. Text is untrusted. */
 static void coop_session_command(CoopSession *s,unsigned int client,const char *text,
@@ -599,7 +639,7 @@ static void coop_session_command(CoopSession *s,unsigned int client,const char *
  }
  if(COOP_IS("help")){
   coop_result(r,COOP_ACT_REPLY,s->campaign?
-   "[Co-op] !coop !abort !next !difficulty !campaign full|water|earth|air|fire|nightmare !changelevel !kill !class":
+   "[Co-op] !coop !abort !next !difficulty !campaign <realm|full> !changelevel !kill !class !goto !back":
    "[Co-op] kpc-coop/1: !ready !unready !leave !join !start !next !abort !difficulty (host) !coop");
   return;
  }
@@ -730,6 +770,7 @@ static void coop_session_exit(CoopSession *s,const char *next_world,unsigned int
   char w[COOP_WORLD_MAX];
   if(coop_world_normalize(next_world,w)&&(finale||coop_world_equal(next_world,coop_campaign_worlds[g+1].world))){
    s->start_pending=0;s->lobby_pending=1;s->completed++;
+   coop_session_pick_lobby(s,now);
    coop_begin_change(s,COOP_TARGET_LOBBY,now,r,"Selected route complete");
    return;
   }

@@ -24,13 +24,14 @@ original bytes, and fail closed when the bytes differ.
 ## Playing
 
 1. **Server:** start the server tools launcher with the co-op checkbox, or run
-   `Start-KPC-Selected-Server.ps1 -Map "worlds\realm1\R1M2B" -Cheats Enabled -Coop`.
+   `Start-KPC-Selected-Server.ps1 -Map random -Cheats Enabled -Coop`.
    `-Coop` executes `kpc-coop-server.cfg` (your GUI config plus the co-op map list
    `kpc-coop-maps.txt` and no start armour) and sets `CoopSession=1`. Set
    `CoopCampaign=1` and `CoopIntro=1` in `KPCServerTools.ini [Coop]` for the
    campaign.
 2. **Clients:** install the KPCFix client (`dinput.dll`, `KPCFix.ini`) on every PC and
-   join the server from the multiplayer browser. Everyone arrives in the R1M2B lobby.
+   join the server from the multiplayer browser. Everyone arrives in the lobby, a
+   deathmatch map (PM01–PM10). One player can start alone (`CoopMinPlayers=1`).
 3. **Host** (the earliest player still present, shown with `*` in `!coop`):
    `!difficulty …` if wanted, then `!campaign full` (or a realm). Everyone loads R1M0
    at once.
@@ -43,10 +44,11 @@ original bytes, and fail closed when the bytes differ.
 | `!campaign water\|earth\|air\|fire\|nightmare` (or `1`–`5`) | host, lobby | Starts at that realm's first world now and carries on to the end of the game. `from <realm>` is an alias |
 | `!campaign` | anyone | Shows the selection and help. Any other input gets the help reply |
 | `!difficulty lullaby\|daydream\|sleepless\|coldsweat\|nightmare` (or `0`–`4`, `easy`/`normal`/`hard`) | host, lobby | Difficulty from the next world loaded. `!difficulty` alone shows it. Alias `!skill` |
-| `!abort` | host, any state | Resets everything back to the lobby: everyone goes back to the lobby world (`CoopLobbyWorld`, the random deathmatch map), readiness is cleared, the selection returns to full. During a world change it waits for that world to load. In the lobby it resets in place |
+| `!abort` | host, any state | Resets everything back to the lobby: everyone goes back to a lobby deathmatch map (PM01–PM10, never the one loaded now; a campaign world is never the lobby), the campaign flags are reset (no scripted sequences in the lobby), readiness is cleared, the selection returns to full. During a world change it waits for that world to load. In the lobby it resets in place |
 | `!ready` / `!unready`, `!start` | members / host | The older start: everyone ready, host starts the current selection |
 | `!next` | host, in play | Forces the next world (debugging; exits are host-only anyway) |
 | `!changelevel <world>` | host, lobby or play (campaign mode) | Everyone goes to that WORLDORDER world (`R1M2A` or `worlds\realm1\R1M2A`, any case), and the campaign carries on from there (natural exits lead to its successor). Unknown names get the format; others get "Only the host" |
+| `!goto <player>` / `!back` | anyone, lobby or play | Moves you next to that player (whole name or a unique prefix); `!back` returns to where you were. 3 s cooldown (`CoopTeleport`) |
 | `!kill` | anyone | Kills the player who typed it (normal death and respawn) |
 | `!class` / `!class starbearer\|beastking\|celestial\|demon` | anyone | Next or named player class; weapons, armour and ammo are kept, and the new class's melee / class weapon is added where the player had one |
 | `!all` | anyone, `kpc_cheats 1` | Every armour piece, every weapon, full ammo, for the typer only |
@@ -57,6 +59,9 @@ The stock cheat **keys** GimmieGimmieGimmie and NextArmor (bind them in Setup >
 Controls) also work per player with `kpc_cheats 1`, CyclePlayerClass without it
 (`CoopCheatKeys`). GimmieGimmieGimmie gives 200 of each ammo up to the stock cap,
 100 + 100 per armour piece (`f3440`), as in single player.
+
+The dedicated server's own console also takes `changelevel <world>` (campaign mode;
+no host check and no player minimum).
 
 Commands are read from the game's own chat relay (object `0xfeec4`) and answered with
 its broadcast; no new network messages. Replies are at most 111 bytes.
@@ -175,21 +180,25 @@ its broadcast; no new network messages. Replies are at most 111 bytes.
 Built 2026-11-12 (`7dbba5eb`), emulator and native-smoke tested, not yet two-PC tested.
 
 * **Persistence** (`CoopKeepInventory=1`, `CoopKeepOnDeath=1`): each member's weapons
-  (2–14), armour pieces (`player+0x260` bits), shards (`0x1e`), ammo (`0x11`–`0x14`)
+  (2–14), armour pieces (`player+0x260` bits), BlackDiamonds (`0x1e`), ammo (`0x11`–`0x14`)
   and class (`player+0x264`) are saved every second while alive and right before every
   world change, keyed by the member (`coop_inventory.h`). 400 ms after a spawn the
   class is applied and whatever is missing is given with `f3440` (armour first: it
   raises the ammo cap; weapons need the gauntlets and the player's class, so a weapon
   from another class is given with the class set to it for the call). A start from
   the lobby forgets every snapshot (fresh run); `!abort` and changes along the
-  campaign keep them.
+  campaign keep them. Ammo is kept exactly: the stock ammo a restored weapon brings
+  with it is removed again (two-PC RT3–RT5).
 * **Window shards** (`CoopWindowShards=1`): the window's hide is held 200 ms after its
   break message, so remote clients still have the window when they build the shards.
+  KPCFix clients hide it as soon as the shards are built (`HideBrokenWindow`).
 * **Respawning pickups** (`CoopItemRespawnSec=15`): campaign worlds author
-  `Respawn=false`. At the pickup's hide call (`0xcc29e`) a weapon, ammo, shard, health
-  or power-up gets the stock deathmatch respawn (`+0xb4`, `+0xb8`); the respawn
-  (`0xcbfff` → `cc080`) waits while a player stands on the spot. Armour pieces,
-  pamphlets, keys, tickets and the ultimate weapon never respawn.
+  `Respawn=false`. At the pickup's hide call (`0xcc29e`) a weapon, ammo, BlackDiamond,
+  armour piece, health or power-up gets the stock deathmatch respawn (`+0xb4`, `+0xb8`);
+  the respawn (`0xcbfff` → `cc080`) waits while a player stands on the spot. A returned
+  armour piece ("armor shard") is picked up quietly, with no cutscene, and only by a
+  player who lacks it (`0xc837b`). Pamphlets, keys, tickets and the ultimate weapon
+  never respawn.
 * **Cheat keys** (`CoopCheatKeys=1`): the client sends cheat message `0x3b`; the server
   handler `fb910` refused GimmieGimmieGimmie `0x2f`, CyclePlayerClass `0x31` and
   NextArmor `0x39` in multiplayer (flag 2 of table `0x1016d8a0`). Around that call the
@@ -222,6 +231,8 @@ Built 2026-11-12 (`7dbba5eb`), emulator and native-smoke tested, not yet two-PC 
 | Setting | Effect |
 | --- | --- |
 | `CampaignLoadingArt`, `CampaignLoadingMinimumMs`, `CampaignLoadingHoldSpawn` | Loading picture and spawn hold, above |
+| `KeepRendererOnFocusLoss` (1) | With `KeepAudioOnFocusLoss`: minimised, the game keeps rendering and animating as when focused (no `r_TermRender`/`r_InitRender`); keyboard and mouse are released |
+| `HideBrokenWindow` (1) | A broken window is hidden on this client as soon as its shards are built |
 | `KeepAudioOnFocusLoss`, `ResyncAudioOnFocus` | Remote multiplayer: alt-tab no longer pauses server-owned sounds; 300 ms after the window returns, every sound restarts at its real-time position (PauseAll `0x74c90` + ResumeAll `0x74ce0` from the frame's sound update `0x13bcd`) |
 | `ChatMessageSeconds` (8) | Chat and server message lifetime (stock 3 s, cshell `0xcb38d`) |
 | `ChatBlocksActions` (1) | While a chat message is typed (editor `shell+0x8c`, byte `+0x12ed`), the shell's `OnCommandOn` (vtable `0xff724` → `0xc9d80`) drops every key action: letters no longer toggle noclip/invuln (actions 90/93) or move |
@@ -246,8 +257,8 @@ seq=<n> <PHASE> <event> <detail>`. Useful events: `change`, `world-loaded`,
 
 * Spawn spread does not check doors/moving models or live actors.
 * Menu items not done yet: a "connected" indicator and a Disconnect button in the
-  Escape menu. The Audio-menu checkbox for `KeepAudioOnFocusLoss` exists; its state
-  display and position are being fixed (prompt A).
+  Escape menu. The Audio-menu checkbox for `KeepAudioOnFocusLoss` works; clicks
+  elsewhere on the Audio screen reach the stock widgets again (RT10).
 * Stock clients (without KPCFix) see no loading picture and are not held.
 * No world maps between stages; no saves. Inventory persists within one server run
   only (lost when a player disconnects or the server restarts).

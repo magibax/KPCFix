@@ -114,13 +114,14 @@ U32 THISCALL kpc_mouse_menu_ready(void *menu){
  * term, draw, mouse-move and event slots are wrapped: each runs the original,
  * then the same widget call for the extra box (vtable +0x08 init, +0x0c draw,
  * +0x24 hover, +0x2c event; scalar destructor +0x00 with flag 0 releases its
- * images). Mouse only: the click (event 1) is hit-tested by the checkbox
- * itself (0xd590), so the selected stock widget is never toggled with it. */
+ * images). Mouse only: a click (event 1) goes to the box only when its hit
+ * tests 0xd370 / 0xd400 report the mouse on it (kpc_audio_event). */
 static U8 keep_box[0x160] __attribute__((aligned(16)));
 static U32 keep_box_live;
 U8 *g_audio_shell;
 static const char keep_label[]="Keep Running When Minimised";
-static const char keep_tip[]="Keep sounds, music and the game running when the window loses focus.";
+static const char keep_tip[]="Keep sound, music and the game running when unfocused. Off: multiplayer audio and narration may go out of sync.";
+_Static_assert(sizeof keep_tip<=0x80,"tooltip field is 0x80 bytes");
 typedef U32 (THISCALL *ScreenFn0)(void *);
 typedef U32 (THISCALL *ScreenFn1)(void *,U32);
 typedef U32 (THISCALL *ScreenFn2)(void *,U32,U32);
@@ -173,8 +174,18 @@ U32 THISCALL kpc_audio_move(void *screen){
         ((ScreenFn2)BOX_FN(0x24))(keep_box,(U32)(I32)mouse[1],(U32)(I32)mouse[2]);
     return result;
 }
+/* The checkbox's click handler 0xd590 returns 1 for every click, hit or not
+ * (0xd652), so the box gets the click only when its own hit tests (0xd370
+ * box, 0xd400 label; the tests 0xd590 itself makes) say the mouse is on it.
+ * Two-PC test RT10: every other Audio widget had stopped reacting. */
+static int keep_box_hit(void){
+    const ShellLayout *L=g_shell_layout;
+    if(!L->checkbox_hit_box||!L->checkbox_hit_label)return 0;
+    return (U8)((ScreenFn0)(g_audio_shell+L->checkbox_hit_box))(keep_box)==1||
+           (U8)((ScreenFn0)(g_audio_shell+L->checkbox_hit_label))(keep_box)==1;
+}
 U32 THISCALL kpc_audio_event(void *screen,U32 event,U32 argument){
-    if(keep_box_live&&((U8 *)screen)[0x5c]&&event==1&&(U8)((ScreenFn2)BOX_FN(0x2c))(keep_box,event,argument))return 1;
+    if(keep_box_live&&((U8 *)screen)[0x5c]&&event==1&&keep_box_hit()){((ScreenFn2)BOX_FN(0x2c))(keep_box,event,argument);return 1;}
     return ((ScreenFn2)(g_audio_shell+g_shell_layout->audio_event))(screen,event,argument);
 }
 

@@ -24,7 +24,7 @@ Record toolchain, DLL hashes, regional files, OS or Wine version, renderer and o
 
 From the repository root run `python3 -m unittest discover -s tools -p 'test_*.py'`. Build both archives using the [release procedure](https://github.com/magibax/KPCFix/blob/main/RELEASING.md). Verify the internal manifests, compare ZIP member paths case-insensitively across products and record the ZIP hash with the playtest results.
 
-For an upgrade, test with the official engine already preserved as `server.original.dll`. A recognised active proxy should upgrade in place. An unrecognised active `server.dll` should stop setup without replacing it. With a verified original backup, move the active DLL aside and rerun setup. Confirm the original engine hash and active INI survive both paths.
+For an upgrade from an earlier install, test with the official engine preserved as `server.original.dll` and a Server Tools build as `server.dll`: setup should put the original back as `server.dll` and install `winmm.dll`. An unrecognised `server.dll` without the Server Tools marker should stop setup without replacing it, and so should a `winmm.dll` from another mod. Confirm the original engine hash and active INI survive every path, that `KPCServerTools.log` says "Loaded as winmm.dll", and that the client and `Psycho.exe` still start and play sound with `winmm.dll` present. Restore-Original-Server.cmd should leave only the stock `server.dll`.
 
 ## Audit remediation Windows acceptance matrix (pending manual verification)
 

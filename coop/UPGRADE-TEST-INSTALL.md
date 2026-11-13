@@ -41,13 +41,12 @@ The install step, `tools/install_game.py`:
   key goes to the end of the file.
 * **Server files:** every tracked file under `server-tools\` is copied to the same path in the
   game folder when it differs.
-* **Active `server.dll`:** replaced with the new `KPCServerTools.dll` only when it already is a
-  Server Tools build (it contains the `[KPCFix Server Tools]` marker) and `server.original.dll`
-  exists and is not one. This replaces the "move `server.dll` aside and run setup again" step of
-  section 4. In any other case it leaves `server.dll` alone and tells you to run
-  `Setup-KPCServerTools.cmd`.
-* **Never touched:** `KPCServerTools.ini`, `server.original.dll`, `object.lto`, `client.exe`,
-  `cshell.dll`, `dedicated.exe`, and anything it does not ship.
+* **`winmm.dll` (Server Tools):** replaced with the new `KPCServerTools.dll` only when it already is
+  a Server Tools build (it contains the `[KPCFix Server Tools]` marker). If `server.dll` is still an
+  earlier Server Tools install (proxy as `server.dll`, engine as `server.original.dll`), or Server
+  Tools are not set up, it changes nothing there and tells you to run `Setup-KPCServerTools.cmd`.
+* **Never touched:** `KPCServerTools.ini`, `server.dll`, `server.original.dll`, `object.lto`,
+  `client.exe`, `cshell.dll`, `dedicated.exe`, and anything it does not ship.
 * **Second run:** it prints "is up to date" and changes nothing.
 
 What it does not do: commit (the rule "install only committed builds" below is yours to
@@ -105,14 +104,15 @@ the repository changes it.
    * usually `KPCServerTools.dll`, `SERVER_TOOLS_BUILD.json`, `SHA256SUMS-Server-Tools`,
      `KPCServerTools-default.ini` and the launcher scripts;
    * replace `server-tools-source\` as a whole.
-2. Run `Setup-KPCServerTools.ps1` (or `.cmd`) in the game folder. It installs the proxy as `server.dll`,
-   keeps the official engine as `server.original.dll`, restores a stock `object.lto` if needed, and checks
-   the installed hash against `SERVER_TOOLS_BUILD.json`.
-3. **Expected on branch builds:** setup stops with "Unrecognized active server.dll". Setup only upgrades in
-   place from proxies on the reviewed allowlist (`previous_proxy_hashes`), and branch test builds are not
-   on it. First confirm the backup's `server.dll` matches the active one. Then move the active
-   `server.dll` into the backup folder (leave `server.original.dll` where it is) and run setup again. It
-   reports "DLL installed. Original engine preserved; object.lto is stock."
+2. Close the game, launcher and server (`winmm.dll` also loads into `client.exe` and `Psycho.exe`).
+   Run `Setup-KPCServerTools.ps1` (or `.cmd`) in the game folder. It installs the tools as `winmm.dll`,
+   leaves the official `server.dll` unchanged, restores a stock `object.lto` if needed, and checks the
+   installed hash against `SERVER_TOOLS_BUILD.json`.
+3. **Earlier installs:** if `server.dll` is a Server Tools build (any build with the
+   `[KPCFix Server Tools]` marker, branch builds included) and `server.original.dll` matches the
+   dedicated executable, setup puts `server.original.dll` back as `server.dll` before installing
+   `winmm.dll`. It reports "Installed as winmm.dll. server.dll and object.lto are the unchanged
+   originals." An unrecognised `server.dll` without the marker still stops setup.
 
 Do not add branch hashes to `previous_proxy_hashes` to avoid this step. That list requires a reviewed
 compatibility decision (see [README.md](README.md), "Reviewed proxy upgrade hash policy").

@@ -11,13 +11,13 @@
 | Read this | For |
 | --- | --- |
 | [COOP-MVP.md](COOP-MVP.md) | How the co-op campaign works now (features, commands, engine addresses) |
-| [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md) | Installed builds, test plan and results, playtest triage, open items |
+| [NEXT-SESSION-HANDOFF.md](NEXT-SESSION-HANDOFF.md) | Next steps, installed builds, the retest plan, open work, playtest triage |
 | [CONFIGURATION.md](CONFIGURATION.md) | Every `[Coop]` setting |
 | [UPGRADE-TEST-INSTALL.md](UPGRADE-TEST-INSTALL.md) | Putting a new build on the test PCs: the one-command build, package and install script, and the manual steps behind it |
 | [CAMPAIGN-ARCHITECTURE.md](CAMPAIGN-ARCHITECTURE.md), [CAMPAIGN-MAP-INVENTORY.md](CAMPAIGN-MAP-INVENTORY.md) | Design of the unfinished parts; per-world data |
 | [GENERAL-ALLOCATOR.md](GENERAL-ALLOCATOR.md), [BSP-VOLUME-ABI.md](BSP-VOLUME-ABI.md), [BOX-OVERLAP-ABI.md](BOX-OVERLAP-ABI.md), [INTERSECT-ABI.md](INTERSECT-ABI.md), [SPAWN-ENGINE-TRACE.md](SPAWN-ENGINE-TRACE.md), [SPAWN-FINDINGS.md](SPAWN-FINDINGS.md) | Spawn and collision research (2026-11-10/11). Reference only: the shipped spawn spread is described in COOP-MVP.md |
 | [CAMPAIGN-SYNC-DESIGN.md](CAMPAIGN-SYNC-DESIGN.md) | The original sync proposal. Mostly implemented since; COOP-MVP.md is the current description |
-| [archive/](archive/) | Superseded evidence and finished session prompts |
+| [archive/](archive/) | Superseded evidence, finished session prompts and finished two-PC test rounds ([TWO-PC-RESULTS-2026-11-13.md](archive/TWO-PC-RESULTS-2026-11-13.md)) |
 
 The rest of this file is the 2026-11-11 research ledger and roadmap. Where it
 disagrees with COOP-MVP.md or the handoff, those two are right.

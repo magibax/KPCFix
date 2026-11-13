@@ -6,18 +6,22 @@ Server Tools uses its own semantic version (MAJOR.MINOR.PATCH), independently of
 
 ## Update an existing DLL installation
 
-Close the game and server, copy these files into the game directory, then run **Setup-KPCServerTools.cmd** again to deploy the new DLL. Keep your existing `server.original.dll` and `KPCServerTools.ini`. The setup recognizes the preceding proxy build.
+Close the game and server, copy these files into the game directory, then run **Setup-KPCServerTools.cmd** again to deploy the new DLL. Keep your existing `KPCServerTools.ini`. The setup recognizes the preceding builds.
 
-If setup reports an unrecognised active `server.dll`, leave the official `server.original.dll` in place. Once you have confirmed it is the matching original, move the active `server.dll` to a separate backup folder and rerun setup. Setup verifies the original against the dedicated executable before installing the proxy. Keep the moved DLL if you need to restore your previous installation.
+Earlier releases installed the tools as `server.dll` and kept the official engine as `server.original.dll`. Setup now moves such an install over: it puts the verified `server.original.dll` back as `server.dll` and installs the tools as `winmm.dll`. If setup reports an unrecognised active `server.dll`, leave `server.original.dll` in place, move the active `server.dll` to a separate backup folder and rerun setup.
 
 ## Install or migrate
 
 1. Close the game and dedicated server for this one-time setup. Back up your game folder.
 2. Extract this package into the game directory, normally `C:\Games\Psycho\`, beside `Psycho.exe`, `dedicated.exe`, `server.dll` and `object.lto`. Keep the package's supporting files together.
-3. Run **Setup-KPCServerTools.cmd**. It preserves the official engine as `server.original.dll`, installs our proxy as `server.dll`, and restores recognized earlier Server Tools patches to the exact original `object.lto`. Unsupported files are rejected.
+3. Run **Setup-KPCServerTools.cmd**. It installs the tools as `winmm.dll`, leaves the official `server.dll` unchanged, and restores recognized earlier Server Tools patches to the exact original `object.lto`. Unsupported files are rejected.
 4. Run **KPC-Server-Launcher.cmd** to choose from the single all-maps list, adjust server rules and initial cheat permission, then start the server. The compact GUI keeps the campaign disclaimer at the top. Its launcher terminal remains visible; VBScript is not required. Clients should discover it in their game browser.
 
-Do not manually rename or overwrite the original `server.dll`: setup handles the backup. `KPCServerTools.dll` is the supplied proxy payload, which setup copies to the engine's expected filename. Keep `server.original.dll` beside it.
+Do not rename or overwrite the original `server.dll`; nothing needs it any more. `KPCServerTools.dll` is the supplied payload, which setup copies to `winmm.dll`. Setup refuses to replace a `winmm.dll` from another mod.
+
+**Why winmm.dll.** `dedicated.exe` imports Windows' `WINMM.dll`, and Windows looks for it in the game folder first, so the tools load before the server starts, the same way KPCFix's `dinput.dll` loads into the game. Every winmm function is passed straight on to the system `winmm.dll`. Only in the supported `dedicated.exe` does the DLL do more: it answers the server's request for `server.dll` itself and loads the real `server.dll` behind it. `client.exe` and `Psycho.exe` also import winmm, so they load the DLL too, but there it only passes calls on. Close the game as well as the server before setup or removal.
+
+**Wine.** Wine uses its built-in winmm unless told otherwise. Start the server with `WINEDLLOVERRIDES="winmm=n,b"` (as for `dinput` on the client). Without it the server runs without Server Tools. The earlier layout (the tools as `server.dll`, the engine as `server.original.dll`) still works and needs no override.
 
 The launcher uses its own generated `kpc-gui-server.cfg` and map list; it does not rewrite the shipped `server.cfg`. All 59 maps are listed, including campaign maps and scripted M0 introductions. Campaign maps were not designed for multiplayer and may be buggy.
 
@@ -44,13 +48,13 @@ AllowCheats=0
 
 The graphical launcher adds `AllowCheats` under `[ServerTools]` if an older `KPCServerTools.ini` omits it, and saves the file as UTF-8 without a byte-order mark. Setup preserves existing INI files.
 
-`Enabled=0` makes the proxy pass calls through to the official engine without installing Server Tools hooks; restart the server after changing it. `AllowCheats` sets initial permission, which the graphical launcher updates from its checkbox. Use the console command for live changes. Chat logging and announcements are active whenever the tools are enabled. Startup/errors are also appended to `KPCServerTools.log`.
+`Enabled=0` makes the DLL pass calls through to the official engine without installing Server Tools hooks; restart the server after changing it. `AllowCheats` sets initial permission, which the graphical launcher updates from its checkbox. Use the console command for live changes. Chat logging and announcements are active whenever the tools are enabled. Startup/errors are also appended to `KPCServerTools.log`.
 
-To remove the proxy, close the game/server and run **Restore-Original-Server.cmd**. It restores the preserved official engine to `server.dll`; `object.lto` remains stock. Old on-disk patch installers are moved to `KPCServerTools-Legacy` during migration; do not run them with this DLL installation.
+To remove the tools, close the game and server and run **Restore-Original-Server.cmd**. It deletes the Server Tools `winmm.dll` (and puts back `server.original.dll` from an earlier install); `server.dll` and `object.lto` remain stock. Old on-disk patch installers are moved to `KPCServerTools-Legacy` during migration; do not run them with this DLL installation.
 
 ## How it works and validation
 
-The small 32-bit proxy forwards the engine's two exports and intercepts its lookup of `ObjectDLLSetup`. It validates the official binaries, then installs the established Server Tools hooks in the loaded object module. It does not change the object file, PE headers or relocation table. Original game binaries are not bundled.
+The small 32-bit DLL loads as `winmm.dll`, forwards the system winmm functions, answers `dedicated.exe`'s load of `server.dll`, forwards the engine's two exports and intercepts its lookup of `ObjectDLLSetup`. It validates the official binaries, then installs the established Server Tools hooks in the loaded object module. It does not change the object file, PE headers or relocation table. Original game binaries are not bundled.
 
 Compiled-proxy emulation passed for Europe and US engine profiles at relocated DLL/object addresses, with cheats enabled, disabled, pass-through and altered-object rejection. Hook tests cover separate player state, live revocation, client OFF acknowledgements, chat announcements and prompt restoration. These checks supplement Windows testing; they do not replace it. The stable R3 warning-spacing fix was confirmed in a Windows playtest. Record the DLL hash and repeat the applicable live checks when testing a different build.
 

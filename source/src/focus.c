@@ -119,14 +119,45 @@ U32 __attribute__((thiscall)) kpc_sound_update(void *sound){
 }
 U32 kpc_focus_resyncs(void){return resyncs;}
 /* Replaces "call 0x53980" (r_TermRender, cdecl) at 0x6d1d, the focus-loss
- * renderer shutdown: marks the music pause it triggers as a focus loss. */
+ * renderer shutdown. With the setting on and [Multiplayer]
+ * KeepRendererOnFocusLoss=1 (default) the renderer is not shut down: the game
+ * keeps drawing and animating exactly as when focused (the matching restart,
+ * r_InitRender at 0x6c97, is skipped as a pair). Input still stops: the
+ * engine's input poll (0x1374c, 0x137fc) and mouse centring (0x696c) keep
+ * their stock window tests, and 0x13a20 still resets input on deactivate.
+ * If a fullscreen surface is lost anyway, d3d.ren restores it on its next
+ * flip (IsLost/Restore at d3d.ren 0x1d542). Otherwise this marks the music
+ * pause the shutdown triggers as a focus loss. */
+U32 g_focus_keep_render=1;
+static U32 render_kept,renders_kept;
 U32 CDECL kpc_focus_term_render(void *cm,U32 flag){
     typedef U32 (CDECL *TermFn)(void *,U32);U32 result;
+    if(g_focus_keep_render&&kpc_keep_running()){
+        if(!render_kept&&g_focus_log)g_focus_log("Focus loss: renderer kept running (no shutdown); input released.\r\n");
+        render_kept=1;renders_kept++;return 0;
+    }
+    render_kept=0;
     losing=1;
     result=((TermFn)(g_focus_client+0x53980u))(cm,flag);
     losing=0;
     return result;
 }
+/* Replaces "call 0x534f0" (r_InitRender, cdecl(cm, mode)) at 0x6c97, the
+ * focus-regain restart. 0 = success (the caller shows an error otherwise). */
+U32 CDECL kpc_focus_init_render(void *cm,void *mode){
+    typedef U32 (CDECL *InitFn)(void *,void *);
+    if(render_kept){render_kept=0;return 0;}
+    return ((InitFn)(g_focus_client+0x534f0u))(cm,mode);
+}
+/* Replaces "call 0x287b0" at 0x158e3 and 0x15922: the client world's
+ * active-window tests (client object animation 0x52500 and the client
+ * object update 0x46e0). Active while the renderer is kept. */
+U32 CDECL kpc_focus_world_active(void){
+    typedef U32 (CDECL *ActiveFn)(void);
+    U32 active=((ActiveFn)(g_focus_client+0x287b0u))();
+    return active||render_kept;
+}
+U32 kpc_focus_renders_kept(void){return renders_kept;}
 /* cshell OnEvent 4 / 3 music calls (thiscall, ECX = music manager). */
 void __attribute__((thiscall)) kpc_music_pause(void *music){
     if(losing&&kpc_keep_running()){music_skipped=1;return;}

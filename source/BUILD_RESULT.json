@@ -1,8 +1,8 @@
 {
   "output": "dinput.dll",
   "platform": "windows",
-  "sha256": "1e97026a6944cc6d7e2e3478aca576b2e7a1b1c9fce390bbe0a2d7ddb2525f8e",
-  "bytes": 58368,
+  "sha256": "9a7eef012c22cb5b93236d66bab86e1fc913407b781a4ada8d8e501f9ec0ef34",
+  "bytes": 59392,
   "exports": [
     "DirectInputCreateA",
     "DirectInputCreateW",
@@ -17,8 +17,8 @@
   "elf_to_coff": [
     {
       "object": "kpcfix.obj",
-      "dir32": 866,
-      "rel32": 185
+      "dir32": 886,
+      "rel32": 187
     },
     {
       "object": "sha256.obj",
@@ -32,7 +32,7 @@
     },
     {
       "object": "ui.obj",
-      "dir32": 79,
+      "dir32": 84,
       "rel32": 3
     },
     {
@@ -52,7 +52,7 @@
     },
     {
       "object": "console.obj",
-      "dir32": 27,
+      "dir32": 31,
       "rel32": 5
     },
     {
@@ -72,7 +72,7 @@
     },
     {
       "object": "focus.obj",
-      "dir32": 58,
+      "dir32": 73,
       "rel32": 2
     },
     {

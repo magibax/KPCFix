@@ -22,16 +22,25 @@ function Assert-KPCServerVersion([string]$Exe,$GameProfile) {
     $exeHash = Read-KPCSignature $Exe
     $dllHash = Read-KPCSignature 'server.dll'
     $objectHash = Read-KPCSignature 'object.lto'
-    # The DLL proxy preserves the official engine under a separate filename.
+    # Server Tools load as winmm.dll beside the unchanged server.dll. Earlier
+    # installs replaced server.dll and kept the engine as server.original.dll.
     $metaPath = Join-Path $PSScriptRoot 'SERVER_TOOLS_BUILD.json'
     $proxyRecognized = $false
     if (Test-Path -LiteralPath $metaPath) {
         $meta = Get-Content -Raw -LiteralPath $metaPath | ConvertFrom-Json
-        if ($dllHash -eq $meta.proxy_sha256) {
+        $loader = Join-Path $PSScriptRoot 'winmm.dll'
+        if ((Test-Path -LiteralPath $loader -PathType Leaf) -and (Get-FileHash -LiteralPath $loader -Algorithm SHA256).Hash -eq $meta.proxy_sha256) {
+            $proxyRecognized = $true
+            Write-Host '[KPCFix Server Tools] Server Tools recognized (winmm.dll); server.dll is checked as the original engine.'
+        }
+        elseif ($dllHash -eq $meta.proxy_sha256) {
             $proxyRecognized = $true
             $dllHash = Read-KPCSignature 'server.original.dll'
-            Write-Host '[KPCFix Server Tools] Runtime proxy recognized; checking the preserved original engine.'
+            Write-Host '[KPCFix Server Tools] Earlier install (proxy as server.dll) recognized; rerun Setup-KPCServerTools.cmd to move it to winmm.dll.' -ForegroundColor Yellow
         }
+    }
+    if (!$proxyRecognized) {
+        throw 'KPCFix Server Tools are not installed for this build (no matching winmm.dll). Close the game and server, then run Setup-KPCServerTools.cmd.'
     }
 
     $actualObjectHash = $objectHash
@@ -80,7 +89,7 @@ function Assert-KPCServerVersion([string]$Exe,$GameProfile) {
                 if ($proxyRecognized -and $server.'object.lto'.sha256 -ne $objectHash) {
                     throw 'object.lto is not the official 1.13 file. Setup only restores object.lto files changed by earlier KPCFix versions. Copy the official 1.13 object.lto back into the game folder, then rerun Setup-KPCServerTools.cmd.'
                 }
-                throw 'Original server.original.dll is valid, but the active server.dll is not the selected Server Tools build. Close the server and rerun Setup-KPCServerTools.cmd. If setup refuses an unrecognized DLL, back that active DLL up separately; never overwrite server.original.dll.'
+                throw 'Original server.original.dll is valid, but server.dll is not the original engine. Close the server and rerun Setup-KPCServerTools.cmd. If setup refuses an unrecognized DLL, back that active DLL up separately; never overwrite server.original.dll.'
             }
         }
     }

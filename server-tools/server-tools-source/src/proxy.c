@@ -24,6 +24,25 @@ static HMODULE self,backend;
 static CreateFn create_real;
 static DeleteFn delete_real;
 static WCHAR backend_path[1024],ini_path[1024],log_path[1024];
+/* Loading mode (README-Server-Tools.md):
+ *  - winmm.dll (default install): dedicated.exe imports WINMM.dll, so this
+ *    DLL loads from the game folder before the server starts, the same way
+ *    KPCFix's dinput.dll loads into client.exe. Every winmm export is forwarded
+ *    to the system winmm.dll (winmm_stubs.S, generated from winmm_exports.txt).
+ *    In the supported dedicated.exe the import of LoadLibraryA is redirected so
+ *    its LoadLibraryA("server.dll") returns this module; the original
+ *    server.dll stays unrenamed and unchanged and is loaded as the backend.
+ *    Any other process (client.exe, Psycho.exe...) only gets the forwarding.
+ *  - server.dll (earlier installs, kept as a fallback, e.g. under Wine without
+ *    a winmm override): the engine was renamed server.original.dll. */
+static int winmm_mode;
+static HMODULE system_winmm;
+typedef HMODULE (WINAPI *LoadAFn)(const char *);
+static LoadAFn original_load_a;
+static U32 server_redirects;
+extern U32 winmm_slots[];
+extern const char *const winmm_names[];
+extern const U32 winmm_count;
 static int paths_ready,hooked,active,initial_cheats,spawn_warning_checked;
 static U32 object_installs;
 static U32 len(const char *s){U32 n=0;while(s[n])n++;return n;}
@@ -38,7 +57,7 @@ static void paths(void){
  i=n;while(i&&path[i-1]!='\\'&&path[i-1]!='/')i--;
  if(i>970)ExitProcess(1);
  for(j=0;j<i;j++)backend_path[j]=ini_path[j]=log_path[j]=path[j];
- {const WCHAR *s=(const WCHAR *)L"server.original.dll";for(j=0;(backend_path[i+j]=s[j])!=0;j++);}
+ {const WCHAR *s=winmm_mode?(const WCHAR *)L"server.dll":(const WCHAR *)L"server.original.dll";for(j=0;(backend_path[i+j]=s[j])!=0;j++);}
  {const WCHAR *s=(const WCHAR *)L"KPCServerTools.ini";for(j=0;(ini_path[i+j]=s[j])!=0;j++);}
  {const WCHAR *s=(const WCHAR *)L"KPCServerTools.log";for(j=0;(log_path[i+j]=s[j])!=0;j++);}
  paths_ready=1;
@@ -643,7 +662,7 @@ static void CDECL trace_spawn_position(void *object,const U32 *pos){
 #define COOP_LOG_BUDGET 1000u
 extern void CDECL runtime_broadcast(void *,const char *);
 static int coop_session_enabled;
-static U32 coop_min_players=2,coop_max_players=3;
+static U32 coop_min_players=1,coop_max_players=3;
 static U8 *coop_image;
 static CoopSession coop_state;
 static volatile U32 coop_log_count,campaign_log_count;
@@ -759,6 +778,7 @@ static CoopScoreboard coop_sb;
  * monsters replicate like any placed monster. */
 static int coop_spawners=1,coop_trace_spawners;
 static U32 coop_spawner_ok,coop_spawner_no,coop_spawner_logged;
+static int coop_teleport_enabled=1;
 static int coop_sp_start=1,coop_trace_scripts,coop_script_events=1,coop_friendly_fire,coop_shared_items=1,coop_spread;
 static int coop_host_sequences=1;   /* [Coop] CoopHostSequences (default 1) */
 /* 2026-11-12 playtest follow-ups (each a [Coop] key, session only):
@@ -1993,10 +2013,24 @@ static void coop_set_class(U32 player,U32 cls){
  *(U32 *)(player+0x264u)=cls&3u;
  ((ClassApplyFn)(coop_image+0xf2090u))((void *)player,1);   /* as the stock cheat fab30 */
 }
-/* Give what `saved` has and the player lacks; returns the number of gives. */
-static U32 coop_inv_apply(U32 player,const CoopInvState *saved){
- CoopInvState now;CoopInvPlan p;U32 i,n=0;
+/* Take back ammo the restore's weapon gives added (coop_inv_ammo_excess):
+ * the inventory's own remove, vtable +4 (dd130: thiscall(inv, id, amount),
+ * ret 8; deletes the entry at 0), the same call a weapon makes when it
+ * fires (60159). */
+typedef U32 (__attribute__((thiscall)) *InvRemoveFn)(void *,U32,U32);
+static void coop_inv_trim_ammo(U32 player,const CoopInvState *saved,const U32 base[4]){
+ CoopInvState now;U32 out[4],k,inv=0,vt=0,fn=0;
+ if(!coop_inv_read(player,&now))return;
+ coop_inv_ammo_excess(saved,base,now.ammo,out);
+ if(!coop_rd(player+0x54u,&inv)||!inv||!coop_rd(inv,&vt)||!vt||!coop_rd(vt+4u,&fn)||!fn)return;
+ for(k=0;k<4u;k++)if(out[k])((InvRemoveFn)fn)((void *)inv,COOP_INV_AMMO_FIRST+k,out[k]);
+}
+/* Give what `saved` has and the player lacks; returns the number of gives.
+ * base_ammo: the ammo to keep at least (0 = what the player has now). */
+static U32 coop_inv_apply(U32 player,const CoopInvState *saved,const U32 *base_ammo){
+ CoopInvState now;CoopInvPlan p;U32 i,n=0,base[4];
  if(!coop_inv_read(player,&now))return 0;
+ for(i=0;i<4u;i++)base[i]=base_ammo?base_ammo[i]:now.ammo[i];
  coop_inv_plan(saved,&now,&p);
  if(p.set_class>=0){coop_set_class(player,(U32)p.set_class);n++;}
  for(i=0;i<p.count;i++){
@@ -2004,6 +2038,8 @@ static U32 coop_inv_apply(U32 player,const CoopInvState *saved){
   if(coop_inv_armour(id)){((GiveItemFn)(coop_image+0xf3440u))((void *)player,id,1,1);n++;}
   else if(coop_inv_weapon(id)){coop_give_weapon(player,id);n++;}
  }
+ /* A weapon give adds its stock ammo: take back what exceeds the saved count. */
+ coop_inv_trim_ammo(player,saved,base);
  /* Shards and ammo after armour (ammo cap) and weapons (their own ammo). */
  if(!coop_inv_read(player,&now))return n;
  coop_inv_plan(saved,&now,&p);
@@ -2065,7 +2101,7 @@ static void coop_inv_frame(U32 now){
   pl=coop_member_player((int)i);
   if(!pl||coop_player_dead(pl)){if(now-coop_inv_due[i]>15000u)coop_inv_pending[i]=0;continue;}
   coop_inv_pending[i]=0;
-  gives=coop_inv_apply(pl,&coop_inv_snap[i].s);
+  gives=coop_inv_apply(pl,&coop_inv_snap[i].s,0);
   coop_inv_log("inventory-restored",(int)i,&coop_inv_snap[i].s,gives);
  }
  if(now-coop_inv_last_ms<COOP_INV_SNAPSHOT_MS)return;
@@ -2132,7 +2168,7 @@ static void coop_change_class(U32 player,int cls){
  coop_set_class(player,(U32)cls);
  if(have){
   added=coop_class_weapons(player,(U32)cls,before.weapons);
-  before.cls=(U32)cls;coop_inv_apply(player,&before);
+  before.cls=(U32)cls;coop_inv_apply(player,&before,before.ammo);
  }
  if(slot>=0&&coop_inv_snap[slot].valid&&coop_inv_snap[slot].client==client){
   if(coop_inv_read(player,&now))coop_inv_snap[slot].s=now;else coop_inv_snap[slot].s.cls=(U32)cls;
@@ -2141,8 +2177,122 @@ static void coop_change_class(U32 player,int cls){
   coop_text(line,&k," weapons-before=",sizeof line);coop_dec(line,&k,have?coop_inv_bits(before.weapons):0u,sizeof line);
   coop_text(line,&k," class-weapons-given=",sizeof line);coop_dec(line,&k,added,sizeof line);coop_log("class-change",line);}
 }
+/* ---- !goto / !back (CoopTeleport, session, default 1; no cheat permission) ----
+ *   !goto [name]  move next to another player (default: the host); the name
+ *                 is matched case-insensitively, whole name first, then a
+ *                 unique prefix.
+ *   !back         return to where the last !goto in this world started.
+ * The move is the stock "player teleport" script command (f6c50): SetObjectPos
+ * [g_pServerDE+0x1e0](object, pos), then f3130(player) (thiscall), which sends
+ * the client its new position (message 0x14 with the teleport counter
+ * player+0x1b0). The spot is the first of 16 around the target (8 directions,
+ * 64 and 96 units) that passes the spawn-spread checks (clear line from the
+ * target, floor at the target's height, body inside the world:
+ * coop_spread_probe); with none, the target's own position. Only while
+ * playing or in the lobby, both players alive, at most every 3 s. */
+#define COOP_GOTO_COOLDOWN_MS 3000u
+static U32 coop_goto_ms[COOP_SESSION_MAX_MEMBERS],coop_back_epoch[COOP_SESSION_MAX_MEMBERS];
+static float coop_back_pos[COOP_SESSION_MAX_MEMBERS][3];
+typedef void (__attribute__((thiscall)) *PlayerFn)(void *);
+static int coop_goto_spot(const float *target,float *out){
+ static const float dir[8][2]={{1.f,0.f},{-1.f,0.f},{0.f,1.f},{0.f,-1.f},{0.7071f,0.7071f},{-0.7071f,0.7071f},{0.7071f,-0.7071f},{-0.7071f,-0.7071f}};
+ static const float dist[2]={64.f,96.f};
+ U32 *engine=spawn_image?*(U32 **)(spawn_image+SPAWN_POS_GLOBAL_RVA):0,d,k;CoopSpreadCtx ctx;
+ out[0]=target[0];out[1]=target[1];out[2]=target[2];
+ if(!engine||!engine[KPC_INTERSECT_SERVER_SLOT/4])return 0;
+ ctx.anchor.x=target[0];ctx.anchor.y=target[1];ctx.anchor.z=target[2];
+ ctx.intersect=(KpcIntersectFn)engine[KPC_INTERSECT_SERVER_SLOT/4];
+ if(!coop_floor_below(ctx.intersect,&ctx.anchor,&ctx.anchor_floor))return 0;
+ for(d=0;d<2u;d++)for(k=0;k<8u;k++){
+  CoopVec3 c,o;
+  c.x=target[0]+dir[k][0]*dist[d];c.y=target[1];c.z=target[2]+dir[k][1]*dist[d];
+  if(coop_spread_probe(&ctx,&c,&o)==COOP_PROBE_SAFE){out[0]=o.x;out[1]=o.y;out[2]=o.z;return 1;}
+ }
+ return 0;
+}
+static int coop_player_pos(U32 player,float *pos){
+ U32 de=0,fn=0,obj=0;
+ if(!player||!coop_rd(player+8u,&obj)||!obj||!coop_rd((U32)coop_image+0x16de80u,&de)||!de||!coop_rd(de+0x1d0u,&fn)||!fn)return 0;
+ ((ObjVecFn)fn)(obj,pos);return 1;
+}
+static int coop_teleport(U32 player,float *pos){
+ U32 de=0,fn=0,obj=0;
+ if(!player||!coop_rd(player+8u,&obj)||!obj||!coop_rd((U32)coop_image+0x16de80u,&de)||!de||!coop_rd(de+0x1e0u,&fn)||!fn)return 0;
+ ((ObjVecFn)fn)(obj,pos);
+ ((PlayerFn)(coop_image+0xf3130u))((void *)player);
+ return 1;
+}
+/* Member whose name matches: whole name, else a unique prefix; -1 none, -2 ambiguous. */
+static int coop_member_by_name(const char *a){
+ U32 i,k,len=0;int found=-1,count=0;
+ while(a[len]&&a[len]!=' '&&a[len]!='\t'&&len<COOP_NAME_MAX)len++;
+ if(!len)return -1;
+ for(i=0;i<COOP_SESSION_MAX_MEMBERS;i++){
+  const char *n=coop_state.m[i].name;
+  if(!coop_state.m[i].used)continue;
+  for(k=0;k<len&&n[k]&&coop_lower(n[k])==coop_lower(a[k]);k++){}
+  if(k<len)continue;
+  if(!n[k])return (int)i;
+  found=(int)i;count++;
+ }
+ return count==1?found:count?-2:-1;
+}
+static void coop_goto_command(U32 player,const char *arg,int back,const char *who){
+ U32 client=0,now=GetTickCount();int me=-1,t;float from[3],to[3],at[3];U32 target=0;
+ char line[120];U32 k=0;
+ if(!coop_teleport_enabled){coop_say("[Co-op] !goto and !back are off on this server (CoopTeleport=0)","","");return;}
+ if(coop_rd(player+0x120u,&client))me=coop_find_client(&coop_state,client);
+ if(me<0){coop_say("[Co-op] ",who,": you are not in the session");return;}
+ if(coop_state.phase!=COOP_PHASE_GAMEPLAY&&coop_state.phase!=COOP_PHASE_LOBBY){coop_say("[Co-op] ",who,": !goto and !back work only while playing");return;}
+ if(coop_player_dead(player))return;
+ if(coop_goto_ms[me]&&(int)(now-coop_goto_ms[me])<(int)COOP_GOTO_COOLDOWN_MS)return;
+ if(!coop_player_pos(player,from))return;
+ if(back){
+  if(coop_back_epoch[me]!=coop_state.epoch+1u){coop_say("[Co-op] ",who,": nothing to go back to (use !goto first)");return;}
+  to[0]=coop_back_pos[me][0];to[1]=coop_back_pos[me][1];to[2]=coop_back_pos[me][2];
+  coop_back_epoch[me]=0;
+  if(!coop_teleport(player,to))return;
+  coop_goto_ms[me]=now|1u;
+  coop_say("[Co-op] ",who," went back");
+  coop_log("teleport","!back");
+  return;
+ }
+ while(*arg==' '||*arg=='\t')arg++;
+ t=*arg?coop_member_by_name(arg):coop_state.host;
+ if(t==-2){coop_say("[Co-op] More than one player matches; type more of the name: !goto ",arg,"");return;}
+ if(t<0){coop_say(*arg?"[Co-op] No player called ":"[Co-op] Use: !goto <player name>",*arg?arg:"","");return;}
+ if(t==me){coop_say("[Co-op] ",who,": that is you");return;}
+ target=coop_member_player(t);
+ if(!target||coop_player_dead(target)||!coop_player_pos(target,at)){coop_say("[Co-op] ",coop_state.m[t].name," is not alive in this world");return;}
+ coop_text(line,&k,coop_goto_spot(at,to)?"next to ":"onto (no clear spot beside) ",sizeof line);
+ coop_text(line,&k,coop_state.m[t].name,sizeof line);
+ if(!coop_teleport(player,to))return;
+ coop_back_pos[me][0]=from[0];coop_back_pos[me][1]=from[1];coop_back_pos[me][2]=from[2];coop_back_epoch[me]=coop_state.epoch+1u;
+ coop_goto_ms[me]=now|1u;
+ coop_log("teleport",line);
+ {CoopResult r;U32 m=0;coop_result(&r,COOP_ACT_ANNOUNCE,"");
+  coop_text(r.msg,&m,"[Co-op] ",sizeof r.msg);coop_text(r.msg,&m,who,sizeof r.msg);
+  coop_text(r.msg,&m," went to ",sizeof r.msg);coop_text(r.msg,&m,coop_state.m[t].name,sizeof r.msg);
+  coop_text(r.msg,&m," (!back returns)",sizeof r.msg);coop_execute(&r);}
+}
+/* Dedicated console "changelevel <world>" (logging.S level_command; the
+ * argument block is that of kpc_cheats: [0] count, [1] the command word,
+ * [2] the first argument). Server authority: no host or player minimum. */
+static void CDECL coop_console_changelevel(U32 args){
+ U32 argc=0,p=0;char world[0x80];CoopResult r;
+ world[0]=0;
+ if(!coop_session_enabled||!coop_image)return;
+ if(args&&coop_rd(args,&argc)&&argc>=2u&&coop_rd(args+8u,&p)&&p)coop_copy_str(world,p,sizeof world);
+ {U32 now=GetTickCount();coop_tick(now);coop_presence(now);
+  coop_session_console_changelevel(&coop_state,world,now,&r);}
+ if(r.msg[0])runtime_print(coop_image,r.msg,len(r.msg));
+ if(r.action==COOP_ACT_REPLY){coop_log("console",r.msg);return;}
+ coop_execute(&r);
+}
 static int coop_more_command(U32 player,const char *cmd,const char *who){
  int kill=coop_cheat_word(cmd,"kill"),all=coop_cheat_word(cmd,"all"),cls=coop_cheat_word(cmd,"class");
+ int go=coop_cheat_word(cmd,"goto"),back=coop_cheat_word(cmd,"back");
+ if(go||back){coop_goto_command(player,go?cmd+4:"",back,who);return 1;}
  if(!kill&&!all&&!cls)return 0;
  if(kill){
   if(coop_player_dead(player))return 1;
@@ -2296,6 +2446,38 @@ static void __attribute__((thiscall)) coop_item_respawn(void *item){
  }
  ((ItemRespawnFn)(coop_image+0xcc080u))(item);
  coop_respawn_done++;coop_respawn_log("respawned",(U32)item);
+}
+
+/* Armour pieces (CoopItemRespawnSec): the armour touch c8340 (all seven
+ * armour vtables, slot +0x20) runs the shared pickup cc120 at c837b
+ * (thiscall(item, toucher handle, arg), ret 8). The first pickup is stock
+ * (cutscene and script; coop_item_hide schedules the respawn). A piece that
+ * has come back (Respawn +0xb4 set) is picked up quietly
+ * (coop_armour_quiet): f3440 gives it to the toucher only, then cc570 hides
+ * it and the countdown starts again; a player who has it walks over it. */
+typedef U32 (__attribute__((thiscall)) *ArmourPickupFn)(void *,U32,U32);
+static U32 coop_armour_quiet_logged;
+static U32 __attribute__((thiscall)) coop_armour_pickup(void *item,U32 handle,U32 arg){
+ U32 it=(U32)item,def=0,id=0,h=handle,player=0;int how;
+ if(!coop_item_respawn_sec||!bsp_mem_readable(it+0x54u,0x94)||!coop_rd(it+0x54u,&def)||!def||!coop_rd(def,&id)||!coop_inv_armour(id))
+  return ((ArmourPickupFn)(coop_image+0xcc120u))(item,handle,arg);
+ player=((ToPlayerFn)(coop_image+0xee7d0u))(&h);
+ how=coop_armour_quiet(id,*(const U8 *)(it+0xb4u)!=0,player&&coop_has_item(player,id),!player||coop_player_dead(player));
+ if(how==0)return ((ArmourPickupFn)(coop_image+0xcc120u))(item,handle,arg);
+ if(how==2)return 0;
+ ((GiveItemFn)(coop_image+0xf3440u))((void *)player,id,1,1);
+ *(float *)(it+0xb8u)=(float)(I32)coop_item_respawn_sec;*(U8 *)(it+0x81u)=1;
+ ((ItemHideFn)(coop_image+0xcc570u))(item,0);
+ coop_respawn_scheduled++;
+ if(coop_armour_quiet_logged<16u){
+  char name[24],who[COOP_NAME_MAX],line[96];U32 k=0;
+  coop_item_name(id,name,sizeof name);coop_copy_str(who,player+0x1e8u,sizeof who);
+  coop_armour_quiet_logged++;
+  coop_text(line,&k,"quiet pickup item=",sizeof line);coop_text(line,&k,name,sizeof line);
+  coop_text(line,&k," by ",sizeof line);coop_text(line,&k,who,sizeof line);coop_log("item-respawn",line);
+  coop_say("[Co-op] ",who[0]?who:"?"," picked up a returned armor shard");
+ }
+ return 1;
 }
 
 /* ---- CoopWindowShards (session, default 1): window shards on remote clients ----
@@ -2768,7 +2950,7 @@ static void make_call(OptionalSite *s,U8 *b,const void *target){
  s->hooked[0]=0xe8;copy(s->hooked+1,(const U8 *)&rel,4);
  for(i=5;i<s->size;i++)s->hooked[i]=0x90;
 }
-#define OPTIONAL_SITES 48u
+#define OPTIONAL_SITES 49u
 static void optional_sites(OptionalSite *s,U8 *b){
  static const struct {U32 rva,size;U8 original[6];} table[OPTIONAL_SITES]={
   {SPAWN_POS_CALL_RVA,6,{0xff,0x91,0xe0,0x01,0x00,0x00}},
@@ -2819,6 +3001,7 @@ static void optional_sites(OptionalSite *s,U8 *b){
   {0xcc29e,5,{0xe8,0xcd,0x02,0x00,0x00}},        /* pickup taken -> hide/remove cc570(item, 0) */
   {0xcbfff,5,{0xe8,0x7c,0x00,0x00,0x00}},        /* item respawn countdown done -> cc080 */
   {0x48413,6,{0xff,0x91,0xfc,0x01,0x00,0x00}},   /* window break: SetObjectFlags (hide) before message 0x39 */
+  {0xc837b,5,{0xe8,0xa0,0x3d,0x00,0x00}},        /* armour touch c8340 -> pickup cc120 */
  };
  U32 i;
  for(i=0;i<OPTIONAL_SITES;i++){s[i].rva=table[i].rva;s[i].size=table[i].size;copy(s[i].original,table[i].original,6);}
@@ -2870,6 +3053,7 @@ static void optional_sites(OptionalSite *s,U8 *b){
  make_call(&s[45],b,(const void *)coop_item_hide);
  make_call(&s[46],b,(const void *)coop_item_respawn);
  make_call(&s[47],b,(const void *)coop_window_flags);
+ make_call(&s[48],b,(const void *)coop_armour_pickup);
  s[0].enabled=spawn_trace_enabled;
  s[1].enabled=spawn_separation_enabled||coop_session_enabled;
  s[2].enabled=campaign_trace||coop_session_enabled;
@@ -2893,7 +3077,7 @@ static void optional_sites(OptionalSite *s,U8 *b){
  s[41].enabled=s[42].enabled=coop_session_enabled;
  s[43].enabled=coop_session_enabled&&coop_spawner_nearest;
  s[44].enabled=coop_session_enabled&&coop_cheat_keys;
- s[45].enabled=s[46].enabled=coop_session_enabled&&coop_item_respawn_sec;
+ s[45].enabled=s[46].enabled=s[48].enabled=coop_session_enabled&&coop_item_respawn_sec;
  s[47].enabled=coop_session_enabled&&coop_window_shards;
  coop_ff_skip_target=(U32)b+0xf3f1eu;
  coop_c4230_target=(U32)b+0xc4230u;
@@ -2946,6 +3130,8 @@ static int apply_object(HMODULE module){
   coop_state.intro_settle_ms=coop_intro_settle_ms;
   coop_state.skill=coop_skill;
   coop_apply_skill();
+  /* Dedicated console "changelevel" (logging.S level_command reads STATE+8). */
+  *(U32 *)(b+0x174f08)=(U32)coop_console_changelevel;
  }
  for(i=0;i<OPTIONAL_SITES;i++)if(site[i].enabled)copy(b+site[i].rva,site[i].hooked,site[i].size);
  /* LoadLibrary has already applied relocations and may have run table init. */
@@ -3006,8 +3192,11 @@ static void initialize(void){
  paths();
  if(!module_hash(NULL,exe_sha))fatal("[KPCFix Server Tools] ERROR: cannot identify the host executable.");
  for(i=0;i<2;i++)if(same(exe_sha,exe_hashes[i],32))profile=i;
- if(!file_hash(backend_path,back_sha))fatal("[KPCFix Server Tools] ERROR: missing server.original.dll; run setup first.");
- if(profile>=0){if(!same(back_sha,backend_hashes[profile],32))fatal("[KPCFix Server Tools] ERROR: dedicated executable and original server DLL do not match.");}
+ if(!file_hash(backend_path,back_sha))fatal(winmm_mode?"[KPCFix Server Tools] ERROR: missing server.dll beside winmm.dll.":
+   "[KPCFix Server Tools] ERROR: missing server.original.dll; run setup first.");
+ if(profile>=0){if(!same(back_sha,backend_hashes[profile],32))fatal(winmm_mode?
+   "[KPCFix Server Tools] ERROR: server.dll is not the original engine for this dedicated.exe (an earlier Server Tools install replaced it; run Setup-KPCServerTools.cmd).":
+   "[KPCFix Server Tools] ERROR: dedicated executable and original server DLL do not match.");}
  else if(!same(back_sha,backend_hashes[0],32)&&!same(back_sha,backend_hashes[1],32))
   fatal("[KPCFix Server Tools] ERROR: unsupported original server DLL.");
  if(!backend){
@@ -3041,10 +3230,10 @@ static void initialize(void){
  spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
  coop_session_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSession",0,ini_path)!=0;
- coop_min_players=GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopMinPlayers",2,ini_path);
+ coop_min_players=GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopMinPlayers",1,ini_path);
  coop_max_players=GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopMaxPlayers",3,ini_path);
  if(coop_max_players<1||coop_max_players>3)coop_max_players=3;
- if(coop_min_players<1||coop_min_players>coop_max_players)coop_min_players=coop_max_players<2?coop_max_players:2;
+ if(coop_min_players<1||coop_min_players>coop_max_players)coop_min_players=1;
  coop_trace_timing=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceTiming",0,ini_path)!=0;
  coop_intermission=GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopIntermission",0,ini_path)!=0;
  coop_trace_music=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceMusic",0,ini_path)!=0;
@@ -3067,6 +3256,7 @@ static void initialize(void){
  coop_trace_scripts=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceScripts",0,ini_path)!=0;
  coop_script_events=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopScriptEvents",1,ini_path)!=0;
  coop_friendly_fire=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopFriendlyFire",0,ini_path)!=0;
+ coop_teleport_enabled=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopTeleport",1,ini_path)!=0;
  coop_shared_items=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSharedItems",1,ini_path)!=0;
  coop_host_sequences=coop_session_enabled&&coop_script_events&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopHostSequences",1,ini_path)!=0;
  coop_spawner_nearest=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSpawnerNearest",1,ini_path)!=0;
@@ -3177,6 +3367,9 @@ static void initialize(void){
      "[KPCFix Co-op] effective CoopWindowShards=1 (a broken window stays visible 200 ms so every client draws its shards)":
      "[KPCFix Co-op] effective CoopWindowShards=0 (stock: the window is hidden before the shard message)");
   }
+  if(coop_session_enabled)log_file(coop_teleport_enabled?
+    "[KPCFix Co-op] effective CoopTeleport=1 (!goto <player> and !back for everyone)":
+    "[KPCFix Co-op] effective CoopTeleport=0 (!goto and !back refused)");
   if(coop_session_enabled)log_file(coop_friendly_fire?
     "[KPCFix Co-op] effective CoopFriendlyFire=1 (players can hurt each other)":
     "[KPCFix Co-op] effective CoopFriendlyFire=0 (no damage between players; self and monster damage unchanged)");
@@ -3225,12 +3418,88 @@ static void initialize(void){
  }
  if(active&&coop_sound_clock)coop_install_sound_clock(back_sha);
  if(active&&coop_frame_ms)coop_install_server_frame(back_sha);
+ log_file(winmm_mode?"[KPCFix Server Tools] Loaded as winmm.dll; original server.dll unchanged.":
+   "[KPCFix Server Tools] Loaded as server.dll (earlier install; engine renamed server.original.dll).");
  log_file(active?"[KPCFix Server Tools] Dedicated DLL active.":"[KPCFix Server Tools] Original engine pass-through.");
 }
 I32 CDECL CreateServer(U32 version,const char *name,void **out){
  initialize();return create_real(version,name,out);
 }
 void CDECL DeleteServer(void *server){if(delete_real)delete_real(server);}
+static WCHAR wlower(WCHAR c){return c>='A'&&c<='Z'?(WCHAR)(c+32):c;}
+/* Case-insensitive file-name test of the last path component. */
+static int basename_is_w(const WCHAR *path,const char *name){
+ U32 i=0,start=0,j;
+ for(;path[i];i++)if(path[i]=='\\'||path[i]=='/'||path[i]==':')start=i+1;
+ for(j=0;name[j];j++)if(wlower(path[start+j])!=(WCHAR)name[j])return 0;
+ return path[start+j]==0;
+}
+static int basename_is_a(const char *path,const char *name){
+ U32 i=0,start=0,j;
+ for(;path[i];i++)if(path[i]=='\\'||path[i]=='/'||path[i]==':')start=i+1;
+ for(j=0;name[j];j++){char c=path[start+j];if(c>='A'&&c<='Z')c=(char)(c+32);if(c!=name[j])return 0;}
+ return path[start+j]==0;
+}
+/* dedicated.exe's LoadLibraryA: "server.dll" (any case, with or without a
+ * path) is answered with this module, whose CreateServer/DeleteServer load
+ * and wrap the real server.dll; every other name is the original call. */
+static HMODULE WINAPI server_load_a(const char *name){
+ if(name&&basename_is_a(name,"server.dll")){
+  /* Counted like a real load, so the server's FreeLibrary stays balanced. */
+  WCHAR own[1024];U32 n=GetModuleFileNameW(self,own,1024);HMODULE m;
+  m=n&&n<1024?LoadLibraryW(own):NULL;
+  if(m!=self)return NULL;
+  server_redirects++;return self;
+ }
+ return original_load_a(name);
+}
+/* Replace one by-name import slot of a loaded image. */
+static int hook_import(U8 *b,const char *function,U32 replacement,U32 *original){
+ U32 p=rd(b+60),rva=rd(b+p+24+96+8),old,restore,*desc,*names,*slots,i;
+ if(!rva)return 0;
+ for(desc=(U32 *)(b+rva);desc[3];desc+=5){
+  if(!desc[0])continue;
+  names=(U32 *)(b+desc[0]);slots=(U32 *)(b+desc[4]);
+  for(i=0;names[i];i++){
+   if(names[i]&0x80000000u||!eq((char *)(b+names[i]+2),function))continue;
+   if(slots[i]==replacement)return 1;
+   *original=slots[i];
+   if(!VirtualProtect(&slots[i],4,4,&old))return 0;
+   slots[i]=replacement;
+   VirtualProtect(&slots[i],4,old,&restore);
+   return 1;
+  }
+ }
+ return 0;
+}
+static int winmm_attach(void){
+ WCHAR path[1024];U32 n=GetSystemDirectoryW(path,1024-12),i;
+ U8 exe_sha[32];int dedicated=0;
+ {const WCHAR *s=(const WCHAR *)L"\\winmm.dll";U32 j;if(!n||n>=1024-12)return 0;for(j=0;(path[n+j]=s[j])!=0;j++);}
+ if(!(system_winmm=LoadLibraryW(path)))return 0;
+ for(i=0;i<winmm_count;i++){FARPROC f=GetProcAddress(system_winmm,winmm_names[i]);if(f)winmm_slots[i]=(U32)f;}
+ /* Only the supported dedicated executables get the server.dll redirect. */
+ n=GetModuleFileNameW(NULL,path,1024);
+ if(n&&n<1024&&basename_is_w(path,"dedicated.exe")&&module_hash(NULL,exe_sha))
+  for(i=0;i<2;i++)if(same(exe_sha,exe_hashes[i],32))dedicated=1;
+ if(dedicated){
+  U32 original=0;
+  if(!hook_import((U8 *)GetModuleHandleW(NULL),"LoadLibraryA",(U32)server_load_a,&original)||!original){
+   log_file("[KPCFix Server Tools] ERROR: could not redirect dedicated.exe's server.dll load; original engine runs.");
+   return 1;
+  }
+  original_load_a=(LoadAFn)original;
+ }
+ return 1;
+}
 BOOL WINAPI DllMain(HINSTANCE module,DWORD reason,void *reserved){
- (void)reserved;if(reason==1){self=module;DisableThreadLibraryCalls(module);}return 1;
+ WCHAR own[1024];U32 n;
+ (void)reserved;
+ if(reason==1){
+  self=module;DisableThreadLibraryCalls(module);
+  n=GetModuleFileNameW(module,own,1024);
+  winmm_mode=!(n&&n<1024&&basename_is_w(own,"server.dll"));
+  if(winmm_mode&&!winmm_attach())return 0;
+ }
+ return 1;
 }
