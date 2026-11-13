@@ -1,4 +1,11 @@
-# Maintenance audit of the 1.13 packages
+# Maintenance audit of the 1.13 packages — historical snapshot
+
+**Archived evidence only.** The baseline below describes an earlier R2-era
+state, **not** current Server Tools R3 or the experimental co-op build.
+In particular, its GCC 13.3 server reproduction result does not apply to
+R3, which reproducibly builds with GCC 14.2 and binutils 2.44.
+For current procedures, use the [release guide](https://github.com/magibax/KPCFix/blob/main/RELEASING.md)
+and the [testing guide](https://github.com/magibax/KPCFix/blob/main/TESTING.md).
 
 Historical audit. For current build and packaging procedures, see the [release guide](https://github.com/magibax/KPCFix/blob/main/RELEASING.md).
 

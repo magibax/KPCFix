@@ -4,7 +4,7 @@ d3cb3891ebd70fe72b82b1dc75670ac1b98ceae5770d3b26f86a1e04f4c64046  ./KPC-Server-L
 eae0e68fb56d636eed8bd4e200113cba163b0bde6dcae394653af94a66dfd1a1  ./KPCServerTools-default.ini
 6448dadf8e8edd26707c25d9c1b659dde6c92fd0a730385a75e6b4c8cf7d306d  ./KPCServerTools.dll
 111bd19eff641ab11fd75afbeec380a96e822ac3153344271456fa7629c496d7  ./LICENSE-Server-Tools.txt
-89f7e24fccb3bd3c62e7e98ca88877b57ac4c8b0bfa9dabd6b59eaeaea085124  ./README-Server-Tools.md
+4aac8edc2f624ffe953514ad8b52866bd1e064dd5863a993b98884296ab41cfa  ./README-Server-Tools.md
 88df6cc2bc97da72e253a2ac339f9d7904b41840d85b962383e872595951dc1b  ./Restore-LegacyObject.ps1
 f7aa26ac073117d988973ba682171280a075be24ef1760616df1cbc110903e6f  ./Restore-Original-Server.cmd
 9ae07234fe1efa789e5401c10dec614264204786597d8d52e8008e3d3343c8f2  ./SERVER_TOOLS_BUILD.json
