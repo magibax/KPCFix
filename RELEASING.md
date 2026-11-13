@@ -59,8 +59,8 @@ Earlier releases:
 | Server Tools | [`server-tools-v1.0.0-r3`](https://github.com/magibax/KPCFix/releases/tag/server-tools-v1.0.0-r3) | `KPCFix-Server-Tools-1.0.0.zip` (kept as the fallback for v1.0.1) |
 
 The GitHub Releases of `kpcfix-v1.1.1`, `kpcfix-v1.1.0` and `kpcfix-1.13-r4`
-were removed; their tags remain. All three shipped the same `dinput.dll`
-functionality line that v1.1.2 continues (v1.1.0 to v1.1.2 are the same DLL).
+were removed; their tags remain. v1.1.0, v1.1.1 and v1.1.2 ship the same
+`dinput.dll`.
 
 Server Tools R3 was published from `a034fa6`. Its ZIP SHA-256 is
 `bb518c27864b59a41e9425e015071bc99cbf26d1a724532edf5fe944307c6646`.
