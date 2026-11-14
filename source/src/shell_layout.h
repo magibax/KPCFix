@@ -24,6 +24,9 @@ typedef struct {
     /* Chat typing (console.c): OnCommandOn vtable slot and original, chat
      * editor offset in the shell and its "typing" byte; zero = off. */
     U32 command_slot, command_on, chat_editor, chat_editing;
+    /* Scoreboard key held (console.c): OnCommandOff vtable slot and original
+     * (an empty stub in 1.13); zero = off. Uses screen_close above. */
+    U32 command_off_slot, command_off;
     /* Smooth scripted cameras (camera.c): the sample store call, its target
      * and the global holding the camera object; zero = off. */
     U32 camera_set_call, camera_set, camera_global;

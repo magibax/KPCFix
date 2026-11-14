@@ -41,6 +41,7 @@ if fixture_layout.REGION not in ('Europe', 'USA'):
     # shell layout; other editions log that and keep the original behaviour.
     assert b'Chat typing: not verified for this cshell edition' in bytes(rig.logs)
     assert b'Chat typing: key-bound actions' not in bytes(rig.logs)
+    assert b'Scoreboard hold: not verified for this cshell edition' in bytes(rig.logs)
     rig0 = Rig(settings={'ConsoleKeyFix': 0}); rig0.factory(); assert not rig0.messages
     assert bytes(rig0.u.mem_read(CLIENT + 0x6dc9, 5)) == bytes(rig0.initial_client[0x6dc9:0x6dce])
     assert bytes(rig0.u.mem_read(CLIENT + 0x700a, 5)) == bytes.fromhex('83f8607445')
@@ -85,7 +86,36 @@ assert gate(0) == (0, CM, 0x1234)
 rig.u.mem_write(SHELLBASE + 0x1c8de8, pack(0))
 assert gate(1) == (1, CM, 0x1234)                                 # no shell object: stock
 rig.u.mem_write(SHELLBASE + 0x1c8de8, pack(SHELL)); rig.u.mem_write(SHELL + 0x8c + 0x12ed, b'\x00')
+# Scoreboard held (ScoreboardHold): the key scoreboard (screen type 4 of the
+# manager at [shell+0x138c]) is never closed by a press and closes on release
+# (OnCommandOff slot 0xff728, original 0xcab60 "ret 4"; close 0xad3c0).
+MGR = 0x5a4000
+assert read(rig.u, SHELLBASE + 0xff728) == rig.dllbase + syms['_kpc_command_off']
+assert b'Scoreboard hold: the scoreboard shows while its key is held' in bytes(rig.logs)
+closes = []
+def close(u, at, size, user):
+    sp = u.reg_read(x.UC_X86_REG_ESP); closes.append(u.reg_read(x.UC_X86_REG_ECX))
+    u.reg_write(x.UC_X86_REG_ESP, sp + 4); u.reg_write(x.UC_X86_REG_EIP, read(u, sp))
+rig.u.hook_add(uc.UC_HOOK_CODE, close, begin=SHELLBASE + 0xad3c0, end=SHELLBASE + 0xad3c0)
+off = rig.dllbase + syms['_kpc_command_off']
+rig.u.mem_write(SHELL + 0x138c, pack(MGR))
+def screen(kind): rig.u.mem_write(MGR + 4, struct.pack('<i', kind))
+screen(-1); actions.clear()
+rig.invoke_address(command, (41,), this=SHELL); assert actions == [(SHELL, 41)], actions     # nothing up: the stock show
+screen(4); actions.clear()
+rig.invoke_address(command, (41,), this=SHELL); assert actions == [], actions               # showing: a press keeps it
+rig.invoke_address(off, (40,), this=SHELL); assert closes == []                             # another action released
+rig.invoke_address(off, (41,), this=SHELL); assert closes == [MGR], closes                  # release: closed
+screen(2); closes.clear(); actions.clear()
+rig.invoke_address(off, (41,), this=SHELL); assert closes == []                             # server scoreboard: untouched
+rig.invoke_address(command, (41,), this=SHELL); assert actions == [(SHELL, 41)]             # stock (ignores it while type 2)
+rig.u.mem_write(SHELL + 0x138c, pack(0)); rig.invoke_address(off, (41,), this=SHELL); assert closes == []
+rigs = Rig(settings={'Multiplayer.ScoreboardHold': 0}); rigs.factory(); assert not rigs.messages
+assert read(rigs.u, SHELLBASE + 0xff728) == SHELLBASE + 0xcab60
+assert read(rigs.u, SHELLBASE + 0xff724) == rigs.dllbase + syms['_kpc_command_on']   # chat typing still wraps it
 rigc = Rig(settings={'Multiplayer.ChatBlocksActions': 0}); rigc.factory(); assert not rigc.messages
+assert read(rigc.u, SHELLBASE + 0xff724) == rigc.dllbase + syms['_kpc_command_on']   # the scoreboard still needs it
+rigc = Rig(settings={'Multiplayer.ChatBlocksActions': 0, 'Multiplayer.ScoreboardHold': 0}); rigc.factory(); assert not rigc.messages
 assert read(rigc.u, SHELLBASE + 0xff724) == SHELLBASE + 0xc9d80
 assert bytes(rigc.u.mem_read(CLIENT + 0x23c84, 6)) == bytes.fromhex('8b8814100000')
 # Disabled: both sites keep their original bytes.
@@ -128,4 +158,4 @@ rigw = Rig(settings={'Multiplayer.LogWindowBreaks': 0}); rigw.factory(); assert 
 assert read(rigw.u, SHELLBASE + 0xfe184) == rigw.dllbase + syms['_kpc_window_break']   # still hides
 rigw = Rig(settings={'Multiplayer.LogWindowBreaks': 0, 'Multiplayer.HideBrokenWindow': 0}); rigw.factory(); assert not rigw.messages
 assert read(rigw.u, SHELLBASE + 0xfe184) == SHELLBASE + 0x5bd30
-print(args.fixtures.name, 'passed console key: toggle character dropped within 250 ms, later characters kept, chat typing drops actions and clears the command state, window-break log, broken window hidden at once, disabled')
+print(args.fixtures.name, 'passed console key: toggle character dropped within 250 ms, later characters kept, chat typing drops actions and clears the command state, scoreboard shown while held and closed on release, window-break log, broken window hidden at once, disabled')

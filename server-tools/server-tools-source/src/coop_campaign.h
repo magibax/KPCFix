@@ -57,6 +57,11 @@ static const CoopWorld coop_campaign_worlds[]={
 };
 #undef CW
 #define COOP_CAMPAIGN_LEN (sizeof(coop_campaign_worlds)/sizeof(coop_campaign_worlds[0]))
+/* Worlds outside WORLDORDER that !changelevel also accepts: the tutorial
+ * (worlds\realm0\TUTORIAL, exit object "exit" below). It is played as a
+ * one-world route; leaving it completes that route (back to the lobby). */
+static const CoopWorld coop_extra_worlds[]={{"realm0/tutorial","TUTORIAL",0,0,COOP_W_STAGE1ST}};
+#define COOP_EXTRA_LEN (sizeof(coop_extra_worlds)/sizeof(coop_extra_worlds[0]))
 
 /* The fixed kpc-coop/1 MVP route (CoopCampaign=0), unchanged behaviour. */
 static const CoopWorld coop_mvp_worlds[]={
@@ -143,17 +148,16 @@ static int coop_is_exit_name(const char *label,const char *name){
  for(i=0;i<COOP_EXIT_NAMES;i++)if(coop_ieq(coop_exit_names[i][0],label))return coop_ieq(coop_exit_names[i][1],n);
  return 0;
 }
-/* !changelevel argument -> campaign table index, or -1. Accepted, case-
- * insensitively: the label ("R1M2A"), the WORLDORDER path with or without
- * "worlds\" and ".dat" ("realm1/r1m2a", "worlds\realm1\R1M2A.dat"). Blanks
- * around the argument are ignored; anything else is unknown. */
-static int coop_campaign_find(const char *arg){
- char w[72];unsigned int i,n=0,start=0,k,tail;
+/* Normalise a !changelevel argument into w (lower case, '/' separators, no
+ * "worlds/" prefix, no ".dat"); returns the offset of the world part or -1.
+ * Blanks around the argument are ignored; anything else is unknown. */
+static int coop_world_arg(const char *arg,char w[72]){
+ unsigned int i,n=0,start=0;
  if(!arg)return -1;
  for(i=0;arg[i]==' '||arg[i]=='\t';i++){}
  for(;arg[i]&&arg[i]!=' '&&arg[i]!='\t';i++){
   char c=arg[i];
-  if(n+1>=sizeof w||(unsigned char)c<33||(unsigned char)c>126)return -1;
+  if(n+1>=72u||(unsigned char)c<33||(unsigned char)c>126)return -1;
   if(c>='A'&&c<='Z')c=(char)(c+32);
   w[n++]=c=='\\'?'/':c;
  }
@@ -163,8 +167,15 @@ static int coop_campaign_find(const char *arg){
  if(n>=4&&w[n-4]=='.'&&w[n-3]=='d'&&w[n-2]=='a'&&w[n-1]=='t'){n-=4;w[n]=0;}
  if(n>=2&&w[0]=='.'&&w[1]=='/')start=2;
  if(n-start>7&&w[start]=='w'&&w[start+1]=='o'&&w[start+2]=='r'&&w[start+3]=='l'&&w[start+4]=='d'&&w[start+5]=='s'&&w[start+6]=='/')start+=7;
- for(k=0;k<COOP_CAMPAIGN_LEN;k++){
-  const char *path=coop_campaign_worlds[k].world,*label=coop_campaign_worlds[k].label;
+ return (int)start;
+}
+/* Index of the argument in a world table (label "R1M2A" or path
+ * "realm1/r1m2a", "worlds\realm1\R1M2A.dat", case-insensitive), or -1. */
+static int coop_table_find(const CoopWorld *table,unsigned int len,const char *arg){
+ char w[72];unsigned int i,k,tail;int start=coop_world_arg(arg,w);
+ if(start<0)return -1;
+ for(k=0;k<len;k++){
+  const char *path=table[k].world,*label=table[k].label;
   for(i=0;path[i]&&path[i]==w[start+i];i++){}
   if(!path[i]&&!w[start+i])return (int)k;
   for(i=0,tail=1;label[i]||w[start+i];i++){
@@ -174,5 +185,20 @@ static int coop_campaign_find(const char *arg){
   if(tail)return (int)k;
  }
  return -1;
+}
+/* !changelevel argument -> campaign table index, or -1. */
+static int coop_campaign_find(const char *arg){return coop_table_find(coop_campaign_worlds,COOP_CAMPAIGN_LEN,arg);}
+/* !changelevel argument -> extra world index (the tutorial), or -1. */
+static int coop_extra_find(const char *arg){return coop_table_find(coop_extra_worlds,COOP_EXTRA_LEN,arg);}
+/* !changelevel argument -> shipped deathmatch map number 1-10 (PM01-PM10:
+ * "PM05", "pm5", "deathmatch/pm05", "worlds\deathmatch\PM05"), or 0. */
+static unsigned int coop_deathmatch_find(const char *arg){
+ char w[72];int start=coop_world_arg(arg,w);const char *p;unsigned int v=0,digits=0;
+ if(start<0)return 0;
+ p=w+start;
+ if(p[0]=='d'&&p[1]=='e'&&p[2]=='a'&&p[3]=='t'&&p[4]=='h'&&p[5]=='m'&&p[6]=='a'&&p[7]=='t'&&p[8]=='c'&&p[9]=='h'&&p[10]=='/')p+=11;
+ if(p[0]!='p'||p[1]!='m')return 0;
+ for(p+=2;*p>='0'&&*p<='9'&&digits<3;p++,digits++)v=v*10u+(unsigned int)(*p-'0');
+ return !*p&&digits&&v>=1u&&v<=10u?v:0;
 }
 #endif

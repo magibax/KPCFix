@@ -127,12 +127,27 @@ U32 kpc_focus_resyncs(void){return resyncs;}
  * their stock window tests, and 0x13a20 still resets input on deactivate.
  * If a fullscreen surface is lost anyway, d3d.ren restores it on its next
  * flip (IsLost/Restore at d3d.ren 0x1d542). Otherwise this marks the music
- * pause the shutdown triggers as a focus loss. */
+ * pause the shutdown triggers as a focus loss.
+ *
+ * Only while the client is in a world (client shell state shell+0x1398 == 1,
+ * the state netwatch.c uses; shell = [cshell + client_shell_global]). At
+ * startup, in movies, menus, loading screens and level changes the stock
+ * shutdown/restart pair runs: playtest 2026-11-13, a focus change during the
+ * startup movies left the screen black until the next minimise/restore,
+ * which is the stock restart showing the menu. */
 U32 g_focus_keep_render=1;
+U8 *g_focus_shell_slot;        /* cshell global holding the client shell object */
 static U32 render_kept,renders_kept;
+#define FOCUS_SHELL_STATE 0x1398u
+#define FOCUS_STATE_IN_WORLD 1u
+static int focus_in_world(void){
+    U8 *shell;
+    if(!g_focus_shell_slot||!(shell=*(U8 **)g_focus_shell_slot))return 0;
+    return *(const U32 *)(shell+FOCUS_SHELL_STATE)==FOCUS_STATE_IN_WORLD;
+}
 U32 CDECL kpc_focus_term_render(void *cm,U32 flag){
     typedef U32 (CDECL *TermFn)(void *,U32);U32 result;
-    if(g_focus_keep_render&&kpc_keep_running()){
+    if(g_focus_keep_render&&kpc_keep_running()&&focus_in_world()){
         if(!render_kept&&g_focus_log)g_focus_log("Focus loss: renderer kept running (no shutdown); input released.\r\n");
         render_kept=1;renders_kept++;return 0;
     }

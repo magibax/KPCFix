@@ -21,6 +21,7 @@ pack = lambda *v: struct.pack('<' + 'I' * len(v), *[i & 0xffffffff for i in v])
 read = lambda u, a: struct.unpack('<I', u.mem_read(a, 4))[0]
 CLIENT, SHELLBASE, CM, SESSION, SOUND, MUSIC = 0x1ca0000, 0x20000000, 0x5c0000, 0x5c1000, 0x5c2000, 0x5c4000
 CVAR = 0x5c3000
+SHELLOBJ = 0x5c6000                  # client shell object ([cshell+0x1c8de8]); state at +0x1398
 
 
 def call_target(u, at):
@@ -78,7 +79,10 @@ def setup(rig, cvar):
     return calls
 
 
-def session(rig, mode, local_server=0, present=True):
+def session(rig, mode, local_server=0, present=True, state=1):
+    """state: client shell state (1 = in a world; 5 = changing level; None = no shell yet)."""
+    rig.u.mem_write(SHELLBASE + 0x1c8de8, pack(0 if state is None else SHELLOBJ))
+    rig.u.mem_write(SHELLOBJ + 0x1398, pack(state or 0))
     rig.u.mem_write(CLIENT + 0xaacd0, pack(CM if present else 0))
     rig.u.mem_write(CM + 0x1004, pack(SESSION)); rig.u.mem_write(SESSION + 0xa8, pack(mode))
     rig.u.mem_write(SESSION + 0x50, pack(local_server))
@@ -139,6 +143,19 @@ for mode, local in ((2, 0), (2, 0x1234), (4, 0x1234), (2, None)):
     assert server_active(rig, calls) == 1                                    # local server not paused
     rig.active = 1; assert server_active(rig, calls) == 1
 assert cvar['sets'] == [('KeepAudioOnFocusLoss', '1')], cvar        # created once with the INI default
+# Outside a world (startup and movies before the shell exists, menus, loading,
+# level change) the renderer is not kept: the stock shutdown and restart run as a
+# pair, while the music and sound pauses stay skipped (playtest 2026-11-13: a
+# focus change during the startup movies left a black screen).
+for state in (None, 0, 5, 7):
+    session(rig, 2, 0x1234, state=state)
+    rig.active = 0
+    assert lose(rig, calls) == [('term', CM)], state                   # shutdown runs, no music/sound pause
+    assert world_active(rig, calls) == 0                                # world not forced active
+    assert regain(rig, calls) == [('init', CM)], state                 # matching restart, no music/sound resume
+# Lost in a world, regained after the state changed: still one balanced pair (no restart).
+session(rig, 2, 0x1234, state=1); assert lose(rig, calls) == KEPT_LOSE
+session(rig, 2, 0x1234, state=5); assert regain(rig, calls) == []
 assert bytes(rig.logs).count(b'Focus regained') == 0
 # "KeepAudioOnFocusLoss 0" (console or the Audio checkbox): everything stock.
 rig.u.mem_write(CVAR + 0x18, struct.pack('<f', 0.0))
@@ -262,4 +279,4 @@ screen('_kpc_audio_term'); assert calls == [('s_term', SCREEN), ('w_dtor', b, 0)
 screen('_kpc_audio_draw', 1); assert calls == [('s_draw', SCREEN, 1)], calls
 screen('_kpc_audio_init'); assert [c[0] for c in calls] == ['s_init', 'ctor', 'w_init', 'images']
 screen('_kpc_audio_init'); assert [c[0] for c in calls] == ['s_init', 'w_dtor', 'ctor', 'w_init', 'images']
-print(args.fixtures.name, 'passed focus loss: every mode keeps renderer, world, sounds, music and the local server running, input released; KeepRendererOnFocusLoss=0; console variable off = stock; balanced pairs; resync on regain; INI default 0; Audio-menu checkbox')
+print(args.fixtures.name, 'passed focus loss: every mode keeps sounds, music and the local server running and, in a world, the renderer and world (stock renderer restart outside a world), input released; KeepRendererOnFocusLoss=0; console variable off = stock; balanced pairs; resync on regain; INI default 0; Audio-menu checkbox')

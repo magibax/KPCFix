@@ -542,13 +542,20 @@ static int queue_chat(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     return add_edit(edits,count,base+g_shell_layout->chat_duration,before,after,8);
 }
 /* Chat typing: drop key-bound actions while the message editor types (console.c). */
+/* Also the scoreboard key held (console.c): OnCommandOn and OnCommandOff. */
 static int queue_chat_actions(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     const ShellLayout *L=g_shell_layout;U8 before[4],after[4];
-    if(!g_chat_blocks_actions)return 1;
+    if(g_scoreboard_hold&&(!L->command_off_slot||!L->command_slot||!L->screen_close)){
+        g_scoreboard_hold=0;log_text("Scoreboard hold: not verified for this cshell edition; the key toggles as stock.\r\n");
+    }
+    if(!g_chat_blocks_actions&&!g_scoreboard_hold)return 1;
     if(!L->command_slot){g_chat_blocks_actions=0;log_text("Chat typing: not verified for this cshell edition; key actions unchanged.\r\n");return 1;}
     store32(before,(U32)(base+L->command_on));store32(after,(U32)kpc_command_on);
     g_command_shell=base;
-    return add_edit(edits,count,base+L->command_slot,before,after,4);
+    if(!add_edit(edits,count,base+L->command_slot,before,after,4))return 0;
+    if(!g_scoreboard_hold)return 1;
+    store32(before,(U32)(base+L->command_off));store32(after,(U32)kpc_command_off);
+    return add_edit(edits,count,base+L->command_off_slot,before,after,4);
 }
 /* Window-shard diagnostic: the shard manager's handler slot (console.c). */
 static int queue_window_watch(Edit edits[EDIT_CAP],U32 *count,U8 *base){
@@ -563,6 +570,9 @@ static int queue_window_watch(Edit edits[EDIT_CAP],U32 *count,U8 *base){
 static int queue_focus_music(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     const ShellLayout *L=g_shell_layout;U8 before[5],after[5];
     if(!g_focus_enabled)return 1;
+    /* The renderer is kept only in a world (focus.c); without a verified shell
+     * global it is never kept. */
+    if(L->client_shell_global)g_focus_shell_slot=base+L->client_shell_global;
     if(!L->music_pause_call){log_text("Focus loss: music hooks not verified for this cshell edition; music pauses as stock.\r\n");return 1;}
     g_focus_shell=base;
     near_call(before,base+L->music_pause_call,base+L->music_pause);near_call(after,base+L->music_pause_call,kpc_music_pause);
@@ -645,6 +655,7 @@ static int patch_shell(HMODULE module){
     if(g_chat_seconds!=3&&g_shell_layout->chat_duration){log_text("Chat message time: seconds=");log_hex(g_chat_seconds);log_text(" (stock 3).\r\n");}
     if(g_camera_smooth&&g_shell_layout->camera_set_call)log_text("Cutscene camera smoothing: server camera samples interpolated every frame.\r\n");
     if(g_chat_blocks_actions)log_text("Chat typing: key-bound actions (noclip, movement...) are ignored while a message is being typed.\r\n");
+    if(g_scoreboard_hold)log_text("Scoreboard hold: the scoreboard shows while its key is held and closes on release.\r\n");
     if(g_loading_enabled&&g_loading_hold)log_text("Loading picture spawn hold: the player enters the world when the picture's minimum time has passed.\r\n");
     log_text("Ground contact: V5 applied in memory.\r\n");
     kpc_status|=GROUND_READY|GROUND_RUNTIME;
@@ -745,6 +756,7 @@ static int install_game_fixes(void){
     g_focus_default=GetPrivateProfileIntW(L"Multiplayer",L"KeepAudioOnFocusLoss",1,ini_path)!=0;
     g_console_key_fix=GetPrivateProfileIntW(L"KPCFix",L"ConsoleKeyFix",1,ini_path)!=0;
     g_chat_blocks_actions=GetPrivateProfileIntW(L"Multiplayer",L"ChatBlocksActions",1,ini_path)!=0;
+    g_scoreboard_hold=GetPrivateProfileIntW(L"Multiplayer",L"ScoreboardHold",1,ini_path)!=0;
     g_window_watch=GetPrivateProfileIntW(L"Multiplayer",L"LogWindowBreaks",1,ini_path)!=0;
     g_window_hide=GetPrivateProfileIntW(L"Multiplayer",L"HideBrokenWindow",1,ini_path)!=0;
     g_camera_smooth=GetPrivateProfileIntW(L"Multiplayer",L"SmoothCutsceneCamera",1,ini_path)!=0;

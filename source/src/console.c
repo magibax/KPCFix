@@ -83,11 +83,46 @@ U32 g_chat_blocks_actions;
 U8 *g_command_shell;
 static U32 blocked_actions;
 typedef void (__attribute__((thiscall)) *CommandFn)(void *,U32);
+
+/* Scoreboard while the key is held ([Multiplayer] ScoreboardHold, default 1).
+ * cshell 703813a4: the Scoreboard action (41, autoexec "AddAction Scoreboard
+ * 41", Tab) is a toggle in OnCommandOn (case 0xca64c): in multiplayer and in
+ * a world, unless the server's intermission scoreboard (screen type 2) is up,
+ * it closes the screen manager's current screen ([shell+0x138c], type at +4)
+ * when it is type 4, the key scoreboard (close 0xad3c0), else shows type 4
+ * (0xad1b0(4)). Nothing else closes type 4 (0x69 and 0x1a close only types
+ * 0/2), so it stayed up until the key was pressed again. OnCommandOff
+ * (vtable slot 0xff728 -> 0xcab60, an empty "ret 4") is called by the engine
+ * once when a command turns off (client.exe 0x5060). With the setting on,
+ * a press never closes it (OnCommandOn returns when type 4 is up) and the
+ * release closes it with the stock close. Type 4 is created only by this key
+ * (0xca6ac is the only caller passing 4), and its close touches no HUD flag,
+ * so the server-driven scoreboard (type 2) is never affected. */
+U32 g_scoreboard_hold;
+#define ACTION_SCOREBOARD 41u
+#define SHELL_SCREENS 0x138cu
+#define SCREEN_KEY_SCOREBOARD 4
+static U32 scoreboard_closes;
+static U8 *key_scoreboard_screens(void *shell){
+    U8 *mgr;
+    if(!g_scoreboard_hold||!shell||!(mgr=*(U8 **)((U8 *)shell+SHELL_SCREENS)))return 0;
+    return *(const I32 *)(mgr+4)==SCREEN_KEY_SCOREBOARD?mgr:0;
+}
 void __attribute__((thiscall)) kpc_command_on(void *shell,U32 action){
     const ShellLayout *L=g_shell_layout;
     if(g_chat_blocks_actions&&shell&&*((const U8 *)shell+L->chat_editor+L->chat_editing)){blocked_actions++;return;}
+    if(action==ACTION_SCOREBOARD&&key_scoreboard_screens(shell))return;   /* held: already showing */
     ((CommandFn)(g_command_shell+L->command_on))(shell,action);
 }
+void __attribute__((thiscall)) kpc_command_off(void *shell,U32 action){
+    const ShellLayout *L=g_shell_layout;U8 *mgr;
+    typedef void (__attribute__((thiscall)) *CloseFn)(void *);
+    if(action==ACTION_SCOREBOARD&&(mgr=key_scoreboard_screens(shell))!=0){
+        ((CloseFn)(g_command_shell+L->screen_close))(mgr);scoreboard_closes++;
+    }
+    ((CommandFn)(g_command_shell+L->command_off))(shell,action);
+}
+U32 kpc_scoreboard_closes(void){return scoreboard_closes;}
 U32 kpc_blocked_actions(void){return blocked_actions;}
 
 /* The engine also keeps the bound commands' on/off state itself and sends it

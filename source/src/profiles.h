@@ -24,6 +24,7 @@ static const ShellProfile shell_profiles[]={
             .checkbox_hit_box = 0xd370, .checkbox_hit_label = 0xd400,
             .window_break_slot = 0xfe184, .window_break = 0x5bd30,
             .command_slot = 0xff724, .command_on = 0xc9d80, .chat_editor = 0x8c, .chat_editing = 0x12ed,
+            .command_off_slot = 0xff728, .command_off = 0xcab60,
             .camera_set_call = 0xab104, .camera_set = 0xa8f30, .camera_global = 0x1c49dc,
             .hud_sites = {0x9f95b, 0x9fa12, 0xa0540, 0xb27cb, 0xb28e7, 0xb2ac5, 0xb2ca0, 0xb2ef4, 0xb3110, 0xb349f, 0xe2e6b, 0xe2f42, 0xa1977},
             .panel_position = 0xa0110,

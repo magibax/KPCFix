@@ -662,6 +662,9 @@ static void CDECL trace_spawn_position(void *object,const U32 *pos){
 #define COOP_LOG_BUDGET 1000u
 extern void CDECL runtime_broadcast(void *,const char *);
 static int coop_session_enabled;
+static U8 *campaign_image;   /* object.lto image once the runtime hooks are installed */
+static int coop_force_session=-1,coop_chat_control,coop_launch_session; /* live !coop on|off; CoopChatControl; CoopSession at launch */
+static void coop_switch_session(int on,int reset);
 static U32 coop_min_players=1,coop_max_players=3;
 static U8 *coop_image;
 static CoopSession coop_state;
@@ -865,9 +868,20 @@ static void coop_presence(U32 now){
  * campaign plus the map "start" prepends. In campaign mode a target world
  * missing from the maplist is written (memory only; the file is untouched)
  * into the slot NextLevel takes next; the MVP route still requires it. */
+/* The world the server started on (for !reset): maplist entry 0, taken
+ * before the session writes any maplist slot. The launcher's map files list
+ * the start map first (kpc-gui-maps.txt, kpc-coop-maps.txt). */
+static char coop_launch_world[0x80];
+static void coop_take_launch_world(void){
+ U32 shell,count;U8 *b=coop_image?coop_image:campaign_image;
+ if(coop_launch_world[0]||!b)return;
+ if(coop_rd((U32)b+COOP_SHELL_RVA,&shell)&&shell&&coop_rd(shell+0x1ae0u,&count)&&count&&count<=50)
+  coop_copy_str(coop_launch_world,shell+0x210u,0x7f);
+}
 static int coop_prepare_maplist(U32 target){
  U32 shell,count,i,cursor_value,slot,mbi[7];char name[0x80];
  const char *world=coop_target_world(&coop_state,target);U32 *cursor=(U32 *)(coop_image+COOP_MAPCURSOR_RVA);
+ coop_take_launch_world();
  if(!world[0]||!coop_rd((U32)coop_image+COOP_SHELL_RVA,&shell)||
     !coop_rd(shell+0x1ae0u,&count)||!count||count>50)return 0;
  if(VirtualQuery(cursor,mbi,sizeof(mbi))!=sizeof(mbi)||mbi[4]!=0x1000||!(mbi[5]&0xccu)||(mbi[5]&0x100))return 0;
@@ -929,6 +943,8 @@ static void coop_execute(CoopResult *r){
  if(r->action==COOP_ACT_NONE)return;
  coop_log(r->action==COOP_ACT_CHANGE_WORLD?"change":"say",r->msg);
  runtime_broadcast(coop_image,r->msg);
+ if(r->action==COOP_ACT_RESET){coop_switch_session(coop_launch_session,1);return;}
+ if(r->action==COOP_ACT_SESSION_OFF){coop_switch_session(0,0);return;}
  if(r->action==COOP_ACT_CHANGE_WORLD){
   U32 shell;
   if(!coop_prepare_maplist(r->target_pos)||!coop_rd((U32)coop_image+COOP_SHELL_RVA,&shell)||!shell){
@@ -1212,9 +1228,41 @@ static int coop_cheat_command(U32 player,const char *cmd,const char *who){
  coop_execute(&r);
  return 1;
 }
+/* Outside a session ([Coop] CoopChatControl=1): any player may type
+ *   !coop on   start a co-op session now (campaign; the world reloads as
+ *              the lobby, the server's own settings otherwise apply);
+ *   !reset     back to how the server was right after launch;
+ *   !coop      what is available.
+ * The host of a session uses !coop off and !reset (coop_session_command). */
+static void coop_offline_chat(const char *said){
+ U8 *b=campaign_image;U32 i=0;char w[16];U32 n=0;
+ while(said[i]==' '||said[i]=='\t')i++;
+ if(said[i++]!='!'||!b)return;
+ while(said[i]&&said[i]!=' '&&said[i]!='\t'&&n+1<sizeof w){w[n++]=coop_lower(said[i]);i++;}
+ w[n]=0;while(said[i]==' '||said[i]=='\t')i++;
+ if(coop_word(w,"coop")){
+  char a[8];U32 k=0;
+  while(said[i]&&said[i]!=' '&&k+1<sizeof a){a[k++]=coop_lower(said[i]);i++;}
+  a[k]=0;
+  if(coop_word(a,"on")){
+   runtime_broadcast(b,"[Co-op] Co-op session on: loading the lobby; host types !campaign full (or a realm) to start");
+   log_file("[KPCFix Co-op] chat !coop on: session switched on");
+   coop_switch_session(1,0);
+  }else runtime_broadcast(b,"[Co-op] Co-op is off. !coop on starts a co-op session; !reset restores the server's start state");
+ }else if(coop_word(w,"reset")){
+  runtime_broadcast(b,"[Co-op] Server reset to its start state");
+  log_file("[KPCFix Co-op] chat !reset (no session)");
+  coop_switch_session(coop_launch_session,1);
+ }
+}
 static void __attribute__((used,noinline)) coop_chat_observe(U32 player,U32 text){
  U32 client=0,object=0,now;char name[COOP_NAME_MAX],said[COOP_COMMAND_MAX+2];CoopResult r;U32 i=0;
- if(!coop_session_enabled||!coop_image||!text)return;
+ if(!text)return;
+ if(!coop_session_enabled){
+  if(coop_chat_control){coop_copy_str(said,text,sizeof said);coop_offline_chat(said);}
+  return;
+ }
+ if(!coop_image)return;
  coop_copy_str(said,text,sizeof said);
  while(said[i]==' '||said[i]=='\t')i++;
  if(said[i]!='!')return;
@@ -2414,7 +2462,9 @@ static void coop_respawn_log2(const char *event,U32 item,U32 kind,const char *ex
 static void coop_respawn_log(const char *event,U32 item){coop_respawn_log2(event,item,event[0]=='s'?0u:event[0]=='r'?1u:4u,0);}
 static void __attribute__((thiscall)) coop_item_hide(void *item,U32 force){
  U32 it=(U32)item,def=0,id=0;
- if(coop_item_respawn_sec&&!(force&0xffu)&&bsp_mem_readable(it+0x54u,0x94)&&!*(const U8 *)(it+0xb4u)&&!*(const U8 *)(it+0xe4u)&&
+ /* A death drop (DropWeapon f3660 starts the lifetime timer +0x9c, the only
+  * starter of that timer) is never scheduled: its lifetime removes it. */
+ if(coop_item_respawn_sec&&!(force&0xffu)&&bsp_mem_readable(it+0x54u,0x94)&&!*(const U8 *)(it+0xb4u)&&!*(const U8 *)(it+0xe4u)&&!*(const U8 *)(it+0x9cu)&&
     coop_rd(it+0x54u,&def)&&def&&coop_rd(def,&id)&&coop_item_respawnable(id)){
   *(U8 *)(it+0xb4u)=1;*(float *)(it+0xb8u)=(float)(I32)coop_item_respawn_sec;*(U8 *)(it+0x81u)=1;
   coop_respawn_scheduled++;coop_respawn_log("scheduled",it);
@@ -2424,6 +2474,7 @@ static void __attribute__((thiscall)) coop_item_hide(void *item,U32 force){
   coop_text(why,&k," not scheduled: force=",sizeof why);coop_dec(why,&k,force&0xffu,sizeof why);
   coop_text(why,&k," Respawn=",sizeof why);coop_dec(why,&k,*(const U8 *)(it+0xb4u),sizeof why);
   coop_text(why,&k," expiry=",sizeof why);coop_dec(why,&k,*(const U8 *)(it+0xe4u),sizeof why);
+  coop_text(why,&k," drop=",sizeof why);coop_dec(why,&k,*(const U8 *)(it+0x9cu),sizeof why);
   coop_respawn_log2("skipped",it,2u,why);
  }
  ((ItemHideFn)(coop_image+0xcc570u))(item,force);
@@ -2598,7 +2649,6 @@ static U32 __attribute__((thiscall)) coop_trace_switch(void *command){
 }
 
 static int campaign_trace;
-static U8 *campaign_image;
 
 /* Replace only the native six-byte game-type load at 2d455. Preserve the
  * receiver, original registers and flags, then replay the load before
@@ -2895,9 +2945,10 @@ static void *CDECL coop_music_event(const char *label,U32 argc,U32 argv){
 /* Per-frame tick: the server shell Update (ffb70) calls 100720 (pending
  * NextLevel check) every frame at ffbbf with ECX = shell. Forward unchanged,
  * then deliver due per-player music starts. Installed only with CoopMusic. */
+static void coop_dead_frame(U32 now);
 static void __attribute__((thiscall)) coop_frame(void *shell){
  ((ShellFn)(coop_image+0x100720u))(shell);
- if(coop_session_enabled){coop_inv_frame(GetTickCount());coop_powerup_frame(GetTickCount());if(coop_window_shards)coop_window_frame(GetTickCount());}
+ if(coop_session_enabled){coop_inv_frame(GetTickCount());coop_powerup_frame(GetTickCount());if(coop_window_shards)coop_window_frame(GetTickCount());coop_dead_frame(GetTickCount());}
  if(coop_session_enabled&&coop_music)coop_music_frame(GetTickCount());
  if(coop_session_enabled&&coop_intro)coop_intro_frame(GetTickCount());
  if(coop_session_enabled&&coop_start_scoreboard){
@@ -2942,6 +2993,90 @@ static U32 CDECL coop_bars_send_gate(void){
  if(coop_bars_sends&&now-coop_bars_last_send<COOP_BARS_SEND_MS)return 0;
  coop_bars_last_send=now;coop_bars_sends++;return 1;
 }
+/* ---- Death drops ([Coop] CoopDropLifetimeSec, session, default 20) ----
+ * A player who dies in multiplayer drops the current weapon (damage handler
+ * f3bc0: f3efc-f3f19 -> DropWeapon f3660, ids 7-14 only; the ultimate
+ * weapons drop as item 0x23). DropWeapon starts the item's lifetime timer
+ * (+0x9c) with 10.0 s (f3708 push 0x41200000; f370d call cc780, thiscall
+ * item, float), and the item update cbf10 removes the item when it runs out
+ * (cc054: cc570(item, 1)). The f370d call is replaced so the lifetime is this
+ * value (0 = stock 10 s); both calls are logged (playtest 2026-11-13: drops
+ * reported to stay, so the log shows whether the timer ran). */
+typedef void (__attribute__((thiscall)) *ItemTimerFn)(void *,float);
+static U32 coop_drop_sec=20,coop_drops_made,coop_drops_expired;
+static void coop_drop_log(const char *event,U32 item,U32 count){
+ char line[96],name[24];U32 k=0,def=0,id=0;
+ if(count>32u)return;
+ name[0]=0;if(coop_rd(item+0x54u,&def)&&def&&coop_rd(def,&id))coop_item_name(id,name,sizeof name);
+ coop_text(line,&k,event,sizeof line);coop_text(line,&k," item=",sizeof line);coop_text(line,&k,name[0]?name:"?",sizeof line);
+ if(event[0]=='d'){coop_text(line,&k," lifetime_s=",sizeof line);coop_dec(line,&k,coop_drop_sec?coop_drop_sec:10u,sizeof line);}
+ coop_log("death-drop",line);
+}
+static void __attribute__((thiscall)) coop_drop_lifetime(void *item,float secs){
+ ((ItemTimerFn)(coop_image+0xcc780u))(item,coop_drop_sec?(float)(I32)coop_drop_sec:secs);
+ coop_drop_log("dropped",(U32)item,++coop_drops_made);
+}
+static void __attribute__((thiscall)) coop_drop_expired(void *item,U32 force){
+ coop_drop_log("expired",(U32)item,++coop_drops_expired);
+ ((ItemHideFn)(coop_image+0xcc570u))(item,force);
+}
+/* ---- Host-only cutscene skip ([Coop] CoopHostSkip, session, default 1) ----
+ * cshell: space during a cinematic (OnKeyDown ccc3f -> a7cc0) sends message
+ * 0x3d MID_CINEMATIC with 0x81 and the script name; a7f40 sends 0x3d with
+ * 0x80 (continue/user input). object.lto CServerShell::OnMessage fe3a0, case
+ * 0x3d (feb36): push msg; call c5830 (cdecl) at feb3e; the sender HCLIENT is
+ * at [esp+0x1d4] there. c5830 sets the user-input flag (0x80) or ends a
+ * skippable running script and plays its ending script (0x81, c54f0). Only
+ * the session host's messages reach c5830; others are dropped (so a
+ * non-host can neither skip an intro nor end a sequence that leads to the
+ * exit). With no host yet, everyone may. */
+typedef void (CDECL *CinematicMsgFn)(U32);
+static int coop_host_skip=1;
+static U32 coop_skip_refused,coop_skip_reply_ms;
+static void __attribute__((used,noinline)) coop_cinematic_msg(U32 msg,U32 sender){
+ int me=coop_find_client(&coop_state,sender);
+ if(coop_session_enabled&&coop_host_skip&&coop_state.host>=0&&me!=coop_state.host){
+  U32 now=GetTickCount();
+  coop_skip_refused++;
+  if(!coop_skip_reply_ms||now-coop_skip_reply_ms>=5000u){
+   coop_skip_reply_ms=now|1u;
+   coop_log("skip-refused","cinematic skip/continue from a non-host dropped");
+   runtime_broadcast(coop_image,"[Co-op] Only the host (*) can skip cutscenes");
+  }
+  return;
+ }
+ ((CinematicMsgFn)(coop_image+0xc5830u))(msg);
+}
+/* Replaces "call c5830" at feb3e: [esp+4] = msg, [esp+0x1dc] = sender. */
+static void __attribute__((naked)) coop_cinematic_entry(void){
+ __asm__ volatile("pushl 0x1dc(%esp); pushl 8(%esp); call coop_cinematic_msg; addl $8,%esp; ret");
+}
+/* ---- Everyone dead ([Coop] CoopRestartOnWipe, session, default 1) ----
+ * Every 250 ms during play: members present and spawned in this world, and
+ * how many of them are dead (CPlayer vtable +0x60, state +0x198 2 or 3).
+ * coop_session_dead_check restarts the world after COOP_ALL_DEAD_MS. */
+static int coop_restart_on_wipe=1;
+/* Dead only when the player's vtable answers so (an unreadable player is not
+ * counted as dead, unlike coop_player_dead's fail-safe for pickups). */
+static int coop_player_dead_known(U32 player){
+ U32 vt=0,fn=0;
+ if(!player||!coop_rd(player,&vt)||!vt||!coop_rd(vt+0x60u,&fn)||!fn)return 0;
+ return (((ThisBoolFn)fn)((void *)player)&0xffu)!=0;
+}
+static U32 coop_dead_next;
+static void coop_dead_frame(U32 now){
+ U32 present=0,dead=0,i;CoopResult r;
+ if(!coop_restart_on_wipe||(int)(now-coop_dead_next)<0)return;
+ coop_dead_next=now+250u;
+ if(coop_state.phase!=COOP_PHASE_GAMEPLAY){coop_state.dead_since=0;return;}
+ for(i=0;i<COOP_SESSION_MAX_MEMBERS;i++){
+  U32 player;
+  if(!coop_state.m[i].used||coop_state.m[i].away)continue;
+  if(!(player=coop_member_player((int)i)))continue;   /* not in this world yet */
+  present++;if(coop_player_dead_known(player))dead++;
+ }
+ if(coop_session_dead_check(&coop_state,present,dead,now,&r)){coop_log("everyone-dead",r.msg);coop_execute(&r);}
+}
 /* Optional in-memory call/load redirects inside the original object image.
  * Each site's original bytes are verified; disabled sites must stay original. */
 typedef struct {U32 rva,size;U8 original[6],hooked[6];int enabled;} OptionalSite;
@@ -2950,7 +3085,7 @@ static void make_call(OptionalSite *s,U8 *b,const void *target){
  s->hooked[0]=0xe8;copy(s->hooked+1,(const U8 *)&rel,4);
  for(i=5;i<s->size;i++)s->hooked[i]=0x90;
 }
-#define OPTIONAL_SITES 49u
+#define OPTIONAL_SITES 52u
 static void optional_sites(OptionalSite *s,U8 *b){
  static const struct {U32 rva,size;U8 original[6];} table[OPTIONAL_SITES]={
   {SPAWN_POS_CALL_RVA,6,{0xff,0x91,0xe0,0x01,0x00,0x00}},
@@ -3002,6 +3137,9 @@ static void optional_sites(OptionalSite *s,U8 *b){
   {0xcbfff,5,{0xe8,0x7c,0x00,0x00,0x00}},        /* item respawn countdown done -> cc080 */
   {0x48413,6,{0xff,0x91,0xfc,0x01,0x00,0x00}},   /* window break: SetObjectFlags (hide) before message 0x39 */
   {0xc837b,5,{0xe8,0xa0,0x3d,0x00,0x00}},        /* armour touch c8340 -> pickup cc120 */
+  {0xf370d,5,{0xe8,0x6e,0x90,0xfd,0xff}},        /* DropWeapon -> lifetime timer cc780(item, 10.0) */
+  {0xcc054,5,{0xe8,0x17,0x05,0x00,0x00}},        /* item update: lifetime over -> cc570(item, 1) */
+  {0xfeb3e,5,{0xe8,0xed,0x6c,0xfc,0xff}},        /* OnMessage 0x3d MID_CINEMATIC -> c5830(msg) */
  };
  U32 i;
  for(i=0;i<OPTIONAL_SITES;i++){s[i].rva=table[i].rva;s[i].size=table[i].size;copy(s[i].original,table[i].original,6);}
@@ -3054,11 +3192,17 @@ static void optional_sites(OptionalSite *s,U8 *b){
  make_call(&s[46],b,(const void *)coop_item_respawn);
  make_call(&s[47],b,(const void *)coop_window_flags);
  make_call(&s[48],b,(const void *)coop_armour_pickup);
+ make_call(&s[49],b,(const void *)coop_drop_lifetime);
+ make_call(&s[50],b,(const void *)coop_drop_expired);
+ make_call(&s[51],b,(const void *)coop_cinematic_entry);
  s[0].enabled=spawn_trace_enabled;
  s[1].enabled=spawn_separation_enabled||coop_session_enabled;
  s[2].enabled=campaign_trace||coop_session_enabled;
  s[3].enabled=campaign_trace||(coop_session_enabled&&coop_intro);
  for(i=4;i<8;i++)s[i].enabled=coop_session_enabled;
+ /* The chat relay is also watched outside a session for !coop on and !reset
+  * ([Coop] CoopChatControl, default 1). */
+ s[4].enabled=coop_session_enabled||coop_chat_control;
  s[8].enabled=coop_session_enabled&&(coop_trace_music||coop_music);
  s[9].enabled=coop_session_enabled;   /* music, intro, scoreboard, inventory restore, powerup re-send */
  s[10].enabled=coop_session_enabled&&(coop_script_clock||coop_trace_timing);
@@ -3079,8 +3223,28 @@ static void optional_sites(OptionalSite *s,U8 *b){
  s[44].enabled=coop_session_enabled&&coop_cheat_keys;
  s[45].enabled=s[46].enabled=s[48].enabled=coop_session_enabled&&coop_item_respawn_sec;
  s[47].enabled=coop_session_enabled&&coop_window_shards;
+ s[49].enabled=s[50].enabled=coop_session_enabled;
+ s[51].enabled=coop_session_enabled&&coop_host_skip;
  coop_ff_skip_target=(U32)b+0xf3f1eu;
  coop_c4230_target=(U32)b+0xc4230u;
+}
+/* Arm the session on the object image b: fresh session state from the
+ * current settings (startup, a chat !coop on, !reset). */
+static void coop_arm(U8 *b){
+ U32 k;
+ coop_image=b;coop_session_init(&coop_state,coop_min_players,coop_max_players);coop_t0=GetTickCount();
+ coop_script_clock_reset(&coop_clock);coop_sb_reset(&coop_sb);
+ if(coop_campaign)coop_session_enable_campaign(&coop_state);
+ for(k=0;coop_lobby_world[k]&&k+1<COOP_WORLD_MAX;k++){coop_state.lobby_world[k]=coop_lobby_world[k];}
+ coop_state.lobby_world[k]=0;
+ coop_state.test_label=coop_start_label;coop_resolve_test_start(&coop_state);
+ coop_state.intro_settle_ms=coop_intro_settle_ms;
+ coop_state.skill=coop_skill;
+ coop_apply_skill();
+ /* No inventory carries over from before (a !reset starts with nothing). */
+ for(k=0;k<COOP_SESSION_MAX_MEMBERS;k++){unsigned char *z=(unsigned char *)&coop_inv_snap[k];U32 q;for(q=0;q<sizeof coop_inv_snap[k];q++)z[q]=0;coop_inv_pending[k]=0;}
+ /* Dedicated console "changelevel" (logging.S level_command reads STATE+8). */
+ *(U32 *)(b+0x174f08)=(U32)coop_console_changelevel;
 }
 static int apply_object(HMODULE module){
  U8 *b=(U8 *)module;U8 hash[32],expected[8];U32 i,j,old,restore,already=1;
@@ -3121,18 +3285,7 @@ static int apply_object(HMODULE module){
   spawn_image=b;clearance_started=0;spawn_trace_count=0;collision_trace_count=0;
   for(i=0;i<COOP_TRIAL_SLOTS;i++)spawn_trial_reservations.player[i]=0;
  }
- if(coop_session_enabled){
-  coop_image=b;coop_session_init(&coop_state,coop_min_players,coop_max_players);coop_t0=GetTickCount();
-  coop_script_clock_reset(&coop_clock);coop_sb_reset(&coop_sb);
-  if(coop_campaign)coop_session_enable_campaign(&coop_state);
-  {U32 k;for(k=0;coop_lobby_world[k]&&k+1<COOP_WORLD_MAX;k++)coop_state.lobby_world[k]=coop_lobby_world[k];coop_state.lobby_world[k]=0;}
-  coop_state.test_label=coop_start_label;coop_resolve_test_start(&coop_state);
-  coop_state.intro_settle_ms=coop_intro_settle_ms;
-  coop_state.skill=coop_skill;
-  coop_apply_skill();
-  /* Dedicated console "changelevel" (logging.S level_command reads STATE+8). */
-  *(U32 *)(b+0x174f08)=(U32)coop_console_changelevel;
- }
+ if(coop_session_enabled)coop_arm(b);
  for(i=0;i<OPTIONAL_SITES;i++)if(site[i].enabled)copy(b+site[i].rva,site[i].hooked,site[i].size);
  /* LoadLibrary has already applied relocations and may have run table init. */
  *(U32 *)(b+0x16d950)&=~3u;
@@ -3187,49 +3340,88 @@ static int intercept_backend(void){
  }
  return 0;
 }
-static void initialize(void){
- U8 exe_sha[32],back_sha[32];int profile=-1,i;U32 pe_size;
- paths();
- if(!module_hash(NULL,exe_sha))fatal("[KPCFix Server Tools] ERROR: cannot identify the host executable.");
- for(i=0;i<2;i++)if(same(exe_sha,exe_hashes[i],32))profile=i;
- if(!file_hash(backend_path,back_sha))fatal(winmm_mode?"[KPCFix Server Tools] ERROR: missing server.dll beside winmm.dll.":
-   "[KPCFix Server Tools] ERROR: missing server.original.dll; run setup first.");
- if(profile>=0){if(!same(back_sha,backend_hashes[profile],32))fatal(winmm_mode?
-   "[KPCFix Server Tools] ERROR: server.dll is not the original engine for this dedicated.exe (an earlier Server Tools install replaced it; run Setup-KPCServerTools.cmd).":
-   "[KPCFix Server Tools] ERROR: dedicated executable and original server DLL do not match.");}
- else if(!same(back_sha,backend_hashes[0],32)&&!same(back_sha,backend_hashes[1],32))
-  fatal("[KPCFix Server Tools] ERROR: unsupported original server DLL.");
- if(!backend){
-  backend=LoadLibraryW(backend_path);
-  if(!backend)fatal("[KPCFix Server Tools] ERROR: original server DLL could not be loaded.");
-  pe_size=same(back_sha,backend_hashes[0],32)?0x51000:0x55000;
-  if(!valid_image((U8 *)backend,pe_size))fatal("[KPCFix Server Tools] ERROR: original engine image layout mismatch.");
-  create_real=(CreateFn)GetProcAddress(backend,"CreateServer");
-  delete_real=(DeleteFn)GetProcAddress(backend,"DeleteServer");
-  if(!create_real||!delete_real)fatal("[KPCFix Server Tools] ERROR: missing original server exports.");
+static U8 coop_back_sha[32];
+static void coop_read_config(const U8 back_sha[32]);
+/* Live session switch: chat !coop on (no session), host !coop off, !reset.
+ * Runs on the server thread inside the chat relay hook (feec4), so nothing
+ * else is executing in object.lto: the session's optional sites are written
+ * (installed or restored to their verified original bytes) like at startup,
+ * the session is armed afresh or left off, and the world is reloaded:
+ *  - on: the lobby (the start map when it is a deathmatch map, else a random
+ *    PM01-PM10), through the session's own change;
+ *  - off: the start map, through the native pending NextLevel.
+ * reset = 1: the settings are the INI's as at launch (coop_launch_session),
+ * the cheat permission goes back to AllowCheats, inventories are cleared and
+ * the server returns to the start map (in a session: CoopLobbyWorld). */
+static int coop_sites_write(U8 *b,const OptionalSite *before,const OptionalSite *after){
+ U32 i,old,restore;
+ for(i=0;i<OPTIONAL_SITES;i++)
+  if(before[i].enabled!=after[i].enabled&&!same(b+before[i].rva,before[i].enabled?before[i].hooked:before[i].original,before[i].size))return 0;
+ if(!VirtualProtect(b+0x1000,0x116000,0x40,&old))return 0;
+ for(i=0;i<OPTIONAL_SITES;i++)
+  if(before[i].enabled!=after[i].enabled)copy(b+after[i].rva,after[i].enabled?after[i].hooked:after[i].original,after[i].size);
+ VirtualProtect(b+0x1000,0x116000,old,&restore);
+ FlushInstructionCache(GetCurrentProcess(),b+0x1000,0x116000);
+ return 1;
+}
+static int coop_native_reload(U8 *b,const char *world){
+ U32 shell,count;
+ if(!world[0]||!coop_rd((U32)b+COOP_SHELL_RVA,&shell)||!shell||!coop_rd(shell+0x1ae0u,&count)||!count||count>50)return 0;
+ if(!bsp_mem_readable(shell+0x210u,0x7f)||!bsp_mem_readable(shell+0x1ae8u,2)||*(const U8 *)(shell+0x1ae8u))return 0;
+ {char *dst=(char *)(shell+0x210u);U32 k;for(k=0;world[k]&&k<0x7e;k++)dst[k]=world[k];dst[k]=0;}   /* entry 0 = the start map again */
+ *(U32 *)(b+COOP_MAPCURSOR_RVA)=count-1u;   /* NextLevel pre-increments and wraps to 0 */
+ *(U8 *)(shell+0x1ae9u)=1;
+ return 1;
+}
+static void coop_switch_session(int on,int reset){
+ U8 *b=campaign_image;OptionalSite before[OPTIONAL_SITES],after[OPTIONAL_SITES];
+ U32 now=GetTickCount();int was=coop_session_enabled,force_before=coop_force_session;
+ if(!b)return;
+ coop_take_launch_world();
+ optional_sites(before,b);
+ coop_force_session=reset?-1:on;
+ if(reset&&coop_launch_session!=on)coop_force_session=coop_launch_session;
+ coop_read_config(coop_back_sha);
+ optional_sites(after,b);
+ if(!coop_sites_write(b,before,after)){
+  coop_force_session=force_before;coop_read_config(coop_back_sha);
+  log_file("[KPCFix Co-op] session switch failed: a hook site did not hold its expected bytes; nothing changed");
+  runtime_broadcast(b,"[Co-op] Could not switch the co-op session (see KPCServerTools.log)");
+  return;
  }
- active=profile>=0&&GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"Enabled",1,ini_path)!=0;
- campaign_trace=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceCampaign",0,ini_path)!=0;
- initial_cheats=GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"AllowCheats",0,ini_path)!=0;
- spawn_separation_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TrialSeparateSpawns",0,ini_path)!=0;
- collision_trace_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceCollisionABI",0,ini_path)!=0;
- bsp_volume_enabled=active&&same(back_sha,bsp_original_hash,32)&&
-   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceBspVolume",0,ini_path)!=0;
- if(active&&!same(back_sha,bsp_original_hash,32)&&
-    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceBspVolume",0,ini_path)!=0)
-   log_file("[KPCFix Co-op] BSP trace unsupported for this original server.dll hash; disabled.");
- model_registry_enabled=active&&same(back_sha,bsp_original_hash,32)&&
-   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceModelRegistry",0,ini_path)!=0;
- if(active&&!same(back_sha,bsp_original_hash,32)&&
-    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceModelRegistry",0,ini_path)!=0)
-   log_file("[KPCFix Co-op] Model registry trace unsupported for this original server.dll hash; disabled.");
- model_state_enabled=model_registry_enabled&&
-   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceModelState",0,ini_path)!=0;
- clearance_enabled=active&&(bsp_volume_enabled||model_registry_enabled||
-   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TracePlayerClearance",0,ini_path)!=0);
- spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
-   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
- coop_session_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSession",0,ini_path)!=0;
+ if(reset)*(U32 *)(b+0x174f00u)=initial_cheats?1u:0u;   /* kpc_cheats back to AllowCheats */
+ {char line[96];U32 m=0;
+  coop_text(line,&m,"[KPCFix Co-op] session ",sizeof line);coop_text(line,&m,coop_session_enabled?"on":"off",sizeof line);
+  coop_text(line,&m,reset?" (reset to the launch state)":(was?" (host !coop off)":" (chat !coop on)"),sizeof line);log_file(line);}
+ if(coop_session_enabled){
+  CoopResult r;char w[COOP_WORLD_MAX];
+  if(!spawn_image){U32 k;spawn_image=b;clearance_started=0;spawn_trace_count=0;collision_trace_count=0;for(k=0;k<COOP_TRIAL_SLOTS;k++)spawn_trial_reservations.player[k]=0;}
+  coop_arm(b);
+  if(coop_sound_clock)coop_install_sound_clock(coop_back_sha);
+  if(coop_frame_ms)coop_install_server_frame(coop_back_sha);
+  /* Turned on from deathmatch: the start map is the lobby if it is a
+   * deathmatch map. A reset keeps the launch CoopLobbyWorld. */
+  if(!reset&&coop_world_normalize(coop_launch_world,w)&&w[0]=='d'&&w[1]=='e'&&w[2]=='a'&&w[3]=='t'&&w[4]=='h'){
+   U32 k;for(k=0;w[k]&&k+1<COOP_WORLD_MAX;k++)coop_state.lobby_force[k]=w[k];coop_state.lobby_force[k]=0;
+  }
+  coop_state.lobby_pending=1;coop_session_pick_lobby(&coop_state,now);
+  coop_begin_change(&coop_state,COOP_TARGET_LOBBY,now,&r,reset?"Server reset":"Co-op session on");
+  coop_execute(&r);
+ }else{
+  *(U32 *)(b+0x174f08u)=0;   /* console changelevel: co-op off reply */
+  if(!coop_native_reload(b,coop_launch_world))log_file("[KPCFix Co-op] session off: start map unknown or intermission active; world kept");
+ }
+}
+/* [Coop] settings, read at startup and again when a chat command switches
+ * the session on or off (coop_switch_session). */
+static void coop_read_config(const U8 back_sha[32]){
+ /* coop_force_session: set by a live !coop on|off (chat); -1 = the INI. */
+ coop_session_enabled=active&&(coop_force_session>=0?coop_force_session:GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopSession",0,ini_path)!=0);
+ coop_chat_control=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopChatControl",1,ini_path)!=0;
+ coop_host_skip=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopHostSkip",1,ini_path)!=0;
+ coop_restart_on_wipe=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopRestartOnWipe",1,ini_path)!=0;
+ coop_drop_sec=coop_session_enabled?GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopDropLifetimeSec",20,ini_path):0;
+ if(coop_drop_sec>600u)coop_drop_sec=600u;
  coop_min_players=GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopMinPlayers",1,ini_path);
  coop_max_players=GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopMaxPlayers",3,ini_path);
  if(coop_max_players<1||coop_max_players>3)coop_max_players=3;
@@ -3238,9 +3430,12 @@ static void initialize(void){
  coop_intermission=GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopIntermission",0,ini_path)!=0;
  coop_trace_music=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceMusic",0,ini_path)!=0;
  coop_music=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopMusic",1,ini_path)!=0;
- coop_intro=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopIntro",0,ini_path)!=0;
+ /* The whole campaign is the default route (CoopCampaign=0: the fixed test
+  * route R1M2B > R1M2C > R1M3A). The campaign needs the intros (their scripts
+  * load each level's other scripts), so CoopIntro follows CoopCampaign. */
+ coop_campaign=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopCampaign",1,ini_path)!=0;
+ coop_intro=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopIntro",coop_campaign,ini_path)!=0;
  coop_script_clock=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopScriptClock",coop_intro,ini_path)!=0;
- coop_campaign=coop_session_enabled&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"CoopCampaign",0,ini_path)!=0;
  /* Campaign loads show the original loading picture on KPCFix clients
   * (client [Multiplayer] CampaignLoadingArt), so the start scoreboard is off
   * by default there; the MVP route keeps it on. */
@@ -3306,6 +3501,52 @@ static void initialize(void){
     }}
   }else if(wn)coop_start_state=2;
  }
+}
+static void initialize(void){
+ U8 exe_sha[32],back_sha[32];int profile=-1,i;U32 pe_size;
+ paths();
+ if(!module_hash(NULL,exe_sha))fatal("[KPCFix Server Tools] ERROR: cannot identify the host executable.");
+ for(i=0;i<2;i++)if(same(exe_sha,exe_hashes[i],32))profile=i;
+ if(!file_hash(backend_path,back_sha))fatal(winmm_mode?"[KPCFix Server Tools] ERROR: missing server.dll beside winmm.dll.":
+   "[KPCFix Server Tools] ERROR: missing server.original.dll; run setup first.");
+ if(profile>=0){if(!same(back_sha,backend_hashes[profile],32))fatal(winmm_mode?
+   "[KPCFix Server Tools] ERROR: server.dll is not the original engine for this dedicated.exe (an earlier Server Tools install replaced it; run Setup-KPCServerTools.cmd).":
+   "[KPCFix Server Tools] ERROR: dedicated executable and original server DLL do not match.");}
+ else if(!same(back_sha,backend_hashes[0],32)&&!same(back_sha,backend_hashes[1],32))
+  fatal("[KPCFix Server Tools] ERROR: unsupported original server DLL.");
+ if(!backend){
+  backend=LoadLibraryW(backend_path);
+  if(!backend)fatal("[KPCFix Server Tools] ERROR: original server DLL could not be loaded.");
+  pe_size=same(back_sha,backend_hashes[0],32)?0x51000:0x55000;
+  if(!valid_image((U8 *)backend,pe_size))fatal("[KPCFix Server Tools] ERROR: original engine image layout mismatch.");
+  create_real=(CreateFn)GetProcAddress(backend,"CreateServer");
+  delete_real=(DeleteFn)GetProcAddress(backend,"DeleteServer");
+  if(!create_real||!delete_real)fatal("[KPCFix Server Tools] ERROR: missing original server exports.");
+ }
+ active=profile>=0&&GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"Enabled",1,ini_path)!=0;
+ campaign_trace=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceCampaign",0,ini_path)!=0;
+ initial_cheats=GetPrivateProfileIntW((const WCHAR *)L"ServerTools",(const WCHAR *)L"AllowCheats",0,ini_path)!=0;
+ spawn_separation_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TrialSeparateSpawns",0,ini_path)!=0;
+ collision_trace_enabled=active&&GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceCollisionABI",0,ini_path)!=0;
+ bsp_volume_enabled=active&&same(back_sha,bsp_original_hash,32)&&
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceBspVolume",0,ini_path)!=0;
+ if(active&&!same(back_sha,bsp_original_hash,32)&&
+    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceBspVolume",0,ini_path)!=0)
+   log_file("[KPCFix Co-op] BSP trace unsupported for this original server.dll hash; disabled.");
+ model_registry_enabled=active&&same(back_sha,bsp_original_hash,32)&&
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceModelRegistry",0,ini_path)!=0;
+ if(active&&!same(back_sha,bsp_original_hash,32)&&
+    GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceModelRegistry",0,ini_path)!=0)
+   log_file("[KPCFix Co-op] Model registry trace unsupported for this original server.dll hash; disabled.");
+ model_state_enabled=model_registry_enabled&&
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceModelState",0,ini_path)!=0;
+ clearance_enabled=active&&(bsp_volume_enabled||model_registry_enabled||
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TracePlayerClearance",0,ini_path)!=0);
+ spawn_trace_enabled=active&&(clearance_enabled||spawn_separation_enabled||collision_trace_enabled||
+   GetPrivateProfileIntW((const WCHAR *)L"Coop",(const WCHAR *)L"TraceSpawns",0,ini_path)!=0);
+ coop_read_config(back_sha);
+ coop_launch_session=coop_session_enabled;
+ for(i=0;i<32;i++)coop_back_sha[i]=back_sha[i];
  if(active&&(spawn_trace_enabled||coop_session_enabled||campaign_trace)){
   /* Diagnostic identity tied to the exact bytes of this DLL file. */
   U8 own[32];WCHAR own_path[1024];U32 k,n=GetModuleFileNameW(self,own_path,1024);
@@ -3404,6 +3645,14 @@ static void initialize(void){
    if(coop_lobby_world[0]){m=0;coop_text(line,&m,"[KPCFix Co-op] effective CoopLobbyWorld=",sizeof line);coop_text(line,&m,coop_lobby_world,sizeof line);log_file(line);}
    if(coop_intro&&coop_intro_settle_ms!=COOP_INTRO_SETTLE_MS){m=0;coop_text(line,&m,"[KPCFix Co-op] effective CoopIntroSettleMs=",sizeof line);coop_dec(line,&m,coop_intro_settle_ms,sizeof line);log_file(line);}
    if(coop_intro_all)log_file("[KPCFix Co-op] effective CoopIntroAll=1 (every route world's starting_cinematic plays)");
+  }
+  log_file(coop_chat_control?"[KPCFix Co-op] effective CoopChatControl=1 (outside a session: chat !coop on, !reset)":"[KPCFix Co-op] effective CoopChatControl=0");
+  if(coop_session_enabled){
+   char line[120];U32 m=0;
+   log_file(coop_host_skip?"[KPCFix Co-op] effective CoopHostSkip=1 (only the host skips cutscenes)":"[KPCFix Co-op] effective CoopHostSkip=0");
+   log_file(coop_restart_on_wipe?"[KPCFix Co-op] effective CoopRestartOnWipe=1 (everyone dead: the world restarts)":"[KPCFix Co-op] effective CoopRestartOnWipe=0");
+   coop_text(line,&m,"[KPCFix Co-op] effective CoopDropLifetimeSec=",sizeof line);coop_dec(line,&m,coop_drop_sec,sizeof line);
+   coop_text(line,&m,coop_drop_sec?" (weapons dropped at death disappear after this)":" (stock 10 s)",sizeof line);log_file(line);
   }
   log_file(model_registry_enabled?
     "[KPCFix Co-op] effective TraceModelRegistry=1":

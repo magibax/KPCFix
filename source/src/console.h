@@ -4,6 +4,9 @@
 extern U32 g_console_key_fix,g_chat_blocks_actions;
 extern U8 *g_command_shell;
 void __attribute__((thiscall)) kpc_command_on(void *shell,U32 action);
+void __attribute__((thiscall)) kpc_command_off(void *shell,U32 action);
+U32 kpc_scoreboard_closes(void);
+extern U32 g_scoreboard_hold;
 U32 kpc_blocked_actions(void);
 void kpc_console_key_entry(void);
 void kpc_console_char_entry(void);

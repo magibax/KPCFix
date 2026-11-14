@@ -85,6 +85,18 @@ its broadcast; no new network messages. Replies are at most 111 bytes.
   the selection completes it and returns to the lobby. **Live:** natural exits,
   scripted intro exits.
 * **Lobby world:** a random deathmatch map (PM01–PM10) picked by the launcher on every co-op start and written to `CoopLobbyWorld`; players spawn at its own multiplayer starts. The DLL default without the key is R1M2B.
+* **Any map** (2026-11-14, not yet played): host `!changelevel` also takes the tutorial
+  (`TUTORIAL`, a one-world route) and the deathmatch maps (`PM01`–`PM10`, which become the
+  lobby). The campaign is the default route (`CoopCampaign=1`, intros on).
+* **Everyone dead** (`CoopRestartOnWipe`, not yet played): when every present player is
+  dead for 2 s during play, the world restarts from its start and its intro plays again.
+* **Cutscene skip** (`CoopHostSkip`, not yet played): only the host's skip or continue
+  message reaches the server; other players get "Only the host (*) can skip cutscenes".
+* **Switching and reset** (`CoopChatControl`, emulator only): on a deathmatch server any
+  player can type `!coop on`; the session's hooks are installed live and the world reloads
+  as the lobby. In a session the host can type `!coop off` (back to deathmatch on the start
+  map) and `!reset` (the server's launch state: settings, cheat permission, no inventories,
+  start world).
 * **Membership:** keyed by the engine's client handle; disconnects are detected from
   the engine's player list; an empty session returns to a new lobby.
 

@@ -48,7 +48,9 @@ typedef enum {
  COOP_ACT_CHANGE_WORLD=2, /* broadcast msg, then load route[target] natively */
  COOP_ACT_REPLY=3,        /* informational reply (broadcast; chat has no unicast here) */
  COOP_ACT_INTRO_START=4,  /* broadcast msg, then play the world's starting_cinematic once */
- COOP_ACT_INTRO_ABORT=5   /* broadcast msg, then release camera/input (intro overran) */
+ COOP_ACT_INTRO_ABORT=5,  /* broadcast msg, then release camera/input (intro overran) */
+ COOP_ACT_RESET=6,        /* host !reset: broadcast msg, then the proxy restores the launch state */
+ COOP_ACT_SESSION_OFF=7   /* host !coop off: broadcast msg, then the proxy turns the session off */
 } CoopAction;
 
 typedef struct {
@@ -96,6 +98,10 @@ typedef struct {
  char lobby_world[COOP_WORLD_MAX];  /* normalised lobby world or empty = route start */
  char lobby_pick[COOP_WORLD_MAX];   /* campaign: random deathmatch lobby picked at !abort / route end */
  unsigned int intro_settle_ms;      /* barrier settle after the last spawn (default 3000) */
+ unsigned int extra_route;          /* route is coop_extra_worlds (the tutorial), not a campaign slice */
+ char lobby_force[COOP_WORLD_MAX];  /* !changelevel PMxx: that deathmatch map is the lobby until !abort */
+ unsigned int dead_since;           /* everyone dead since (now|1), 0 = someone alive */
+ unsigned int restarts;             /* world restarts after everyone died, this server run */
 } CoopSession;
 
 typedef struct {
@@ -186,6 +192,7 @@ static const char *coop_target_world(const CoopSession *s,unsigned int target){
  /* Lobby: CoopLobbyWorld, else always R1M2B (the co-op lobby world the
   * launcher starts; it is in every maplist the launcher writes). */
  if(target==COOP_TARGET_LOBBY){
+  if(s->lobby_force[0])return s->lobby_force;
   if(s->campaign&&!coop_lobby_fixed(s)&&s->lobby_pick[0])return s->lobby_pick;
   return s->lobby_world[0]?s->lobby_world:COOP_DEFAULT_LOBBY;
  }
@@ -218,7 +225,7 @@ static void coop_session_pick_lobby(CoopSession *s,unsigned int seed){
 }
 /* Global WORLDORDER index of route position pos, or -1 for the MVP table. */
 static int coop_campaign_index(const CoopSession *s,unsigned int pos){
- if(!s->campaign||pos>=s->route_len)return -1;
+ if(!s->campaign||s->extra_route||pos>=s->route_len)return -1;
  return (int)((unsigned int)(s->route-coop_campaign_worlds)+pos);
 }
 /* Resolve the test start label against the active route (0 if absent). */
@@ -233,7 +240,7 @@ static int coop_session_select(CoopSession *s,unsigned int mode,unsigned int rea
  unsigned int first,len;
  if(!s->campaign||!coop_campaign_slice(mode,realm,&first,&len))return 0;
  s->sel_mode=mode;s->sel_realm=mode==COOP_SEL_FULL?0:realm;
- s->route=&coop_campaign_worlds[first];s->route_len=len;
+ s->route=&coop_campaign_worlds[first];s->route_len=len;s->extra_route=0;
  coop_resolve_test_start(s);
  return 1;
 }
@@ -525,45 +532,67 @@ static int coop_in_lobby_world(const CoopSession *s){
  return !s->world_label[0]||(l[0]&&coop_word(s->world_label,l));
 }
 static void coop_abort_change(CoopSession *s,unsigned int now,CoopResult *r){
- s->start_pending=0;s->lobby_pending=1;s->abort_after_load=0;
+ s->start_pending=0;s->lobby_pending=1;s->abort_after_load=0;s->lobby_force[0]=0;
  coop_session_pick_lobby(s,now);
  coop_session_lobby_reset(s);
  coop_begin_change(s,COOP_TARGET_LOBBY,now,r,"Host aborted");
 }
 /* !changelevel <world> (host, campaign mode): every player goes to that
- * WORLDORDER world, from the lobby or during play. The campaign then carries
- * on from there (the selection becomes "from <world>" to the end), so natural
- * exits lead to its successor; !abort returns to the lobby and the default
- * selection. The change is the same server-side world change as an exit
- * (loading picture, spawn hold, !abort during the load). */
+ * world, from the lobby or during play. Any shipped map is accepted:
+ *  - a WORLDORDER world (R1M0..R5M1B): the campaign then carries on from
+ *    there (the selection becomes "from <world>" to the end), so natural
+ *    exits lead to its successor; !abort returns to the lobby and the default
+ *    selection;
+ *  - the tutorial (TUTORIAL): played as a one-world route, its exit completes
+ *    it (back to the lobby);
+ *  - a deathmatch map (PM01..PM10): it becomes the lobby (players use its own
+ *    starts, the session returns to the lobby state) until !abort.
+ * The change is the same server-side world change as an exit (loading
+ * picture, spawn hold, !abort during the load). */
 /* console = 1: the dedicated server console's "changelevel <world>" (server
  * authority: no host test and no player minimum). */
 static void coop_session_changelevel_as(CoopSession *s,int me,int console,const char *arg,unsigned int now,CoopResult *r){
- int g;unsigned int m=0,present=coop_present_count(s),k;
+ int g,extra=-1;unsigned int m=0,present=coop_present_count(s),k,dm=0;
  char why[COOP_MSG_MAX];
  if(!s->campaign){coop_result(r,COOP_ACT_REPLY,"[Co-op] !changelevel needs CoopCampaign=1");return;}
  while(*arg==' '||*arg=='\t')arg++;
- if(!*arg){coop_result(r,COOP_ACT_REPLY,console?"[Co-op] Use: changelevel <world>, e.g. changelevel R1M2A or worlds\\realm1\\R1M2A":
-                                         "[Co-op] Use: !changelevel <world>, e.g. !changelevel R1M2A or worlds\\realm1\\R1M2A (host)");return;}
+ if(!*arg){coop_result(r,COOP_ACT_REPLY,console?"[Co-op] Use: changelevel <world>, e.g. changelevel R1M2A, TUTORIAL or PM05":
+                                         "[Co-op] Use: !changelevel <world>, e.g. !changelevel R1M2A, TUTORIAL or PM05 (host)");return;}
  g=coop_campaign_find(arg);
- if(g<0){coop_result(r,COOP_ACT_REPLY,"[Co-op] Unknown world. Use a campaign world R1M0..R5M1B: !changelevel R1M2A or worlds\\realm1\\R1M2A");return;}
+ if(g<0&&(extra=coop_extra_find(arg))<0&&!(dm=coop_deathmatch_find(arg))){
+  coop_result(r,COOP_ACT_REPLY,"[Co-op] Unknown world. Use R1M0..R5M1B, TUTORIAL or PM01..PM10 (also as worlds\\realm1\\R1M2A)");return;
+ }
  if(!console&&(me<0||me!=s->host)){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can change the level");return;}
  if(s->phase==COOP_PHASE_TRANSITION||s->phase==COOP_PHASE_WORLD_LOADING){coop_result(r,COOP_ACT_REPLY,"[Co-op] A world change is already in progress");return;}
+ if(dm){
+  /* A deathmatch map: back to the lobby state there (no player minimum). */
+  const char *pre="deathmatch/pm";unsigned int n=0;
+  for(k=0;pre[k];k++)s->lobby_force[n++]=pre[k];
+  s->lobby_force[n++]=(char)('0'+dm/10u);s->lobby_force[n++]=(char)('0'+dm%10u);s->lobby_force[n]=0;
+  s->start_pending=0;s->lobby_pending=1;s->abort_after_load=0;
+  coop_session_lobby_reset(s);
+  coop_begin_change(s,COOP_TARGET_LOBBY,now,r,console?"Server changed level":"Host changed level");
+  return;
+ }
  if(!console&&s->phase==COOP_PHASE_LOBBY&&present<s->min_players){
   r->action=COOP_ACT_REPLY;r->msg[0]=0;
   coop_append(r->msg,&m,"[Co-op] Need ");coop_append_uint(r->msg,&m,s->min_players);
   coop_append(r->msg,&m," players to start, ");coop_append_uint(r->msg,&m,present);coop_append(r->msg,&m," here");
   return;
  }
- if(!coop_session_select(s,COOP_SEL_WORLD,(unsigned int)g)){coop_result(r,COOP_ACT_REPLY,"[Co-op] Campaign selection failed");return;}
+ if(extra>=0){
+  s->sel_mode=COOP_SEL_WORLD;s->sel_realm=0;
+  s->route=&coop_extra_worlds[extra];s->route_len=1;s->extra_route=1;s->start_pos=0;
+ }else if(!coop_session_select(s,COOP_SEL_WORLD,(unsigned int)g)){coop_result(r,COOP_ACT_REPLY,"[Co-op] Campaign selection failed");return;}
  s->seq++;
  if(s->phase==COOP_PHASE_LOBBY){
   for(k=0;k<COOP_SESSION_MAX_MEMBERS;k++)s->m[k].ready=0;
   s->started=1;s->start_pending=1;
  }else s->start_pending=0;
  s->lobby_pending=0;s->abort_after_load=0;
- why[0]=0;coop_append(why,&m,console?"Server changed level (campaign continues from ":"Host changed level (campaign continues from ");
- coop_append(why,&m,coop_route_label(s,0));coop_append(why,&m,")");
+ why[0]=0;coop_append(why,&m,console?"Server changed level":"Host changed level");
+ coop_append(why,&m,extra>=0?" (tutorial)":" (campaign continues from ");
+ if(extra<0){coop_append(why,&m,coop_route_label(s,0));coop_append(why,&m,")");}
  coop_begin_change(s,0,now,r,why);
 }
 static void coop_session_changelevel(CoopSession *s,int me,const char *arg,unsigned int now,CoopResult *r){
@@ -614,9 +643,25 @@ static void coop_session_command(CoopSession *s,unsigned int client,const char *
  /* Anything else is not a command, except that a malformed !campaign gets
   * the help reply instead of silence. */
  if(i!=len&&!COOP_IS("campaign")&&!COOP_IS("difficulty")&&!COOP_IS("skill"))return;
- if(argc&&!COOP_IS("campaign")&&!COOP_IS("difficulty")&&!COOP_IS("skill"))return; /* only these take arguments */
+ if(argc&&!COOP_IS("campaign")&&!COOP_IS("difficulty")&&!COOP_IS("skill")&&!COOP_IS("coop"))return; /* only these take arguments */
+ if(COOP_IS("coop")&&argc==1&&(coop_word(arg[0],"on")||coop_word(arg[0],"off"))){
+  /* !coop on: already on. !coop off (host): the proxy turns the session off
+   * and reloads the world as a normal deathmatch server. */
+  if(coop_word(arg[0],"on")){coop_result(r,COOP_ACT_REPLY,"[Co-op] The co-op session is already on (host: !coop off)");return;}
+  if(me<0||me!=s->host){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can turn the co-op session off");return;}
+  coop_result(r,COOP_ACT_SESSION_OFF,"[Co-op] Host turned the co-op session off: normal deathmatch from the next world");
+  return;
+ }
+ if(argc&&COOP_IS("coop"))return;  /* !coop takes only on|off */
  if(COOP_IS("coop")||COOP_IS("status")){
   r->action=COOP_ACT_REPLY;coop_status(s,r->msg);return;
+ }
+ if(COOP_IS("reset")){
+  /* Host: everything back to how the server was right after launch (the
+   * proxy restores the settings, cheats, difficulty and the start world). */
+  if(me<0||me!=s->host){coop_result(r,COOP_ACT_REPLY,"[Co-op] Only the host (*) can reset the server");return;}
+  coop_result(r,COOP_ACT_RESET,"[Co-op] Host reset the server to its start state");
+  return;
  }
  if(COOP_IS("difficulty")||COOP_IS("skill")){
   unsigned int m=0;int v;
@@ -639,8 +684,8 @@ static void coop_session_command(CoopSession *s,unsigned int client,const char *
  }
  if(COOP_IS("help")){
   coop_result(r,COOP_ACT_REPLY,s->campaign?
-   "[Co-op] !coop !abort !next !difficulty !campaign <realm|full> !changelevel !kill !class !goto !back":
-   "[Co-op] kpc-coop/1: !ready !unready !leave !join !start !next !abort !difficulty (host) !coop");
+   "[Co-op] !campaign <realm|full> !changelevel !abort !next !reset !difficulty !coop !kill !class !goto !back":
+   "[Co-op] kpc-coop/1: !ready !unready !leave !join !start !next !abort !reset !difficulty (host) !coop");
   return;
  }
  if(COOP_IS("campaign")){
@@ -748,6 +793,24 @@ static void coop_session_command(CoopSession *s,unsigned int client,const char *
 #undef COOP_IS
 }
 
+/* Everyone dead: during play, when every present member's player is dead for
+ * COOP_ALL_DEAD_MS, the world is loaded again from its start (the same
+ * server-side change as an exit; its intro plays again and inventories are
+ * restored as after a world change). present = members in the session and
+ * spawned in this world, dead = how many of them are dead (proxy). */
+#define COOP_ALL_DEAD_MS 2000u
+static int coop_session_dead_check(CoopSession *s,unsigned int present,unsigned int dead,unsigned int now,CoopResult *r){
+ char why[COOP_MSG_MAX];unsigned int n=0;
+ coop_result(r,COOP_ACT_NONE,"");
+ if(s->phase!=COOP_PHASE_GAMEPLAY||!s->started||!present||dead<present||s->route_pos>=s->route_len){s->dead_since=0;return 0;}
+ if(!s->dead_since){s->dead_since=now|1u;return 0;}
+ if((int)(now-s->dead_since)<(int)COOP_ALL_DEAD_MS)return 0;
+ s->dead_since=0;s->start_pending=0;s->lobby_pending=0;s->abort_after_load=0;s->restarts++;
+ why[0]=0;coop_append(why,&n,"Everyone died: restarting ");coop_append(why,&n,coop_route_label(s,s->route_pos));
+ coop_begin_change(s,s->route_pos,now,r,why);
+ return 1;
+}
+
 /* A native exit trigger fired (any client). Server validates destination
  * against the fixed route and debounces to one transition per epoch. */
 static void coop_session_exit(CoopSession *s,const char *next_world,unsigned int now,CoopResult *r){
@@ -834,6 +897,8 @@ static void coop_session_world_loaded(CoopSession *s,const char *world){
  if(s->lobby_pending){
   /* Completion or host abort: back to the lobby, members kept, unready. */
   s->lobby_pending=0;s->started=0;s->phase=COOP_PHASE_LOBBY;s->generation++;
+  /* The tutorial is a one-off route: the lobby offers the campaign again. */
+  if(s->campaign&&s->extra_route)coop_session_select(s,COOP_SEL_FULL,0);
   for(idx=0;idx<(int)COOP_SESSION_MAX_MEMBERS;idx++)s->m[idx].ready=0;
   return;
  }

@@ -1,7 +1,7 @@
 #ifndef KPC_FOCUS_H
 #define KPC_FOCUS_H
 #include "winmini.h"
-extern U8 *g_focus_client,*g_focus_shell;
+extern U8 *g_focus_client,*g_focus_shell,*g_focus_shell_slot;
 extern U32 g_focus_enabled,g_focus_resync,g_focus_default,g_focus_keep_render;
 extern void (*g_focus_log)(const char *);
 int kpc_remote_multiplayer(void);

@@ -166,6 +166,9 @@ def profile_int(a):
  if key=='CoopPowerupResend':return 0 if '--no-powerup-resend' in sys.argv else a[2]
  if key=='CoopItemRespawnSec':return 0 if '--no-item-respawn' in sys.argv else a[2]
  if key=='CoopWindowShards':return 0 if '--no-window-shards' in sys.argv else a[2]
+ if key=='CoopChatControl':return 0 if '--no-chat-control' in sys.argv else a[2]
+ if key=='CoopHostSkip':return 0 if '--no-host-skip' in sys.argv else a[2]
+ if key in ('CoopRestartOnWipe','CoopDropLifetimeSec'):return a[2]
  if key=='CoopSoundClock':
   # Default argument is the effective CoopScriptClock.
   if '--no-sound-clock' in sys.argv:return 0
@@ -281,7 +284,8 @@ def coop_scenario():
         0xfdfdb:(6,'ff90f0000000'),0xc8348:(6,'8b88d0010000'),0x409bb:(5,'e870380800'),0xb676f:(5,'e8cccc0300'),
         0xc2c9c:(5,'e87fcc0200'),0xc2c56:(5,'e8f5cc0200'),
         0xd51fb:(6,'ff90d0010000'),0xfead7:(5,'e834ceffff'),0xcc29e:(5,'e8cd020000'),0xcbfff:(5,'e87c000000'),
-        0x48413:(6,'ff91fc010000'),0xc837b:(5,'e8a03d0000')}
+        0x48413:(6,'ff91fc010000'),0xc837b:(5,'e8a03d0000'),
+        0xf370d:(5,'e86e90fdff'),0xcc054:(5,'e817050000'),0xfeb3e:(5,'e8ed6cfcff')}
  music_flag='--no-music' not in sys.argv
  intro_flag='--intro' in sys.argv
  trace_timing='--trace-timing' in sys.argv
@@ -295,6 +299,7 @@ def coop_scenario():
  hooked_optional[0xd51fb]=spawner_nearest;hooked_optional[0xfead7]=cheat_keys
  hooked_optional[0xcc29e]=hooked_optional[0xcbfff]=hooked_optional[0xc837b]=item_respawn
  window_shards='--no-window-shards' not in sys.argv;hooked_optional[0x48413]=window_shards
+ host_skip='--no-host-skip' not in sys.argv;hooked_optional[0xfeb3e]=host_skip
  bars='--no-health-bars' not in sys.argv
  for rva in (0xea6d2,0xea7c3,0xeaa10,0xeab11):hooked_optional[rva]=bars
  spawners='--no-spawners' not in sys.argv;trace_spawners='--trace-spawners' in sys.argv
@@ -734,7 +739,40 @@ def coop_scenario():
   assert changes()==4
   cur=read(obj+0x16da88);slot=cur+1 if cur+1<3 else 0
   assert cstr(shell+0x210+slot*0x7f)=='worlds\\realm4\\r4m1a',cstr(shell+0x210+slot*0x7f)
-  print('PASS co-op campaign: selection, start into a world missing from the maplist, successor-only exits, abort to lobby, !changelevel')
+  # !changelevel to the tutorial and to a deathmatch map (any shipped map).
+  next_level();spawn(alice)
+  out=chat(alice,'!changelevel TUTORIAL');assert any('(tutorial) -> TUTORIAL' in m for m in out),out
+  assert changes()==5
+  cur=read(obj+0x16da88);slot=cur+1 if cur+1<3 else 0
+  assert cstr(shell+0x210+slot*0x7f)=='worlds\\realm0\\tutorial',cstr(shell+0x210+slot*0x7f)
+  next_level();spawn(alice)
+  out=chat(alice,'!changelevel PM05');assert any('Host changed level -> lobby PM05' in m for m in out),out
+  assert changes()==6
+  next_level();spawn(alice)
+  # Death drop: DropWeapon's lifetime call gets CoopDropLifetimeSec (20 s, stock 10 s).
+  timers=[]
+  def cc780():
+   sp=u.reg_read(UC_X86_REG_ESP);timers.append((u.reg_read(UC_X86_REG_ECX),struct.unpack('<f',bytes(u.mem_read(sp+4,4)))[0]))
+   u.reg_write(UC_X86_REG_ESP,sp+8);u.reg_write(UC_X86_REG_EIP,read(sp))
+  stubs[obj+0xcc780]=cc780
+  call_regs(target[0xf370d],[0x41200000],{UC_X86_REG_ECX:strings+0x1400},4)
+  assert timers==[(strings+0x1400,20.0)],timers
+  assert 'death-drop dropped item=? lifetime_s=20' in b''.join(log).decode('latin1')
+  del stubs[obj+0xcc780]
+  # Host-only cutscene skip: MID_CINEMATIC (0x3d) reaches c5830 only from the host.
+  skips=[]
+  def c5830():
+   sp=u.reg_read(UC_X86_REG_ESP);skips.append(read(sp+4))
+   u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+  stubs[obj+0xc5830]=c5830
+  def cinematic(client,msg):
+   n=len(said);args=[msg]+[0]*117+[client];call_regs(target[0xfeb3e],args,{},0);return said[n:]
+  if host_skip:
+   out=cinematic(0x222,0x7777);assert skips==[] and any('Only the host (*) can skip cutscenes' in m for m in out),out
+   out=cinematic(0x111,0x8888);assert skips==[0x8888],skips
+  else:assert 'effective CoopHostSkip=0' in b''.join(log).decode('latin1')
+  del stubs[obj+0xc5830]
+  print('PASS co-op campaign: selection, start into a world missing from the maplist, successor-only exits, abort to lobby, !changelevel to campaign worlds, the tutorial and deathmatch maps, death-drop lifetime, host-only cutscene skip')
   return
  if intro_flag:
   # Synchronised original intro (CoopIntro). The stock WorldProperties lookup
@@ -1354,6 +1392,41 @@ else:
  if not coop_session:
   for rva,orig in ((0x93c5d,'0c10'),(0x93c65,'e896530600'),(0xea6d2,'e809e90000'),(0xea7c3,'e818e80000'),(0xeaa10,'e8cbe50000'),(0xeab11,'e8cae40000')):
    assert bytes(u.mem_read(obj+rva,len(orig)//2))==bytes.fromhex(orig),hex(rva)
+ if not coop_session and '--no-chat-control' in sys.argv:
+  assert bytes(u.mem_read(obj+0xfeec4,6))==bytes.fromhex('81c6e8010000'),'chat relay untouched without CoopChatControl'
+ elif not coop_session:
+  # CoopChatControl (default 1): outside a session the chat relay is watched
+  # for !coop on (the session is switched on live: hooks installed, lobby
+  # loaded) and !reset (back to the launch state: hooks restored, start map).
+  now=bytes(u.mem_read(obj+0xfeec4,6));assert now[0]==0xe8,'chat relay watched'
+  chat_at=(obj+0xfeec4+5+struct.unpack('<i',now[1:5])[0])&0xffffffff
+  said2=[];base2=scratch+0x140000;shell2=base2;text2=base2+0x3000;who=base2+0x5000
+  write(obj+0x16de60,shell2);write(shell2+0x1d0,1);write(shell2+0x1ae0,2)
+  u.mem_write(shell2+0x210,b'worlds\\deathmatch\\PM08\0');u.mem_write(shell2+0x210+0x7f,b'worlds\\deathmatch\\PM02\0')
+  write(obj+0x16da88,0);write(obj+0x157724,base2+0x4000)
+  write(who+8,0xa1);write(who+0x120,0x111);u.mem_write(who+0x1e8,b'Alice\0')
+  def broadcast2():
+   said2.append(cstr(u.reg_read(UC_X86_REG_EDX)));sp=u.reg_read(UC_X86_REG_ESP)
+   u.reg_write(UC_X86_REG_ESP,sp+4);u.reg_write(UC_X86_REG_EIP,read(sp))
+  stubs[obj+report['hook_symbols']['broadcast_only']]=broadcast2
+  def say2(s):
+   n=len(said2);u.mem_write(text2,s.encode()+b'\0')
+   call_regs(chat_at,[],{UC_X86_REG_ESI:who,UC_X86_REG_EAX:text2},0);return said2[n:]
+  frame_site=obj+0xffbbf;assert bytes(u.mem_read(frame_site,5))==bytes.fromhex('e85c0b0000')
+  out=say2('!coop');assert any('Co-op is off' in m for m in out),out
+  out=say2('!coop on');assert any('Co-op session on' in m for m in out),out
+  assert u.mem_read(frame_site,1)[0]==0xe8 and bytes(u.mem_read(frame_site,5))!=bytes.fromhex('e85c0b0000'),'session hooks installed'
+  assert u.mem_read(obj+0xfeb3e,1)[0]==0xe8 and bytes(u.mem_read(obj+0xfeb3e,5))!=bytes.fromhex('e8ed6cfcff')
+  assert 'session on (chat !coop on)' in b''.join(log).decode('latin1')
+  assert any('Co-op session on -> lobby PM08' in m for m in said2),said2
+  assert u.mem_read(shell2+0x1ae9,1)[0]==1,'lobby change requested';u.mem_write(shell2+0x1ae9,b'\0')
+  # In the session the first player is the host: !reset returns to the launch state.
+  out=say2('!reset');assert any('Host reset the server to its start state' in m for m in out),out
+  assert bytes(u.mem_read(frame_site,5))==bytes.fromhex('e85c0b0000'),'session hooks restored'
+  assert bytes(u.mem_read(obj+0xfeb3e,5))==bytes.fromhex('e8ed6cfcff')
+  assert 'session off (reset to the launch state)' in b''.join(log).decode('latin1')
+  assert u.mem_read(shell2+0x1ae9,1)[0]==1 and cstr(shell2+0x210)=='worlds\\deathmatch\\PM08','back to the start map'
+  print('PASS chat control: !coop on installs the session live and loads the lobby; host !reset restores the launch state and start map')
  if coop_session:coop_scenario()
  call(proxy+ps['_DeleteServer'],[0x30080000]);assert setup_calls[-1]==('delete',0x30080000)
  print('PASS compiled DLL:',fixtures.name,'proxy relocation, export forwarding, IAT interception, object relocation, guarded memory patching, initial policy, idempotence, unchanged headers/relocations and unchanged original file')

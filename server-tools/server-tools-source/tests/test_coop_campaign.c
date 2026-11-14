@@ -332,7 +332,75 @@ static void test_lobby_pick_and_console(void){
  /* Chat !changelevel still needs the host. */
  lobby(&s);cmd(&s,B,"!changelevel R1M2A");assert(strstr(r.msg,"Only the host"));
 }
+/* !changelevel to any shipped map: the tutorial (one-world route) and the
+ * deathmatch maps (they become the lobby); !reset and !coop off (host
+ * actions for the proxy); everyone dead reloads the world. */
+static void test_any_map_reset_and_dead(void){
+ CoopSession s;CoopResult x;
+ assert(coop_extra_find("TUTORIAL")==0&&coop_extra_find("worlds\\realm0\\tutorial.dat")==0&&coop_extra_find("R1M0")<0);
+ assert(coop_deathmatch_find("PM05")==5&&coop_deathmatch_find("pm5")==5&&coop_deathmatch_find("worlds/deathmatch/PM10")==10);
+ assert(coop_deathmatch_find("deathmatch/pm01")==1&&!coop_deathmatch_find("PM11")&&!coop_deathmatch_find("PM00")&&!coop_deathmatch_find("PM")&&!coop_deathmatch_find("PM05x"));
+ assert(!coop_deathmatch_find("R1M2A")&&!coop_deathmatch_find("")&&!coop_deathmatch_find(0));
+ /* Tutorial: started from the lobby as a one-world route; its exit completes it. */
+ lobby(&s);
+ cmd(&s,A,"!changelevel tutorial");
+ assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==0&&strstr(r.msg,"(tutorial) -> TUTORIAL")&&s.extra_route&&s.route_len==1);
+ assert(!strcmp(coop_target_world(&s,0),"realm0/tutorial")&&coop_campaign_index(&s,0)<0&&s.started);
+ load(&s,"worlds/realm0/TUTORIAL",1000);assert(s.phase==COOP_PHASE_INTRO_PENDING);
+ spawn(&s,A,"Alice",1100);assert(s.phase==COOP_PHASE_GAMEPLAY);
+ coop_session_exit(&s,"worlds/realm1/r1m0",1200,&x);assert(x.action==COOP_ACT_CHANGE_WORLD&&x.target_pos==COOP_TARGET_LOBBY);
+ load(&s,"worlds/realm1/R1M2B",1300);assert(s.phase==COOP_PHASE_LOBBY&&!s.extra_route&&s.sel_mode==COOP_SEL_FULL);
+ /* A campaign world after the tutorial is a normal campaign slice again. */
+ cmd(&s,A,"!changelevel R1M2A");assert(r.action==COOP_ACT_CHANGE_WORLD&&!s.extra_route&&s.route_len==45);
+ load(&s,"worlds/realm1/R1M2A",1400);spawn(&s,A,"Alice",1500);assert(s.phase==COOP_PHASE_GAMEPLAY);
+ /* Deathmatch map during play: back to the lobby state there; it stays the lobby. */
+ cmd(&s,B,"!changelevel PM05");assert(strstr(r.msg,"Only the host"));
+ cmd(&s,A,"!changelevel worlds/deathmatch/PM05");
+ assert(r.action==COOP_ACT_CHANGE_WORLD&&r.target_pos==COOP_TARGET_LOBBY&&strstr(r.msg,"lobby PM05")&&!strcmp(coop_target_world(&s,COOP_TARGET_LOBBY),"deathmatch/pm05"));
+ load(&s,"worlds/deathmatch/PM05",1600);assert(s.phase==COOP_PHASE_LOBBY&&!s.started&&coop_in_lobby_world(&s));
+ /* No player minimum for a deathmatch map (one player, minimum 2). */
+ coop_session_init(&s,2,3);coop_session_enable_campaign(&s);spawn(&s,A,"Alice",0);
+ cmd(&s,A,"!changelevel PM02");assert(r.action==COOP_ACT_CHANGE_WORLD&&strstr(r.msg,"lobby PM02"));
+ cmd(&s,A,"!changelevel PM03");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"already in progress"));
+ load(&s,"worlds/deathmatch/PM02",100);
+ /* In that lobby, !abort resets the lobby in place (it is the lobby world). */
+ strcpy(s.lobby_world,"deathmatch/pm08");
+ cmd(&s,A,"!abort");assert(r.action==COOP_ACT_ANNOUNCE&&strstr(r.msg,"Lobby reset (PM02"));
+ /* During play, !abort clears the forced lobby and returns to the normal one. */
+ cmd(&s,A,"!changelevel R1M2A");load(&s,"worlds/realm1/R1M2A",200);spawn(&s,A,"Alice",300);
+ cmd(&s,A,"!abort");assert(r.action==COOP_ACT_CHANGE_WORLD&&!s.lobby_force[0]&&strstr(r.msg,"lobby PM08"));
+ /* Console: the tutorial and deathmatch maps too. */
+ coop_session_init(&s,2,3);coop_session_enable_campaign(&s);
+ coop_session_console_changelevel(&s,"PM07",1000,&x);assert(x.action==COOP_ACT_CHANGE_WORLD&&strstr(x.msg,"Server changed level -> lobby PM07"));
+ load(&s,"worlds/deathmatch/PM07",2000);
+ coop_session_console_changelevel(&s,"TUTORIAL",3000,&x);assert(x.action==COOP_ACT_CHANGE_WORLD&&strstr(x.msg,"-> TUTORIAL"));
+ /* !reset and !coop off: host only; the proxy carries them out. */
+ lobby(&s);
+ cmd(&s,B,"!reset");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Only the host"));
+ cmd(&s,A,"!reset");assert(r.action==COOP_ACT_RESET&&strstr(r.msg,"start state"));
+ cmd(&s,A,"!coop on");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"already on"));
+ cmd(&s,B,"!coop off");assert(r.action==COOP_ACT_REPLY&&strstr(r.msg,"Only the host"));
+ cmd(&s,A,"!coop off");assert(r.action==COOP_ACT_SESSION_OFF);
+ cmd(&s,A,"!coop maybe");assert(r.action==COOP_ACT_NONE);
+ cmd(&s,A,"!coop");assert(r.action==COOP_ACT_REPLY);
+ cmd(&s,A,"!campaign water");assert(r.action==COOP_ACT_CHANGE_WORLD);            /* arguments still work */
+ /* Everyone dead for 2 s during play: the world restarts (same route position). */
+ lobby(&s);cmd(&s,A,"!changelevel R1M3A");load(&s,"worlds/realm1/R1M3A",1000);
+ spawn(&s,A,"Alice",1100);spawn(&s,B,"Bob",1100);assert(s.phase==COOP_PHASE_GAMEPLAY);
+ assert(!coop_session_dead_check(&s,2,1,5000,&x)&&!s.dead_since);              /* one alive */
+ assert(!coop_session_dead_check(&s,2,2,6000,&x)&&s.dead_since);               /* both dead: wait */
+ assert(!coop_session_dead_check(&s,2,1,7000,&x)&&!s.dead_since);              /* one respawned: reset */
+ assert(!coop_session_dead_check(&s,2,2,8000,&x));
+ assert(!coop_session_dead_check(&s,2,2,9999,&x));
+ assert(coop_session_dead_check(&s,2,2,10002,&x)&&x.action==COOP_ACT_CHANGE_WORLD&&x.target_pos==s.route_pos);
+ assert(strstr(x.msg,"Everyone died: restarting R1M3A")&&s.restarts==1&&s.phase==COOP_PHASE_TRANSITION);
+ load(&s,"worlds/realm1/R1M3A",11000);assert(s.phase==COOP_PHASE_INTRO_PENDING&&s.started);   /* intro again */
+ /* Not in the lobby, not with nobody present. */
+ lobby(&s);assert(!coop_session_dead_check(&s,2,2,1000,&x)&&!coop_session_dead_check(&s,2,2,9000,&x));
+ assert(!coop_session_dead_check(&s,0,0,9000,&x));
+}
 int main(void){
+ test_any_map_reset_and_dead();
  test_lobby_pick_and_console();
  test_changelevel();
  test_difficulty_and_host_exits();

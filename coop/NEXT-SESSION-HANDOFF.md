@@ -1,130 +1,161 @@
-# Co-op handoff (updated 2026-11-13, after the RT1–RT12 retest fixes and the winmm.dll loader)
+# Co-op handoff (updated 2026-11-14: renderer, scoreboard, any-map changelevel, reset, live co-op switch, wipe restart, host skip, death drops)
 
 How everything works: [COOP-MVP.md](COOP-MVP.md). Settings: [CONFIGURATION.md](CONFIGURATION.md).
 Project rules and tooling: [CLAUDE.md](../CLAUDE.md).
 Finished test rounds: [archive/TWO-PC-RESULTS-2026-11-13.md](archive/TWO-PC-RESULTS-2026-11-13.md)
-(the T1–T20 results, their causes and fixes, and the user's request list N1–N18),
+(T1–T20, their causes and fixes, the user's request list N1–N18),
 [archive/COOP-MVP-EVIDENCE-2026-11-12.md](archive/COOP-MVP-EVIDENCE-2026-11-12.md).
 
 ## Next steps (in order)
 
-1. **Laptop:** copy `C:\KPCTest\pkg-client-9a7eef01` (`dinput.dll`, `KPCFix.ini`,
-   `DDrawCompat-CLIENT.ini`) into the laptop's game folder. The desktop already has both new
-   builds (Server Tools now as `winmm.dll`, see below).
-2. **Not yet run on these builds:** `source/audit_sites.py` for client `9a7eef01`.
-3. **RT11 decision (user):** how to keep the R1M2A belt lift from stranding the other players
-   (options in [Open work](#open-work)).
-4. **Two-PC retest:** run the [Retest plan](#retest-plan) and fill in its Result column (or
-   paste the report in chat). Send both `KPCFix.log` files and the desktop's `KPCServerTools.log`.
-5. **After the retest:** for each failure use [If a retest fails](#if-a-retest-fails); move
-   what passed to [Live-confirmed](#live-confirmed-two-pcs).
-6. **Then the open work** in [Open work](#open-work).
+1. **Laptop:** copy `C:\KPCTest\pkg-client-50d29dee` (`dinput.dll`, `KPCFix.ini`,
+   `DDrawCompat-CLIENT.ini`) into its game folder. It still has `1e97026a`. The desktop has
+   both new builds.
+2. **Two-PC test:** run the [Test plan](#test-plan) (the new RB items first, then the RA items
+   that were never run) and fill in the Result column, or paste the report in chat. Send
+   both `KPCFix.log` files and the desktop's `KPCServerTools.log`. Footage helps: note the
+   time of each problem.
+3. **RT11 decision (user):** the R1M2A belt lift strands the other players (options in
+   [Open work](#rt11-r1m2a-belt-lift-user-to-choose)).
+4. **After the test:** use [If a test fails](#if-a-test-fails); move what passed to
+   [Live-confirmed](#live-confirmed-two-pcs). Merge into `coop/mvp-lobby` only what the
+   user confirms in game.
 
 ## Where things stand
 
-* **Branch:** `coop/mvp-lobby-untested` (untested fixes; `coop/mvp-lobby` holds confirmed
-  work, `main` the stable release). Pushed; co-op CI passes again since `7c50ae8` (its
-  `CoopIntro` marker assertion was stale from `6d91b5b` until then).
-* **Server Tools now load as `winmm.dll`.** `dedicated.exe` imports `WINMM.dll`, so the DLL
-  loads from the game folder like the client's `dinput.dll`, forwards every winmm function to
-  the system DLL, and answers the server's `LoadLibraryA("server.dll")` itself; the original
-  `server.dll` stays unrenamed. Setup moves an earlier install (proxy as `server.dll`, engine
-  as `server.original.dll`) over. See [README-Server-Tools.md](../server-tools/README-Server-Tools.md).
-* **Installed:**
+* **Branch** `coop/mvp-lobby-untested`. The user pushed up to `fa56ce9`; later commits are local.
+* **Installed (2026-11-14 05:53):**
 
-  | Machine | Server Tools (`winmm.dll`) | Client `dinput.dll` | Backup of what was replaced |
+  | Machine | Server Tools (`winmm.dll`) | Client `dinput.dll` | Backups |
   | --- | --- | --- | --- |
-  | Desktop `C:\Games\Psycho` (client, host, dedicated server) | `6448dadf`; `server.dll` is the original `83b7bce8` again | `9a7eef01` | `C:\KPCTest\backup\psycho-20261113-175417-before-6448dadf` (also holds the old `server.dll` proxy `dcc66b4c` and `server.original.dll`). Reinstalled 2026-11-13 23:20 after the folder had been switched to the stable release (client `288bce4e`, no Server Tools): `C:\KPCTest\backup\psycho-20261113-232042-before-6448dadf` and `C:\KPCTest\backup\psycho-*-ini-before-reset` (the stable `KPCFix.ini`, `ScalePercent=200`). `KPCFix.ini` is now the repo file (`48789c94`); `KPCServerTools.ini` is the new default with `CoopCampaign`, `CoopIntro`, `TraceScripts`, `TraceTiming` and `AllowCheats` on and the start scoreboard left to the DLL default (`d007552a`; previous copy in `C:\KPCTestackup\psycho-20261113-234449-serverini-before-campaign`) |
-  | Laptop (second player, client only) | — | `1e97026a` (needs `pkg-client-9a7eef01`) | — |
-  | `C:\KPCTest\smoke1\Psycho` (disposable smoke server) | `6448dadf` | — | `C:\KPCTest\backup\psycho-20261113-175538-before-6448dadf` |
+  | Desktop `C:\Games\Psycho` (client, host, dedicated server) | `3e68fccc`; `server.dll` is the original `83b7bce8` | `50d29dee` | `C:\KPCTest\backup\psycho-20261114-053931-before-3e68fccc` (the previous DLLs `6448dadf` / `9a7eef01`) and `...-055345-before-3e68fccc` (docs). `KPCFix.ini` got `ScoreboardHold=1`; the user's own values (e.g. `ScalePercent=200`) are kept. `KPCServerTools.ini` is unchanged since 2026-11-13 (`CoopCampaign`, `CoopIntro`, `TraceScripts`, `TraceTiming`, `AllowCheats` on; previous copy in `C:\KPCTest\backup\psycho-20261113-234449-serverini-before-campaign`); the new keys use the DLL defaults |
+  | Laptop (second player) | — | `1e97026a`: needs `pkg-client-50d29dee` | — |
+  | `C:\KPCTest\smoke1\Psycho` (disposable) | `3e68fccc` | — | `C:\KPCTest\backup\psycho-20261114-053939-before-3e68fccc` |
 
-  Install with `tools/install_game.py --game-dir <folder> --client --server`. It updates an
-  installed `winmm.dll` but never moves an earlier install over: run `Setup-KPCServerTools.cmd`
-  in the game folder for that (close the game and `Psycho.exe` too).
-* **Tests passed** for `6448dadf` / `9a7eef01`: server unit tests 26/26 (64/32-bit), emulator
-  matrix 53/53 (three new `--winmm` cases; the matrix now runs in parallel, about 20 s), client
-  suite 20/20, packaging of both ZIPs, native smoke in Coop, Normal and PassThrough mode with
-  `winmm.dll` (`C:\KPCTest\smoke1\smoke-winmm-*.json`). **Not run:** `audit_sites.py`, two-PC test.
+* **Tests passed** for `3e68fccc` / `50d29dee` (2026-11-14):
+  * server unit tests 26/26 (64/32-bit), with new cases in `test_coop_campaign.c`
+    (any-map `!changelevel`, `!reset` / `!coop off` actions, everyone-dead restart);
+  * emulator matrix 56/56, three new runs (`--no-chat-control`, `--cheats --no-chat-control`,
+    `--coop-session --campaign --no-host-skip`); new checks: tutorial and PM05 changes,
+    death-drop lifetime 20 s, host-only cutscene skip, and outside a session `!coop on`
+    (hooks installed live, lobby PM08 loaded) then host `!reset` (hooks restored, start map);
+  * native smoke in Coop (fixed route), Normal and PassThrough mode. The first Coop run failed
+    because the harness's `start` line reached the console garbled (`ner start ...`, "No game
+    running"); two reruns passed 17/17;
+  * client suite 20/20 (Europe), four-edition suite 65/65, `audit_sites.py` pass (33 sites);
+  * launcher INI test, packaging of both ZIPs.
+  * **Not run:** `run_checks.py` (needs Unicorn and binutils in one Python; `logging.S` is
+    unchanged), and no two-PC test of the 2026-11-14 changes.
 
-### Retest results (RT1–RT12, 2026-11-13) and what changed
+### What changed on 2026-11-14 (user requests after the RT test)
 
-| RT | Result | Change in this commit |
-| --- | --- | --- |
-| RT1, RT2, RT6, RT7, RT12 | PASS | — |
-| RT3, RT4, RT5 | PASS except ammo: used ammo came back full after a world change (197 → 200) | Restoring a weapon also gave its stock ammo (`f34b7`); the excess over what the player had is now removed again (`coop_inv_ammo_excess`) |
-| RT8 | Shards appear, but the window stays visible among them for a moment | Client `HideBrokenWindow=1` hides the window as soon as its shards are built |
-| RT9 | The armour shard did not come back | The test targeted BlackDiamond; "armor shard" in the game means an armour piece (`0x27`–`0x2c`), which never respawned. Armour pieces now respawn; a returned one is picked up quietly (no cutscene) by a player who lacks it (user choice 1) |
-| RT10 | Every Audio-screen control below the new checkbox was broken | The checkbox's click handler (`0xd590`) says "handled" for every click; clicks now reach it only on its box or label. Tooltip warns about multiplayer audio/narration sync |
-| RT11 | PASS, but the belt lift strands the other players (design) | Open: user to choose |
-| Extras | — | No 2-player minimum (`CoopMinPlayers=1`); server console `changelevel <world>`; `!goto <player>` / `!back` (`CoopTeleport`); `!abort` and completion go to a random deathmatch lobby (never a campaign world) with the campaign flags reset; client keeps rendering when minimised, input released (`KeepRendererOnFocusLoss`) |
+| Request | Change | Evidence | Setting |
+| --- | --- | --- | --- |
+| Cinematics broke after minimising: black screen at startup until minimise/restore showed the menu | The renderer is kept running on focus loss **only in a world** (client shell state `+0x1398` = 1). Startup, movies, menus, loading and level changes get the stock shutdown/restart pair again. Sounds, music and a local game still keep running everywhere | No movie lines in the user's `KPCFix.log`; the cause is inferred (the stock restart is what brought the menu back). Client emulator test | `KeepRendererOnFocusLoss` (client) |
+| The renderer must survive minimise/maximise | Same change: in a world the renderer is never shut down, so there is no restart to fail | Emulator | — |
+| Scoreboard is sticky and needs two presses: hold to show, release to hide | The Tab action (41) toggled screen type 4 and nothing else closed it. A press no longer closes it; the release (OnCommandOff slot `0xff728`, an empty stub in 1.13) closes it. The server scoreboard (type 2) is untouched. Europe/USA only | cshell static analysis; emulator | `ScoreboardHold` (client) |
+| Everyone dies: reload the map and play the intro again | During play, every present player dead for 2 s restarts the world through the session's change; its intro plays again | Unit test (timing; reset when someone respawns) | `CoopRestartOnWipe` |
+| Intro skippable by the host only, the first time too | MID_CINEMATIC (`0x3d`) skip and continue messages reach the server only from the host | object.lto static analysis (OnMessage `fe3a0`, `feb3e` → `c5830`); emulator | `CoopHostSkip` |
+| Dropped weapons should despawn | Stock already gives death drops a 10 s lifetime (`+0x9c` timer), so the report is not explained yet. The lifetime is now 20 s, drops and expiries are logged (`death-drop dropped` / `expired`), and a picked-up death drop can no longer be scheduled by item respawn (it was) | Static analysis; emulator | `CoopDropLifetimeSec` |
+| The route should be the whole game | `CoopCampaign` defaults to 1 and `CoopIntro` follows it (DLL and default INI) | Emulator | `CoopCampaign`, `CoopIntro` |
+| Enable the co-op session from chat in game | On a deathmatch server any player types `!coop on`: the session hooks are installed live and the world reloads as the lobby. The host's `!coop off` goes back to deathmatch | Emulator | `CoopChatControl` |
+| `!changelevel` to any map | Also `TUTORIAL` (a one-world route) and `PM01`–`PM10` (they become the lobby); chat and server console | Unit tests, emulator | — |
+| `!reset`: the server's state right after launch | Host (any player outside a session): settings as in the INI at launch, `kpc_cheats` back to `AllowCheats`, inventories cleared, fresh session state, back to the start world (`CoopLobbyWorld` in a session, maplist entry 0 otherwise) | Unit test, emulator | — |
 
-## Retest plan
+Found on the way, not changed: monster ammo drops get an expiry of about "2 × server
+time + 5 s" (`70ec9`–`70eea`, a stock bug), so on a long-running server they effectively never
+expire. A fix is described in the research notes (`C:\KPCTest\scratch-drops-re\`) if wanted.
 
-Server: the launcher with **Co-op campaign** and **Test logging**, or `Start-KPC-Selected-Server.ps1 -Map random -Cheats Enabled -Coop -TestLogging On`
-(both write `[Coop] CoopSession=1`, `CoopCampaign=1`, `CoopIntro=1`, `TraceScripts=1`, `TraceTiming=1`). Host = the first player in
-(`*` in `!coop`). Server console `kpc_cheats 1` unless a step says otherwise. Use two
-different player names. Result: PASS / FAIL / not run, plus what was seen.
+## Test plan
 
-| # | Was | Do | Expected | Log marker (`KPCServerTools.log` unless noted) | Result |
-| --- | --- | --- | --- | --- | --- |
-| RA1 | RT10 | Start the server from the launcher; start the client and `Psycho.exe` | server starts; both programs start with sound (`winmm.dll` is in the folder) | `Loaded as winmm.dll; original server.dll unchanged` | |
-| RA2 | N2 | Alone on the server: `!campaign water` | the campaign starts with one player | `change` | |
-| RA3 | RT3–RT5 | Fire a few shots (e.g. 197 left), then: host takes an exit; `!kill`; `!abort` | the ammo count stays as it was (197) each time | `inventory-restored` | |
-| RA4 | RT9 | Take an armour piece (first time: cutscene), step away, wait 20 s; walk over it again; let the other player (if it lacks the piece) walk over it | it comes back; whoever has it walks over it; one who lacks it gets it without a cutscene, and chat says `... picked up a returned armor shard` | `item-respawn scheduled/respawned`, `item-respawn quiet pickup` | |
-| RA5 | RT8 | Break windows as the host and as the non-host | shards on both PCs, no window left standing among them | client `KPCFix.log` window lines | |
-| RA6 | RT10 | Setup > Audio: use every control (sliders, Sound Quality, Enable Sound FX...), then the checkbox; read its tooltip | all controls work; the checkbox toggles; the tooltip mentions multiplayer audio/narration going out of sync | — | |
-| RA7 | extra | Server console: `changelevel R1M2A`, then `changelevel` alone and `changelevel nowhere` | everyone goes to R1M2A; usage / unknown-world replies | `console` | |
-| RA8 | extra | `!goto <other player>` (also a name prefix), then `!back`; try again within 3 s | moved next to the player, then back; the quick retry is refused | `goto` | |
-| RA9 | extra | Host `!abort` during play, twice | everyone goes to a deathmatch map (a different one each time); no intro or scripted sequence runs there | `abort`, `change` | |
-| RA10 | extra | Minimise the client during play (also mid-narration), wait 10 s, restore | the game keeps running and drawing while minimised (sound, music, animation); keys and mouse are not captured; the picture is normal after restore | client `KPCFix.log`: `renderer kept running` | |
-| RA11 | RT11 | After the user's choice: R1M2A belt lift with both players | per the chosen fix | `exit-seen` | |
+Server: the launcher with **Co-op campaign** and **Test logging** (writes `CoopSession=1`,
+`CoopCampaign=1`, `CoopIntro=1`, `TraceScripts=1`, `TraceTiming=1`). Host = the first player
+in (`*` in `!coop`). Server console `kpc_cheats 1` unless a step says otherwise. Two different
+player names. Result: PASS / FAIL / not run, plus what was seen.
 
-Anything else seen (crashes, wrong player affected, sounds behind the loading picture,
-players stuck in the floor): add a line under the table with the world and time.
+| # | Do | Expected | Log marker (`KPCServerTools.log` unless noted) | Result |
+| --- | --- | --- | --- | --- |
+| RB1 | Start the game; let the startup movies play; minimise and restore during a movie and in the menu | movies play normally; restoring shows the movie or menu at once | client `KPCFix.log`: no "renderer kept running" before a world | |
+| RB2 | In a world, minimise for 10 s (also during narration), restore | the game kept running and drawing; picture normal after restore | client: `renderer kept running` | |
+| RB3 | In a world, hold Tab, release; tap Tab | the scoreboard shows only while held; a tap shows it briefly | — | |
+| RB4 | Both players die (e.g. `!kill` each, within 2 s) during play | after 2 s "Everyone died: restarting <world>", the world reloads, its intro plays again, inventories back | `everyone-dead` | |
+| RB5 | During an intro the non-host presses space; then the host does | non-host: "Only the host (*) can skip cutscenes" and the intro continues; host: intro skipped | `skip-refused` | |
+| RB6 | Die holding a weapon that drops (Scourge, Magma, Zero, Windblade, an ultimate) and watch the drop | it disappears after about 20 s; if picked up it does not come back | `death-drop dropped`, `death-drop expired` | |
+| RB7 | `!changelevel TUTORIAL` and play to its exit; `!changelevel PM05`; `!changelevel R1M2A` | the tutorial loads and its exit returns to the lobby; PM05 becomes the lobby; R1M2A starts the campaign there | `change` | |
+| RB8 | Host `!reset` during play | "Host reset the server to its start state"; back to the launcher's lobby map, nobody has items, cheats as at launch | `session on (reset to the launch state)` | |
+| RB9 | Start a **deathmatch** server from the launcher; a player types `!coop on`; later the host types `!coop off` | the co-op lobby loads (`!campaign` works); `!coop off` returns to the deathmatch start map | `session on (chat !coop on)`, `session off (host !coop off)` | |
+| RA1 | Start the server from the launcher; start the client and `Psycho.exe` | the server starts; both programs start with sound | `Loaded as winmm.dll; original server.dll unchanged` | |
+| RA2 | Alone on the server: `!campaign water` | the campaign starts with one player | `change` | |
+| RA3 | Fire a few shots (e.g. 197 left), then: the host takes an exit; `!kill`; `!abort` | the ammo count stays as it was each time | `inventory-restored` | |
+| RA4 | Take an armour piece (first time: cutscene), step away, wait 20 s; walk over it again; the other player (lacking it) walks over it | it comes back; one who lacks it gets it without a cutscene; chat `... picked up a returned armor shard` | `item-respawn scheduled/respawned`, `item-respawn quiet pickup` | |
+| RA5 | Break windows as host and non-host | shards on both PCs, no window left among them | client window lines | |
+| RA6 | Setup > Audio: every control, then the checkbox; read its tooltip | all controls work; the tooltip warns about multiplayer audio/narration sync | — | |
+| RA7 | Server console: `changelevel R1M2A`, `changelevel`, `changelevel nowhere` | everyone goes to R1M2A; usage and unknown-world replies | `console` | |
+| RA8 | `!goto <other player>` (also a name prefix), `!back`; again within 3 s | moved there and back; the quick retry is refused | `goto` | |
+| RA9 | Host `!abort` during play, twice | everyone goes to a deathmatch map; no intro or scripted sequence there | `abort`, `change` | |
+| RA11 | After the user's choice: the R1M2A belt lift with both players | per the chosen fix | `exit-seen` | |
+
+(RA10, minimising in a world, is now RB2.) Anything else (crashes, the wrong player affected,
+sounds behind the loading picture, players stuck in the floor): add a line with the world and time.
 
 ## Logs to collect
 
 * Desktop: `C:\Games\Psycho\KPCServerTools.log` (server) and `C:\Games\Psycho\KPCFix.log` (client).
 * Laptop: `KPCFix.log` in its game folder.
-* Note the time of each failure; with `[Coop] TraceTiming=1` co-op lines carry `t=<ms>`.
+* With `TraceTiming=1` co-op lines carry `t=<ms>`; note the time of each failure.
 
-## If a retest fails
+## If a test fails
 
-* **RT1/RT5 (fresh start):** no `inventory-cleared` line → the start did not come through
-  `start_pending` (`coop_session.h`), or `CoopKeepInventory=0`.
-* **RT3/RT4 (persistence):** `inventory-saved ... weapons=0` while holding weapons → `dd170`
-  (inventory list) does not see them; no `inventory-saved` → the snapshot saw the player as
-  dead (`vtable+0x60`) or not in the live list; `inventory-restored ... gives=0` with items
-  missing → `f3440` refused them (class or gauntlets rule, `f3467`–`f349b`).
-* **RT6 (class):** `class-weapons-given=0` while slot 1 stays empty → the weapon definition
-  (`[player+0x54+id*4]+8`, class `+8`, any-class byte `+0xc`) was unreadable, or the groups
-  of four (3–6, 7–10, 11–14) do not match the slots; see `coop_class_weapons` in `proxy.c`.
-* **RA3 (ammo):** the count still rises → `inventory-restored` should list the trim; the
-  removal uses the inventory vtable `0x11ef98` `+4` (`coop_inv_trim_ammo` in `proxy.c`).
-* **RA4 (armour):** no `scheduled` → the hide call `0xcc29e` was not reached for the piece;
-  `respawned` but no quiet pickup → the touch handler's call `0xc837b` is not hooked
-  (`CoopItemRespawnSec` must be non-zero) or the player was seen as dead / already owning it.
-* **RA5 (windows):** a window still stands among its shards → check `HideBrokenWindow=1` in
-  the client's `KPCFix.ini` and the window lines in `KPCFix.log`.
-* **RA1 / RA10:** if the client or `Psycho.exe` misbehaves with `winmm.dll` present, run
-  `Restore-Original-Server.cmd` to remove it and report; if the picture is broken after
-  restoring the window, set `KeepRendererOnFocusLoss=0`.
-* **RT11 (lift):** last time the log ended after `cs1belt.scr`; check whether
-  `trigger_door liftpiece1/2 open` runs and whether the exit volume is reached.
+* **RB1:** a black screen again → look for a "renderer kept running" line before the world
+  loaded in `KPCFix.log`; if there is none, the cause is elsewhere (DDrawCompat
+  `FullscreenMode`, the movie path in `cinematic.c`); compare once with `KeepAudioOnFocusLoss=0`.
+* **RB3:** the scoreboard stays up after release → the release did not arrive (a focus change
+  while held?); `ScoreboardHold=0` restores the stock toggle.
+* **RB4:** no restart and no `everyone-dead` → the players were not counted
+  (`coop_member_player` finds a member only after its spawn in that world, and an unreadable
+  player counts as alive); a restart loop → send the log around it.
+* **RB5:** the non-host still skips → the skip took another path than message `0x3d` (the
+  callers of `a7f40` are not mapped); `skip-refused` shows whether the gate saw it.
+* **RB6:** `death-drop dropped` but never `expired` → the item's update stopped (engine
+  deactivation of unseen objects is the suspect); then remove drops from the frame hook.
+* **RB8 / RB9:** `session switch failed` → a hook site held unexpected bytes and nothing was
+  changed; a world that does not reload → `session off: start map unknown`.
+* **RA3 (ammo):** the count still rises → `inventory-restored` should list the trim
+  (`coop_inv_trim_ammo`, inventory vtable `0x11ef98` `+4`).
+* **RA4 (armour):** no `scheduled` → the hide call `0xcc29e` was not reached; `respawned`
+  without a quiet pickup → the touch call `0xc837b` is not hooked or the player was seen as
+  dead or owning it.
+* **RA5 (windows):** check `HideBrokenWindow=1` and the window lines in `KPCFix.log`.
+* **RA1:** if the client or `Psycho.exe` misbehaves with `winmm.dll` present, run
+  `Restore-Original-Server.cmd` and report.
+* **RT11 (lift):** check whether `trigger_door liftpiece1/2 open` runs and whether the exit
+  volume is reached.
 
 ## Open work
+
+### New open items (2026-11-14)
+
+* **Death drops that stay** (user report): unexplained by static analysis (stock lifetime
+  10 s). Wait for the RB6 log; if `expired` never appears, track drops from the frame hook
+  and remove them with `cc570(item, 1)` (guard against freed items: compare the item's
+  HOBJECT against the engine's object list first).
+* **Monster ammo drops never expire** on a long-running server (stock bug, see "What
+  changed"). Fix or keep: user to decide.
+* **`!op <name>` / `!deop` (N7)** and **`!reload` (N17, now just `!changelevel <current world>`)**.
+* **Live switch (`!coop on|off`, `!reset`)** is emulator-tested only: the native smoke harness
+  cannot type chat. Watch RB8/RB9 closely.
 
 ### User requests from the 2026-11-13 test (full text in the archive)
 
 | # | Request | Status |
 | --- | --- | --- |
-| N1 | `!changelevel` accepts any world (PMxx, TUTORIAL) | open |
+| N1 | `!changelevel` accepts any world (PMxx, TUTORIAL) | done 2026-11-14 (RB7) |
 | N2 | No 2-player minimum for `!campaign` / `!changelevel` | done (`CoopMinPlayers=1`), RA2 |
 | N4 | First armour shard per world: everyone watches the cutscene and gets the slot-1 weapon and armour | open |
 | N5 | Campaign pickups keep everyone's weapons and armour equal; cheat items personal; a death restores exactly what the player had plus what was shared while dead | open |
 | N6 | Ammo sharing switch: INI setting and host `!ammoshare on\|off` | open |
 | N7 | `!op <name>` / `!deop`: an op may run host commands and skip cutscenes | open |
-| N16 | Only host or op may skip cutscenes (needs N7; triage row 6) | open |
+| N16 | Only host or op may skip cutscenes (needs N7; triage row 6) | host-only done 2026-11-14 (RB5, `CoopHostSkip`); the op part waits for N7 |
 | N17 | `!reload` = `!changelevel <current world>` (needs N1) | open |
 | N18 | Server console world change without dropping clients | console `changelevel <world>` done (RA7); the dropped-client "connected" state is still open |
 | N15 | Wooden-box debris | open (windows done in `7623b69`) |
@@ -221,7 +252,7 @@ until every member stands in it; (4) leave it and rely on `!goto`.
 ### Older open items (2026-11-12 triage)
 
 1. **World held behind the loading picture** (row 9): no simulation until every member has spawned.
-2. **Only the host skips cutscenes** (row 6, with N7/N16): find the client message → `endingscript` path.
+2. **Only the host skips cutscenes**: done 2026-11-14 (`CoopHostSkip`, message `0x3d` → `c5830`); `!op` (N7) still open.
 3. **Collectables HUD in co-op** (row 10) and the **Disconnect menu item** (row 21).
 4. **Switches/levers host gate** (row 3: `CSwitch` `44dd6` and other command-list owners).
 5. **Collision-checked spawn allocator** (`coop/GENERAL-ALLOCATOR.md`) and a protected
