@@ -1,0 +1,90 @@
+{
+  "output": "dinput.dll",
+  "platform": "windows",
+  "sha256": "288bce4efd01e986fc11e77d8d119488b67993ae39ad67830f22ab79daaf7dad",
+  "bytes": 44032,
+  "exports": [
+    "DirectInputCreateA",
+    "DirectInputCreateW",
+    "DirectInputCreateEx",
+    "DllGetClassObject",
+    "DllCanUnloadNow",
+    "DllRegisterServer",
+    "DllUnregisterServer",
+    "KPCFixVersion",
+    "KPCFixStatus"
+  ],
+  "elf_to_coff": [
+    {
+      "object": "kpcfix.obj",
+      "dir32": 707,
+      "rel32": 180
+    },
+    {
+      "object": "sha256.obj",
+      "dir32": 1,
+      "rel32": 0
+    },
+    {
+      "object": "hud.obj",
+      "dir32": 46,
+      "rel32": 8
+    },
+    {
+      "object": "ui.obj",
+      "dir32": 29,
+      "rel32": 0
+    },
+    {
+      "object": "configs.obj",
+      "dir32": 27,
+      "rel32": 22
+    },
+    {
+      "object": "cinematic.obj",
+      "dir32": 18,
+      "rel32": 5
+    },
+    {
+      "object": "console.obj",
+      "dir32": 6,
+      "rel32": 4
+    },
+    {
+      "object": "minstep_hook.obj",
+      "dir32": 1,
+      "rel32": 0
+    },
+    {
+      "object": "cinematic_hook.obj",
+      "dir32": 1,
+      "rel32": 1
+    },
+    {
+      "object": "timing.obj",
+      "dir32": 48,
+      "rel32": 0
+    },
+    {
+      "object": "ground.obj",
+      "dir32": 0,
+      "rel32": 0
+    },
+    {
+      "object": "input_interval.obj",
+      "dir32": 7,
+      "rel32": 0
+    },
+    {
+      "object": "hud_hooks.obj",
+      "dir32": 0,
+      "rel32": 9
+    },
+    {
+      "object": "ui_hooks.obj",
+      "dir32": 2,
+      "rel32": 3
+    }
+  ],
+  "build_only_system_stubs": "Not deployed. Used only to generate import libraries."
+}

@@ -1,0 +1,79 @@
+{
+  "required_game_version": "1.13",
+  "client": {
+    "sha256": "16131ccf2f80a7569a347f8311158b38bab816e6d08a0c1d9a6e861df472f156",
+    "bytes": 720948,
+    "image_size": 741376
+  },
+  "shells": [
+    {
+      "regions": [
+        "Europe",
+        "USA"
+      ],
+      "sha256": "703813a4dff8da967f5cc81bd587ad63b3c20b2b3b15dbbdb04459cf9f0db5e9",
+      "bytes": 1282100,
+      "image_size": 2011136
+    },
+    {
+      "regions": [
+        "Germany"
+      ],
+      "sha256": "513f468dca8541d6d7bb766601e10021a1aa5c50b22e869f04151ef7755e35dd",
+      "bytes": 1282114,
+      "image_size": 2011136
+    },
+    {
+      "regions": [
+        "Italy-Covermount"
+      ],
+      "sha256": "a3f27e7bdf36f992744dc2b283439a83a0638058f80352e0181018cdfe410ff4",
+      "bytes": 1192001,
+      "image_size": 1916928
+    }
+  ],
+  "servers": [
+    {
+      "regions": [
+        "Europe",
+        "Germany",
+        "Italy-Covermount"
+      ],
+      "dedicated.exe": {
+        "sha256": "b940fd6d3fb7ef91c965631b72b0856e17ed14d91f11cda7c7d50cf8c4668ad8",
+        "bytes": 69632,
+        "image_size": 98304
+      },
+      "server.dll": {
+        "sha256": "83b7bce809948b6f70ed3f35a77a771b6087f1104d90d06a62ac3dc0d4bd37d5",
+        "bytes": 323584,
+        "image_size": 331776
+      },
+      "object.lto": {
+        "sha256": "3a03f8796c482b1a7ad72755df33ee8f1f8056bb10957f6f700e64bd006b3e5b",
+        "bytes": 1511424,
+        "image_size": 1662976
+      }
+    },
+    {
+      "regions": [
+        "USA"
+      ],
+      "dedicated.exe": {
+        "sha256": "19d7766c949b2278ec1e99c9e559312d35fd26456bb2539d9e525abad8a829a8",
+        "bytes": 81920,
+        "image_size": 110592
+      },
+      "server.dll": {
+        "sha256": "93178237bf15f09b5f9316232309d30df623a9c62cc296874dd83c51aa5e40bf",
+        "bytes": 335872,
+        "image_size": 348160
+      },
+      "object.lto": {
+        "sha256": "3a03f8796c482b1a7ad72755df33ee8f1f8056bb10957f6f700e64bd006b3e5b",
+        "bytes": 1511424,
+        "image_size": 1662976
+      }
+    }
+  ]
+}

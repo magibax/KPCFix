@@ -1,0 +1,738 @@
+{
+  "base": {
+    "Germany": {
+      "mss32.dll": {
+        "bytes": 319488,
+        "sha256": "bf9b9e297e5d29b8db1e28b275849f280c1232b2d92393f82a5af785ff27a23e"
+      },
+      "help.txt": {
+        "bytes": 8715,
+        "sha256": "ae0155fe023df1bb8dd47dba1ba4ec886061193f410da363b8a70a93b91341b0"
+      },
+      "de_msg.dll": {
+        "bytes": 32768,
+        "sha256": "2df25ca1f894060bb3b2d32af08d5193432877ab9c014fe8f88c5fcb1ca2fa4b"
+      },
+      "d3d.ren": {
+        "bytes": 327680,
+        "sha256": "08af4f80bb0d36e0e35bb558a9449e246f5f7bf35f2bd7b969f985173592e0ef"
+      },
+      "server.dll": {
+        "bytes": 319488,
+        "sha256": "36b00826296e53f147c43a116de00752ab85eb968195ab38661b5f2a44ba8eb1"
+      },
+      "sres.dll": {
+        "bytes": 32768,
+        "sha256": "fa9ee6d83678b6a1f4fced8a4bf559a0efd3d609d061da7e839968f10bf7ebb2"
+      },
+      "psycho.exe": {
+        "bytes": 1896448,
+        "sha256": "20f72f5e1fdac5a54223208acee4114af22cd6d7d4d71d7ab9145b6587f58259"
+      },
+      "smackw32.dll": {
+        "bytes": 129536,
+        "sha256": "766e5ae74145b3d736b6c1c9645f4f27206c9a4af0c5ed59443764a42a8bdd09"
+      },
+      "cres.dll": {
+        "bytes": 65536,
+        "sha256": "fcdcf09b711c7ee45dacd757daa2b6b57ce453092c4afd143d560987a1252b7c"
+      },
+      "object.lto": {
+        "bytes": 1478656,
+        "sha256": "a6f38a721b537d6c7c592fc1143aeec7533ade3357bd353b611424ae26fe834c"
+      },
+      "cshell.dll": {
+        "bytes": 1245250,
+        "sha256": "c4f92c80c1ea90cc2da024058267694814f50962e4eee7bb21009a36ba149704"
+      },
+      "client.exe": {
+        "bytes": 1138176,
+        "sha256": "9b6b8b4bfd08c812e881c64f343c28293eab6b0797929472d8277063d66631cb"
+      },
+      "cdaudio.dll": {
+        "bytes": 86016,
+        "sha256": "bd2d7f17c3e622c8d2bd62b2ebd0773ee2427efea3eda001f5e0a04c82518814"
+      },
+      "default.cfg": {
+        "bytes": 5959,
+        "sha256": "d0ba7a1ebd18aba8e782bc127edf5728e0ede6aba06f41633d7b7f05f8926a89"
+      },
+      "ima.dll": {
+        "bytes": 110592,
+        "sha256": "f3111c311e6628775ca08c4508479c43f982a26d1f0a6e738b7e2a8d869c1726"
+      },
+      "readme.txt": {
+        "bytes": 22794,
+        "sha256": "61594be4f6dbf428242e157fae77115bffbdca80dccbdc8689c7d765a7d3a514"
+      }
+    },
+    "USA": {
+      "mss32.dll": {
+        "bytes": 319488,
+        "sha256": "bf9b9e297e5d29b8db1e28b275849f280c1232b2d92393f82a5af785ff27a23e"
+      },
+      "help.txt": {
+        "bytes": 6796,
+        "sha256": "82c2645e8a2000fccfa4a4cd96bb636f6e7394b0ee48a13827371d184f4b639e"
+      },
+      "de_msg.dll": {
+        "bytes": 32768,
+        "sha256": "2df25ca1f894060bb3b2d32af08d5193432877ab9c014fe8f88c5fcb1ca2fa4b"
+      },
+      "d3d.ren": {
+        "bytes": 327680,
+        "sha256": "81232fab1fa0518e5b356f783cf4186b836a195ee199614d5c9e87fc2ac1b574"
+      },
+      "server.dll": {
+        "bytes": 319488,
+        "sha256": "36b00826296e53f147c43a116de00752ab85eb968195ab38661b5f2a44ba8eb1"
+      },
+      "sres.dll": {
+        "bytes": 32768,
+        "sha256": "7e833d4e4bbb4724415b1e10375c8d44b008dd956ce0e5887b559cdce6544d10"
+      },
+      "psycho.exe": {
+        "bytes": 1884160,
+        "sha256": "7f31328f5561564bda3f95d48019970e040714e00df799c907f8247ce39d26e1"
+      },
+      "smackw32.dll": {
+        "bytes": 129536,
+        "sha256": "766e5ae74145b3d736b6c1c9645f4f27206c9a4af0c5ed59443764a42a8bdd09"
+      },
+      "cres.dll": {
+        "bytes": 61440,
+        "sha256": "9e8d40c80b9047311267bf4cf1f4e04879e30d744257372f945a515ea3baa3af"
+      },
+      "object.lto": {
+        "bytes": 1478656,
+        "sha256": "bb555a2574bc8c4e424f764c34577d30fc6c95d8a7c7d9c3ae41f3e5d8231d80"
+      },
+      "cshell.dll": {
+        "bytes": 1245236,
+        "sha256": "279cb3116046f9181c8472849dbed1c7482c9617a9d0335c2a835df940d29234"
+      },
+      "client.exe": {
+        "bytes": 704564,
+        "sha256": "b3f10452dbb1bbe35bc307476ff3cc6eaf52d6c1cca5edc8e36f56ec120f7740"
+      },
+      "cdaudio.dll": {
+        "bytes": 86016,
+        "sha256": "bd2d7f17c3e622c8d2bd62b2ebd0773ee2427efea3eda001f5e0a04c82518814"
+      },
+      "default.cfg": {
+        "bytes": 5939,
+        "sha256": "a07ff9a84a6533094c34fa321d4b5d9ffd80e55d315f7d1f8066ee026e237cab"
+      },
+      "ima.dll": {
+        "bytes": 110592,
+        "sha256": "f3111c311e6628775ca08c4508479c43f982a26d1f0a6e738b7e2a8d869c1726"
+      },
+      "readme.txt": {
+        "bytes": 19692,
+        "sha256": "fe74cfc5083d2e0fb7e3da2f0be956407a1f9e5b6e75ef013143780eb7b9c86b"
+      }
+    },
+    "Europe": {
+      "mss32.dll": {
+        "bytes": 319488,
+        "sha256": "bf9b9e297e5d29b8db1e28b275849f280c1232b2d92393f82a5af785ff27a23e"
+      },
+      "help.txt": {
+        "bytes": 6796,
+        "sha256": "82c2645e8a2000fccfa4a4cd96bb636f6e7394b0ee48a13827371d184f4b639e"
+      },
+      "de_msg.dll": {
+        "bytes": 32768,
+        "sha256": "2df25ca1f894060bb3b2d32af08d5193432877ab9c014fe8f88c5fcb1ca2fa4b"
+      },
+      "d3d.ren": {
+        "bytes": 327680,
+        "sha256": "08af4f80bb0d36e0e35bb558a9449e246f5f7bf35f2bd7b969f985173592e0ef"
+      },
+      "server.dll": {
+        "bytes": 319488,
+        "sha256": "36b00826296e53f147c43a116de00752ab85eb968195ab38661b5f2a44ba8eb1"
+      },
+      "sres.dll": {
+        "bytes": 32768,
+        "sha256": "7e833d4e4bbb4724415b1e10375c8d44b008dd956ce0e5887b559cdce6544d10"
+      },
+      "psycho.exe": {
+        "bytes": 1884160,
+        "sha256": "7f31328f5561564bda3f95d48019970e040714e00df799c907f8247ce39d26e1"
+      },
+      "smackw32.dll": {
+        "bytes": 129536,
+        "sha256": "766e5ae74145b3d736b6c1c9645f4f27206c9a4af0c5ed59443764a42a8bdd09"
+      },
+      "cres.dll": {
+        "bytes": 61440,
+        "sha256": "9e8d40c80b9047311267bf4cf1f4e04879e30d744257372f945a515ea3baa3af"
+      },
+      "object.lto": {
+        "bytes": 1478656,
+        "sha256": "bb555a2574bc8c4e424f764c34577d30fc6c95d8a7c7d9c3ae41f3e5d8231d80"
+      },
+      "cshell.dll": {
+        "bytes": 1245236,
+        "sha256": "279cb3116046f9181c8472849dbed1c7482c9617a9d0335c2a835df940d29234"
+      },
+      "client.exe": {
+        "bytes": 1138176,
+        "sha256": "e3ab6b38a883d1ea33dd1593c82d70600075c2770f69990b14c9ff9a4d4b972c"
+      },
+      "cdaudio.dll": {
+        "bytes": 86016,
+        "sha256": "bd2d7f17c3e622c8d2bd62b2ebd0773ee2427efea3eda001f5e0a04c82518814"
+      },
+      "default.cfg": {
+        "bytes": 5939,
+        "sha256": "a07ff9a84a6533094c34fa321d4b5d9ffd80e55d315f7d1f8066ee026e237cab"
+      },
+      "ima.dll": {
+        "bytes": 110592,
+        "sha256": "f3111c311e6628775ca08c4508479c43f982a26d1f0a6e738b7e2a8d869c1726"
+      },
+      "readme.txt": {
+        "bytes": 19692,
+        "sha256": "fe74cfc5083d2e0fb7e3da2f0be956407a1f9e5b6e75ef013143780eb7b9c86b"
+      }
+    },
+    "Italy-Covermount": {
+      "readme.txt": {
+        "bytes": 21197,
+        "sha256": "9367bde498afe433108a7baf8aa123dd6e4a96c0b4c38181c1222d59709080d8"
+      },
+      "mss32.dll": {
+        "bytes": 319488,
+        "sha256": "bf9b9e297e5d29b8db1e28b275849f280c1232b2d92393f82a5af785ff27a23e"
+      },
+      "d3d.ren": {
+        "bytes": 327680,
+        "sha256": "08af4f80bb0d36e0e35bb558a9449e246f5f7bf35f2bd7b969f985173592e0ef"
+      },
+      "de_msg.dll": {
+        "bytes": 32768,
+        "sha256": "2df25ca1f894060bb3b2d32af08d5193432877ab9c014fe8f88c5fcb1ca2fa4b"
+      },
+      "server.dll": {
+        "bytes": 319488,
+        "sha256": "36b00826296e53f147c43a116de00752ab85eb968195ab38661b5f2a44ba8eb1"
+      },
+      "sres.dll": {
+        "bytes": 32768,
+        "sha256": "e6d4937e0600c690793b4c6246140257357ea01416a399651f4ef42bcf7b8a14"
+      },
+      "psycho.exe": {
+        "bytes": 1888256,
+        "sha256": "a2ec6d7c9b659d5faf8786b94324f06358939ab6c69fd783ae767ed17ec871e7"
+      },
+      "smackw32.dll": {
+        "bytes": 129536,
+        "sha256": "766e5ae74145b3d736b6c1c9645f4f27206c9a4af0c5ed59443764a42a8bdd09"
+      },
+      "cres.dll": {
+        "bytes": 69632,
+        "sha256": "42ce586aa694626628f3f6aba893c17ebc103a2923982373bcf0afaeef661a3f"
+      },
+      "help.txt": {
+        "bytes": 9741,
+        "sha256": "e19f3c7129d61ffb73f6f3c4fa0d43ee51c01d8d2ff2e10c7ff9fd8f43dccc47"
+      },
+      "object.lto": {
+        "bytes": 1478656,
+        "sha256": "50bac1c86c44551fc8337ced56965d0d9d901e702970d0c8714b3182c244ceec"
+      },
+      "cshell.dll": {
+        "bytes": 1245249,
+        "sha256": "0d98bcf6c453bba78e48255e6b0b375675c3ff387076cfcf638416132b435a0c"
+      },
+      "client.exe": {
+        "bytes": 704564,
+        "sha256": "9afd24e94736381b3673f6d7c6253313e6d6ef4e89312e950304fb3e4c81f780"
+      },
+      "cdaudio.dll": {
+        "bytes": 86016,
+        "sha256": "bd2d7f17c3e622c8d2bd62b2ebd0773ee2427efea3eda001f5e0a04c82518814"
+      },
+      "default.cfg": {
+        "bytes": 5939,
+        "sha256": "1d24c457ef68f268667281e9892a24b814a6670e40c084cd37bd5270c0fde49b"
+      }
+    }
+  },
+  "113": {
+    "Germany": {
+      "readme.txt": {
+        "bytes": 21197,
+        "sha256": "9367bde498afe433108a7baf8aa123dd6e4a96c0b4c38181c1222d59709080d8"
+      },
+      "dedicated.txt": {
+        "bytes": 8494,
+        "sha256": "ba31250a71cd181888906fe2c0e18b3cf7c5e01078b99ef1159e432524892d44"
+      },
+      "psycho.exe": {
+        "bytes": 1896448,
+        "sha256": "3538dc1f2426d3d40743b8c6e77b2e7abc1f342479b81ded2f0b8f358f4ca431"
+      },
+      "mss32.dll": {
+        "bytes": 319488,
+        "sha256": "bf9b9e297e5d29b8db1e28b275849f280c1232b2d92393f82a5af785ff27a23e"
+      },
+      "changes.txt": {
+        "bytes": 6742,
+        "sha256": "876505c5ae1d4750f5362c031639752d0f6c5387d3b38ad0e76ac2742f1e4571"
+      },
+      "mss16.dll": {
+        "bytes": 276992,
+        "sha256": "9295c812620ae66db510dfaaaa05b81b488dff97abf6fb95a96b8b9e3a34b5dd"
+      },
+      "mssds3dh.m3d": {
+        "bytes": 50176,
+        "sha256": "c806bfac676a8c9307dc40fb0d1ff91cd1fc419e1936019a311b74147b8b1447"
+      },
+      "de_msg.dll": {
+        "bytes": 32768,
+        "sha256": "2df25ca1f894060bb3b2d32af08d5193432877ab9c014fe8f88c5fcb1ca2fa4b"
+      },
+      "mssb16.tsk": {
+        "bytes": 4640,
+        "sha256": "9e610c299313f5a95d31e779b0b846f7006758ae416a27a62fa2e2fb13884b7e"
+      },
+      "d3d.ren": {
+        "bytes": 327680,
+        "sha256": "b021cc3640c8cca36805f916e34b4c773a40a260cc25c5229fbf9f59d0f9212a"
+      },
+      "server.dll": {
+        "bytes": 323584,
+        "sha256": "83b7bce809948b6f70ed3f35a77a771b6087f1104d90d06a62ac3dc0d4bd37d5"
+      },
+      "mssds3ds.m3d": {
+        "bytes": 49664,
+        "sha256": "ad61f6ff128e02a10f01bcf57fe8ffc1a62b2494578cb4a48aa8d3765feb07ad"
+      },
+      "msseax.m3d": {
+        "bytes": 52736,
+        "sha256": "9590614acf191d29cb0fdfe7a1bacd27d20270e8b1381258639ddaaafed1b8b0"
+      },
+      "dedicated.exe": {
+        "bytes": 69632,
+        "sha256": "b940fd6d3fb7ef91c965631b72b0856e17ed14d91f11cda7c7d50cf8c4668ad8"
+      },
+      "smackw32.dll": {
+        "bytes": 129536,
+        "sha256": "766e5ae74145b3d736b6c1c9645f4f27206c9a4af0c5ed59443764a42a8bdd09"
+      },
+      "mssrsx.m3d": {
+        "bytes": 49152,
+        "sha256": "58089dfd2005310a908cfd478f64a8667e6f7ff241b13dd270745f38fc35d5c9"
+      },
+      "server.cfg": {
+        "bytes": 654,
+        "sha256": "0dd37bb552ad75a6586e444f436ef8ed45be31dbba46df1bce3ee9b31553c205"
+      },
+      "mssa3d.m3d": {
+        "bytes": 50176,
+        "sha256": "eb1e1b769d4944f92436d4802158966c03455381f351ed42de050450151f2f48"
+      },
+      "help.txt": {
+        "bytes": 9741,
+        "sha256": "e19f3c7129d61ffb73f6f3c4fa0d43ee51c01d8d2ff2e10c7ff9fd8f43dccc47"
+      },
+      "sres.dll": {
+        "bytes": 32768,
+        "sha256": "a3f60fbe5588a341fb1ccab9775857f00a71e52dda8d49fa718f6233e8a9cff0"
+      },
+      "object.lto": {
+        "bytes": 1511424,
+        "sha256": "3a03f8796c482b1a7ad72755df33ee8f1f8056bb10957f6f700e64bd006b3e5b"
+      },
+      "cres.dll": {
+        "bytes": 65536,
+        "sha256": "db8b03d10f58bdf5f8ebdc5a6316b9eaaabeca4d15381faf0fd233692217e4d8"
+      },
+      "cshell.dll": {
+        "bytes": 1282114,
+        "sha256": "513f468dca8541d6d7bb766601e10021a1aa5c50b22e869f04151ef7755e35dd"
+      },
+      "client.exe": {
+        "bytes": 720948,
+        "sha256": "16131ccf2f80a7569a347f8311158b38bab816e6d08a0c1d9a6e861df472f156"
+      },
+      "cdaudio.dll": {
+        "bytes": 86016,
+        "sha256": "bd2d7f17c3e622c8d2bd62b2ebd0773ee2427efea3eda001f5e0a04c82518814"
+      },
+      "default.cfg": {
+        "bytes": 5939,
+        "sha256": "1d24c457ef68f268667281e9892a24b814a6670e40c084cd37bd5270c0fde49b"
+      },
+      "ima.dll": {
+        "bytes": 110592,
+        "sha256": "f3111c311e6628775ca08c4508479c43f982a26d1f0a6e738b7e2a8d869c1726"
+      },
+      "mssfast.m3d": {
+        "bytes": 59392,
+        "sha256": "7e853d97248d9f70dedfe82220264534e1d1c125679bde1e6735eb1cf3ba91ea"
+      },
+      "server_bighead.cfg": {
+        "bytes": 654,
+        "sha256": "19219128c53c1fb89de89ead8951336acf4bcfc84e2c6a9a7d68fb8a7a0cf121"
+      }
+    },
+    "USA": {
+      "readme.txt": {
+        "bytes": 19080,
+        "sha256": "f6504e2b6cc3160e790c1c1c678e00b824de5a13337b154aa558a5180e77e2b2"
+      },
+      "dedicated.exe": {
+        "bytes": 81920,
+        "sha256": "19d7766c949b2278ec1e99c9e559312d35fd26456bb2539d9e525abad8a829a8"
+      },
+      "dedicated.txt": {
+        "bytes": 8653,
+        "sha256": "35947bbdaaf76dfb13f79d839bdb6ac2322e231c5e6e19ed429cff504b7457cf"
+      },
+      "mss32.dll": {
+        "bytes": 319488,
+        "sha256": "bf9b9e297e5d29b8db1e28b275849f280c1232b2d92393f82a5af785ff27a23e"
+      },
+      "changes.txt": {
+        "bytes": 6742,
+        "sha256": "876505c5ae1d4750f5362c031639752d0f6c5387d3b38ad0e76ac2742f1e4571"
+      },
+      "mss16.dll": {
+        "bytes": 276992,
+        "sha256": "9295c812620ae66db510dfaaaa05b81b488dff97abf6fb95a96b8b9e3a34b5dd"
+      },
+      "mssds3dh.m3d": {
+        "bytes": 50176,
+        "sha256": "c806bfac676a8c9307dc40fb0d1ff91cd1fc419e1936019a311b74147b8b1447"
+      },
+      "de_msg.dll": {
+        "bytes": 32768,
+        "sha256": "2df25ca1f894060bb3b2d32af08d5193432877ab9c014fe8f88c5fcb1ca2fa4b"
+      },
+      "mssb16.tsk": {
+        "bytes": 4640,
+        "sha256": "9e610c299313f5a95d31e779b0b846f7006758ae416a27a62fa2e2fb13884b7e"
+      },
+      "d3d.ren": {
+        "bytes": 327680,
+        "sha256": "b021cc3640c8cca36805f916e34b4c773a40a260cc25c5229fbf9f59d0f9212a"
+      },
+      "server.dll": {
+        "bytes": 335872,
+        "sha256": "93178237bf15f09b5f9316232309d30df623a9c62cc296874dd83c51aa5e40bf"
+      },
+      "mssds3ds.m3d": {
+        "bytes": 49664,
+        "sha256": "ad61f6ff128e02a10f01bcf57fe8ffc1a62b2494578cb4a48aa8d3765feb07ad"
+      },
+      "sres.dll": {
+        "bytes": 32768,
+        "sha256": "873a8be32fc8fd15468c9a0254a85d9a6204b6aacdedd4c78e747ebff96447e0"
+      },
+      "msseax.m3d": {
+        "bytes": 52736,
+        "sha256": "9590614acf191d29cb0fdfe7a1bacd27d20270e8b1381258639ddaaafed1b8b0"
+      },
+      "psycho.exe": {
+        "bytes": 1888256,
+        "sha256": "4c50092eeda3459905c57426d61802503e903844ebcbbe109e986bbe4bf841d3"
+      },
+      "smackw32.dll": {
+        "bytes": 129536,
+        "sha256": "766e5ae74145b3d736b6c1c9645f4f27206c9a4af0c5ed59443764a42a8bdd09"
+      },
+      "mssrsx.m3d": {
+        "bytes": 49152,
+        "sha256": "58089dfd2005310a908cfd478f64a8667e6f7ff241b13dd270745f38fc35d5c9"
+      },
+      "cres.dll": {
+        "bytes": 65536,
+        "sha256": "217571ade46ff4608245bd12d89ad33fa90f7ca88ccf662b125055e73a12a17b"
+      },
+      "server.cfg": {
+        "bytes": 654,
+        "sha256": "0dd37bb552ad75a6586e444f436ef8ed45be31dbba46df1bce3ee9b31553c205"
+      },
+      "mssa3d.m3d": {
+        "bytes": 50176,
+        "sha256": "eb1e1b769d4944f92436d4802158966c03455381f351ed42de050450151f2f48"
+      },
+      "help.txt": {
+        "bytes": 6242,
+        "sha256": "bc5db88e05f8341bd647a0d3256980aa1044056463885e956e858d6a8b3cdc6c"
+      },
+      "object.lto": {
+        "bytes": 1511424,
+        "sha256": "3a03f8796c482b1a7ad72755df33ee8f1f8056bb10957f6f700e64bd006b3e5b"
+      },
+      "cshell.dll": {
+        "bytes": 1282100,
+        "sha256": "703813a4dff8da967f5cc81bd587ad63b3c20b2b3b15dbbdb04459cf9f0db5e9"
+      },
+      "client.exe": {
+        "bytes": 720948,
+        "sha256": "16131ccf2f80a7569a347f8311158b38bab816e6d08a0c1d9a6e861df472f156"
+      },
+      "cdaudio.dll": {
+        "bytes": 86016,
+        "sha256": "bd2d7f17c3e622c8d2bd62b2ebd0773ee2427efea3eda001f5e0a04c82518814"
+      },
+      "default.cfg": {
+        "bytes": 6079,
+        "sha256": "2ea075fac9bf1407f050c9ce405cb8624af24c5d8414f6dd6c63db77f3194cc9"
+      },
+      "ima.dll": {
+        "bytes": 110592,
+        "sha256": "1ea9897028f497e7313857f60d917dc5cbd65a211a3468666fd4246f1554463b"
+      },
+      "mssfast.m3d": {
+        "bytes": 59392,
+        "sha256": "7e853d97248d9f70dedfe82220264534e1d1c125679bde1e6735eb1cf3ba91ea"
+      },
+      "server_bighead.cfg": {
+        "bytes": 654,
+        "sha256": "19219128c53c1fb89de89ead8951336acf4bcfc84e2c6a9a7d68fb8a7a0cf121"
+      }
+    },
+    "Europe": {
+      "readme.txt": {
+        "bytes": 19080,
+        "sha256": "f6504e2b6cc3160e790c1c1c678e00b824de5a13337b154aa558a5180e77e2b2"
+      },
+      "dedicated.txt": {
+        "bytes": 8494,
+        "sha256": "ba31250a71cd181888906fe2c0e18b3cf7c5e01078b99ef1159e432524892d44"
+      },
+      "psycho.exe": {
+        "bytes": 1888256,
+        "sha256": "848caa3e00a4ef5012fe9c1085972874c15142448f8a3af40e7cd3f99a24ece6"
+      },
+      "mss32.dll": {
+        "bytes": 319488,
+        "sha256": "bf9b9e297e5d29b8db1e28b275849f280c1232b2d92393f82a5af785ff27a23e"
+      },
+      "changes.txt": {
+        "bytes": 6742,
+        "sha256": "876505c5ae1d4750f5362c031639752d0f6c5387d3b38ad0e76ac2742f1e4571"
+      },
+      "mss16.dll": {
+        "bytes": 276992,
+        "sha256": "9295c812620ae66db510dfaaaa05b81b488dff97abf6fb95a96b8b9e3a34b5dd"
+      },
+      "mssds3dh.m3d": {
+        "bytes": 50176,
+        "sha256": "c806bfac676a8c9307dc40fb0d1ff91cd1fc419e1936019a311b74147b8b1447"
+      },
+      "de_msg.dll": {
+        "bytes": 32768,
+        "sha256": "2df25ca1f894060bb3b2d32af08d5193432877ab9c014fe8f88c5fcb1ca2fa4b"
+      },
+      "mssb16.tsk": {
+        "bytes": 4640,
+        "sha256": "9e610c299313f5a95d31e779b0b846f7006758ae416a27a62fa2e2fb13884b7e"
+      },
+      "d3d.ren": {
+        "bytes": 327680,
+        "sha256": "b021cc3640c8cca36805f916e34b4c773a40a260cc25c5229fbf9f59d0f9212a"
+      },
+      "server.dll": {
+        "bytes": 323584,
+        "sha256": "83b7bce809948b6f70ed3f35a77a771b6087f1104d90d06a62ac3dc0d4bd37d5"
+      },
+      "mssds3ds.m3d": {
+        "bytes": 49664,
+        "sha256": "ad61f6ff128e02a10f01bcf57fe8ffc1a62b2494578cb4a48aa8d3765feb07ad"
+      },
+      "sres.dll": {
+        "bytes": 32768,
+        "sha256": "fc0e1f80dfd9fe2ad69d5f8473271f0427a1c75abe88e816e4ed2ff5a178d590"
+      },
+      "msseax.m3d": {
+        "bytes": 52736,
+        "sha256": "9590614acf191d29cb0fdfe7a1bacd27d20270e8b1381258639ddaaafed1b8b0"
+      },
+      "dedicated.exe": {
+        "bytes": 69632,
+        "sha256": "b940fd6d3fb7ef91c965631b72b0856e17ed14d91f11cda7c7d50cf8c4668ad8"
+      },
+      "smackw32.dll": {
+        "bytes": 129536,
+        "sha256": "766e5ae74145b3d736b6c1c9645f4f27206c9a4af0c5ed59443764a42a8bdd09"
+      },
+      "mssrsx.m3d": {
+        "bytes": 49152,
+        "sha256": "58089dfd2005310a908cfd478f64a8667e6f7ff241b13dd270745f38fc35d5c9"
+      },
+      "cres.dll": {
+        "bytes": 65536,
+        "sha256": "9ac58201a6c5cf55469384a678d1b402d2bfde526b1088e237e2ff953ae4de36"
+      },
+      "server.cfg": {
+        "bytes": 654,
+        "sha256": "0dd37bb552ad75a6586e444f436ef8ed45be31dbba46df1bce3ee9b31553c205"
+      },
+      "mssa3d.m3d": {
+        "bytes": 50176,
+        "sha256": "eb1e1b769d4944f92436d4802158966c03455381f351ed42de050450151f2f48"
+      },
+      "help.txt": {
+        "bytes": 6242,
+        "sha256": "bc5db88e05f8341bd647a0d3256980aa1044056463885e956e858d6a8b3cdc6c"
+      },
+      "object.lto": {
+        "bytes": 1511424,
+        "sha256": "3a03f8796c482b1a7ad72755df33ee8f1f8056bb10957f6f700e64bd006b3e5b"
+      },
+      "cshell.dll": {
+        "bytes": 1282100,
+        "sha256": "703813a4dff8da967f5cc81bd587ad63b3c20b2b3b15dbbdb04459cf9f0db5e9"
+      },
+      "client.exe": {
+        "bytes": 720948,
+        "sha256": "16131ccf2f80a7569a347f8311158b38bab816e6d08a0c1d9a6e861df472f156"
+      },
+      "cdaudio.dll": {
+        "bytes": 86016,
+        "sha256": "bd2d7f17c3e622c8d2bd62b2ebd0773ee2427efea3eda001f5e0a04c82518814"
+      },
+      "default.cfg": {
+        "bytes": 6079,
+        "sha256": "2ea075fac9bf1407f050c9ce405cb8624af24c5d8414f6dd6c63db77f3194cc9"
+      },
+      "ima.dll": {
+        "bytes": 110592,
+        "sha256": "1ea9897028f497e7313857f60d917dc5cbd65a211a3468666fd4246f1554463b"
+      },
+      "mssfast.m3d": {
+        "bytes": 59392,
+        "sha256": "7e853d97248d9f70dedfe82220264534e1d1c125679bde1e6735eb1cf3ba91ea"
+      },
+      "server_bighead.cfg": {
+        "bytes": 654,
+        "sha256": "19219128c53c1fb89de89ead8951336acf4bcfc84e2c6a9a7d68fb8a7a0cf121"
+      }
+    },
+    "Italy-Covermount": {
+      "dedicated.txt": {
+        "bytes": 8494,
+        "sha256": "ba31250a71cd181888906fe2c0e18b3cf7c5e01078b99ef1159e432524892d44"
+      },
+      "psycho.exe": {
+        "bytes": 1888256,
+        "sha256": "e24d9b37944716ed4a1b25f425a56a05b32106db40f662cb9b4e79dcc8b2103b"
+      },
+      "mss32.dll": {
+        "bytes": 319488,
+        "sha256": "bf9b9e297e5d29b8db1e28b275849f280c1232b2d92393f82a5af785ff27a23e"
+      },
+      "changes.txt": {
+        "bytes": 6742,
+        "sha256": "876505c5ae1d4750f5362c031639752d0f6c5387d3b38ad0e76ac2742f1e4571"
+      },
+      "mss16.dll": {
+        "bytes": 276992,
+        "sha256": "9295c812620ae66db510dfaaaa05b81b488dff97abf6fb95a96b8b9e3a34b5dd"
+      },
+      "help.txt": {
+        "bytes": 9741,
+        "sha256": "e19f3c7129d61ffb73f6f3c4fa0d43ee51c01d8d2ff2e10c7ff9fd8f43dccc47"
+      },
+      "mssds3dh.m3d": {
+        "bytes": 50176,
+        "sha256": "c806bfac676a8c9307dc40fb0d1ff91cd1fc419e1936019a311b74147b8b1447"
+      },
+      "de_msg.dll": {
+        "bytes": 32768,
+        "sha256": "2df25ca1f894060bb3b2d32af08d5193432877ab9c014fe8f88c5fcb1ca2fa4b"
+      },
+      "mssb16.tsk": {
+        "bytes": 4640,
+        "sha256": "9e610c299313f5a95d31e779b0b846f7006758ae416a27a62fa2e2fb13884b7e"
+      },
+      "d3d.ren": {
+        "bytes": 327680,
+        "sha256": "b021cc3640c8cca36805f916e34b4c773a40a260cc25c5229fbf9f59d0f9212a"
+      },
+      "console.pcx": {
+        "bytes": 16265,
+        "sha256": "bf8674f932075122f1fb50b4dcd8a56ee6b6807411e8395cc3a8d44d21a43939"
+      },
+      "server.dll": {
+        "bytes": 323584,
+        "sha256": "83b7bce809948b6f70ed3f35a77a771b6087f1104d90d06a62ac3dc0d4bd37d5"
+      },
+      "mssds3ds.m3d": {
+        "bytes": 49664,
+        "sha256": "ad61f6ff128e02a10f01bcf57fe8ffc1a62b2494578cb4a48aa8d3765feb07ad"
+      },
+      "msseax.m3d": {
+        "bytes": 52736,
+        "sha256": "9590614acf191d29cb0fdfe7a1bacd27d20270e8b1381258639ddaaafed1b8b0"
+      },
+      "dedicated.exe": {
+        "bytes": 69632,
+        "sha256": "b940fd6d3fb7ef91c965631b72b0856e17ed14d91f11cda7c7d50cf8c4668ad8"
+      },
+      "smackw32.dll": {
+        "bytes": 129536,
+        "sha256": "766e5ae74145b3d736b6c1c9645f4f27206c9a4af0c5ed59443764a42a8bdd09"
+      },
+      "mssrsx.m3d": {
+        "bytes": 49152,
+        "sha256": "58089dfd2005310a908cfd478f64a8667e6f7ff241b13dd270745f38fc35d5c9"
+      },
+      "server.cfg": {
+        "bytes": 654,
+        "sha256": "0dd37bb552ad75a6586e444f436ef8ed45be31dbba46df1bce3ee9b31553c205"
+      },
+      "mssa3d.m3d": {
+        "bytes": 50176,
+        "sha256": "eb1e1b769d4944f92436d4802158966c03455381f351ed42de050450151f2f48"
+      },
+      "sres.dll": {
+        "bytes": 32768,
+        "sha256": "0ced897638a7dd9c604136a29a0054f1b3bf47ed5d83c469cec7f812bfff0f91"
+      },
+      "object.lto": {
+        "bytes": 1511424,
+        "sha256": "3a03f8796c482b1a7ad72755df33ee8f1f8056bb10957f6f700e64bd006b3e5b"
+      },
+      "cres.dll": {
+        "bytes": 69632,
+        "sha256": "b09610710ccb88198154cc5a383230524fb9edc5a7e9191ab4b57fcd47f520e3"
+      },
+      "cshell.dll": {
+        "bytes": 1192001,
+        "sha256": "a3f27e7bdf36f992744dc2b283439a83a0638058f80352e0181018cdfe410ff4"
+      },
+      "client.exe": {
+        "bytes": 720948,
+        "sha256": "16131ccf2f80a7569a347f8311158b38bab816e6d08a0c1d9a6e861df472f156"
+      },
+      "cdaudio.dll": {
+        "bytes": 86016,
+        "sha256": "bd2d7f17c3e622c8d2bd62b2ebd0773ee2427efea3eda001f5e0a04c82518814"
+      },
+      "default.cfg": {
+        "bytes": 5939,
+        "sha256": "1d24c457ef68f268667281e9892a24b814a6670e40c084cd37bd5270c0fde49b"
+      },
+      "mssfast.m3d": {
+        "bytes": 59392,
+        "sha256": "7e853d97248d9f70dedfe82220264534e1d1c125679bde1e6735eb1cf3ba91ea"
+      },
+      "server_bighead.cfg": {
+        "bytes": 654,
+        "sha256": "19219128c53c1fb89de89ead8951336acf4bcfc84e2c6a9a7d68fb8a7a0cf121"
+      },
+      "readme.txt": {
+        "bytes": 21197,
+        "sha256": "9367bde498afe433108a7baf8aa123dd6e4a96c0b4c38181c1222d59709080d8"
+      }
+    }
+  }
+}
