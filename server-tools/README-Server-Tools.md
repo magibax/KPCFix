@@ -4,15 +4,18 @@ Tools for hosting *KISS: Psycho Circus* dedicated servers, for game version **1.
 
 Server Tools has its own version number, separate from the KPCFix client. "1.13" always means the game patch.
 
+> **Co-op branch build.** This build adds the experimental co-op campaign. See [coop/README.md](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/README.md) for hosting and commands, and [coop/STATUS.md](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/STATUS.md) for what has been tested. It is not a release.
+
 ## Features
 
 - **Launcher.** Pick any of the 59 maps, set the server rules and start the server from one window.
 - **Cheats, per player.** Players can use noclip and invulnerability with the game's existing developer keys, but only while the host allows cheats.
 - **Live cheat switch.** In the server console, `kpc_cheats 1` allows cheats and `kpc_cheats 0` turns them off, including any cheats players have on. `kpc_cheats` shows the current setting. Everyone sees **Cheats enabled** or **Cheats disabled**, and a player's toggle is announced in chat.
 - **Chat in the console.** Player chat is shown in the server console without breaking what you are typing.
-- **Real-time server timing.** The original server runs game time about 25% too fast, in steps too short for some enemies. For example, the Ballbuster in R2M2A gets stuck in the garage door. Server Tools runs the server in real time, in steps of at least 16 ms (`ServerFrameMs`).
+- **Co-op campaign** (experimental): up to three players through all 48 campaign worlds, with a lobby, shared progress and synchronised loading. Choose **Co-op campaign** in the launcher.
+- **Real-time server timing in co-op.** The original server runs game time about 25% too fast, in steps too short for some enemies (the R2M2A Ballbuster gets stuck in the garage door). In a co-op session the server runs in real time (`[Coop] CoopServerFrameMs`). On this branch, deathmatch keeps the original timing.
 
-**US server note:** the timing fix needs the Europe/UK, German or Italian `server.dll`. A server using the US `server.dll` keeps the original timing. Everything else works on the US build.
+**US server note:** the co-op timing fixes need the Europe/UK, German or Italian `server.dll`. Everything else works on the US build.
 
 ## Install
 
@@ -31,6 +34,8 @@ Setup refuses to continue if any of these is true:
 - `server.dll` is not the original and setup cannot restore it.
 
 It never replaces a file it doesn't recognise.
+
+This build still runs if it is installed the old way, as `server.dll` with the engine renamed `server.original.dll` (for example under Wine without the override below). Setup always installs it as `winmm.dll`.
 
 **Wine:** Wine uses its own built-in `winmm.dll` unless told otherwise. Run the server with `WINEDLLOVERRIDES="winmm=n,b"`.
 
@@ -54,16 +59,19 @@ Setup creates `KPCServerTools.ini` the first time:
 [ServerTools]
 Enabled=1
 AllowCheats=0
-ServerFrameMs=16
+
+[Coop]
+; ...
 ```
 
 | Setting | Meaning |
 |---|---|
 | `Enabled` | `0` runs the original server with no Server Tools features. Restart the server after changing it. |
 | `AllowCheats` | Cheat permission at server start. The launcher sets it from its checkbox. |
-| `ServerFrameMs` | Shortest server step in milliseconds, 1–50. `0` keeps the original timing. A missing key means 16. |
 
-Startup messages and errors are written to `KPCServerTools.log`.
+The `[Coop]` settings are described in the file and in [coop/CONFIGURATION.md](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/CONFIGURATION.md). The launcher writes the ones a co-op start needs.
+
+Startup messages, errors and the co-op session log are written to `KPCServerTools.log`. Include it with every co-op bug report.
 
 ## Uninstall
 
@@ -73,7 +81,7 @@ You can then delete the other Server Tools files:
 - `KPCServerTools.dll`, `KPCServerTools.ini`, `KPCServerTools-default.ini`, `KPCServerTools.log`;
 - the `*.ps1` and `*.cmd` files from this ZIP;
 - `SERVER_TOOLS_*.json`, `SHA256SUMS-Server-Tools`, `legacy-object-patches.json`, `maps.json`, `server-template.cfg`;
-- `kpc-gui-*`, `README-Server-Tools.md` and `LICENSE-Server-Tools.txt`.
+- `kpc-gui-*`, `kpc-coop-*`, `README-Server-Tools.md` and `LICENSE-Server-Tools.txt`.
 
 ## Alongside the KPCFix client
 

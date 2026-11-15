@@ -26,8 +26,16 @@ static ModeFn set_mode;
 static OriginFn set_origin;
 static int initialized;
 
+static int halftone_stretch(void *dest,const Rect *dst,void *src,const Rect *r);
 static int movie_stretch(void *dest,const Rect *dst,void *src,const Rect *r){
-    if(!g_movie_filter || !r || r->right<=r->left || r->bottom<=r->top || dest==src)return 0;
+    if(!g_movie_filter)return 0;
+    return halftone_stretch(dest,dst,src,r);
+}
+/* Loading pictures (loading.c): the same GDI halftone between two DirectDraw
+ * surfaces; 1 = done. */
+U32 CDECL kpc_halftone(void *dest,const Rect *dst,void *src,const Rect *r){return (U32)halftone_stretch(dest,dst,src,r);}
+static int halftone_stretch(void *dest,const Rect *dst,void *src,const Rect *r){
+    if(!dest || !src || !dst || !r || r->right<=r->left || r->bottom<=r->top || dest==src)return 0;
     if(!initialized){
         HMODULE gdi=GetModuleHandleW(L"gdi32.dll");
         if(gdi){

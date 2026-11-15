@@ -1,0 +1,258 @@
+name: Co-op build and checks
+
+on:
+  push:
+    branches:
+      - 'coop/**'
+  pull_request:
+    branches:
+      - 'coop/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify tracked co-op package and newline normalization
+        shell: bash
+        run: |
+          git add --renormalize .
+          if ! git diff --cached --quiet; then
+            git diff --cached --name-only
+            echo 'ERROR: experimental tree is not normalized'
+            exit 1
+          fi
+          for name in sha256.c sha256.h winmini.h; do
+            cmp "source/src/$name" "server-tools/server-tools-source/src/$name"
+          done
+          python3 tools/package_release.py --component server --output-dir "${RUNNER_TEMP}/coop-package-check"
+      - name: Rebuild co-op DLL in the release-pinned server toolchain
+        shell: bash
+        run: |
+          cp -a server-tools "${RUNNER_TEMP}/server-tools"
+          docker run --rm \
+            -v "${RUNNER_TEMP}/server-tools:/work/server-tools" \
+            -w /work/server-tools \
+            debian:trixie-slim sh -euc '
+              apt-get update -qq
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gcc binutils python3 ca-certificates
+              test "$(gcc -dumpfullversion)" = "14.2.0"
+              ld --version | head -1 | grep -F "2.44"
+              python3 server-tools-source/build_dll.py
+            '
+          cmp "${RUNNER_TEMP}/server-tools/KPCServerTools.dll" server-tools/KPCServerTools.dll
+          cmp "${RUNNER_TEMP}/server-tools/SERVER_TOOLS_BUILD.json" server-tools/SERVER_TOOLS_BUILD.json
+          echo "PASS: experimental DLL and manifest reproduce tracked bytes"
+      - name: Ensure separate experimental release channel
+        shell: bash
+        run: |
+          test "${GITHUB_REF}" != refs/tags/server-tools-v1.0.0-r3
+          python3 - <<'PY'
+          from pathlib import Path
+          binary=Path('server-tools/KPCServerTools.dll').read_bytes()
+          assert b'[KPCFix Co-op]' in binary, 'Not an experimental co-op build'
+          print('PASS: experimental binary kept on feature workflow')
+          PY
+      - name: Run asset-free co-op tests
+        run: python3 -m unittest discover -s coop/tools -p 'test_*.py' -v
+      - name: Run native 3-player spawn slot unit tests
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_spawn.c -o /tmp/kpc-coop-spawn-test
+          /tmp/kpc-coop-spawn-test
+      - name: Verify co-op lobby/session state machine (kpc-coop/1)
+        shell: bash
+        run: |
+          for bits in 64 32; do
+            flag=""; if [ "$bits" = 32 ]; then sudo apt-get update -qq && sudo apt-get install -y -qq gcc-multilib >/dev/null; flag=-m32; fi
+            gcc $flag -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src               server-tools/server-tools-source/tests/test_coop_session.c -o /tmp/kpc-coop-session-test-$bits
+            /tmp/kpc-coop-session-test-$bits
+            gcc $flag -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src               server-tools/server-tools-source/tests/test_coop_script_clock.c -o /tmp/kpc-coop-script-clock-test-$bits
+            /tmp/kpc-coop-script-clock-test-$bits
+            gcc $flag -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src               server-tools/server-tools-source/tests/test_coop_scoreboard.c -o /tmp/kpc-coop-scoreboard-test-$bits
+            /tmp/kpc-coop-scoreboard-test-$bits
+            gcc $flag -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src               server-tools/server-tools-source/tests/test_coop_campaign.c -o /tmp/kpc-coop-campaign-test-$bits
+            /tmp/kpc-coop-campaign-test-$bits
+          done
+      - name: Verify fail-closed general allocator policy
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_allocator.c -o /tmp/kpc-coop-allocator-test
+          /tmp/kpc-coop-allocator-test
+      - name: Fail-closed player-volume evidence gate unit tests
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_volume_probe.c -o /tmp/kpc-volume-gate-test
+          /tmp/kpc-volume-gate-test
+      - name: Verify isolated 3D AABB broadphase policy and interior-obstacle regression
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_aabb_overlap.c -o /tmp/kpc-coop-aabb-test
+          /tmp/kpc-coop-aabb-test
+      - name: Verify bounded conservative BSP AABB leaf traversal
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_bsp_box.c -o /tmp/kpc-coop-bsp-test
+          /tmp/kpc-coop-bsp-test
+      - name: Verify bounded registry and reciprocal back-reference diagnostics
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_model_registry.c -o /tmp/kpc-model-registry-test
+          /tmp/kpc-model-registry-test
+      - name: Verify guarded raw WorldModel object-state classification
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_model_state.c -o /tmp/kpc-model-state-test
+          /tmp/kpc-model-state-test
+      - name: Verify legacy LithTech IntersectSegment ABI structs
+        shell: bash
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -I server-tools/server-tools-source/src \
+            server-tools/server-tools-source/tests/test_coop_intersect_abi.c -o /tmp/kpc-intersect-abi-test
+          /tmp/kpc-intersect-abi-test
+      - name: Validate build integrity
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib
+          root=pathlib.Path('server-tools')
+          binary=root/'KPCServerTools.dll'
+          manifest=json.loads((root/'SERVER_TOOLS_BUILD.json').read_text())
+          assert binary.read_bytes()[:2]==b'MZ', 'Expected Windows PE DLL'
+          assert len(binary.read_bytes())==manifest['proxy_bytes']
+          assert hashlib.sha256(binary.read_bytes()).hexdigest()==manifest['proxy_sha256']
+          assert 'bac7696bc79f10b637134b7bbffea1ead01e67c8207452f5c3f339a8b5a353d4' in manifest['previous_proxy_hashes']
+          assert '9b6bd69e894925e6b31f1ed32b6ff82331af104e2c20fbb6aeb43dc4bef5be9a' in manifest['previous_proxy_hashes']
+          assert '66653630a0b717a70c3dd51a3b97efd75bd9b20495bd0b4d089b914b60942a37' in manifest['previous_proxy_hashes']
+          assert 'c2486afa934b7216486891dc640929018ec02cdd4341734c9adc7889bff94c3b' in manifest['previous_proxy_hashes']
+          assert '354a75a1d56968a69ab47539a715f805c210fdcddab02ec0aa0c2fa93ceacd2b' in manifest['previous_proxy_hashes']
+          assert '13ca1d0a7c17986dcbdc3f360bf82f92084584864824b623854fb57b1f10364b' in manifest['previous_proxy_hashes']
+          print('PASS:', binary.stat().st_size, 'bytes;', manifest['proxy_sha256'])
+          PY
+          objdump -p server-tools/KPCServerTools.dll | grep -A12 'Export Table'
+      - name: Verify compiled co-op diagnostic markers are present
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          dll=Path('server-tools/KPCServerTools.dll').read_bytes()
+          assert b'build=coop-session-v2 proto=kpc-coop/1 sha256=' in dll
+          assert b'effective CoopSession=1' in dll
+          assert b'session armed kpc-coop/1 route=R1M2B>R1M2C>R1M3A' in dll
+          assert 'CoopSession'.encode('utf-16le') in dll
+          assert b'telefrag=skipped' in dll
+          assert b'effective CoopIntermission=0 (world change without intermission scoreboard)' in dll
+          assert b'native pending NextLevel set (no intermission scoreboard)' in dll
+          assert b'effective TraceMusic=1' in dll and b'music-world' in dll
+          assert b'effective TraceTiming=1' in dll
+          assert b'effective CoopMusic=1 (per-player world music start after spawn)' in dll
+          assert b'effective CoopIntro=1 (original starting_cinematic after all players are in; verified worlds, or every world with CoopIntroAll)' in dll
+          assert b'CoopTestStartWorld ignored: not a route world' in dll and b'intro-start' in dll
+          assert b'effective CoopScriptClock=1 (script clock limited to wall-clock time)' in dll
+          assert b'clock-calibration' in dll and b'intro-event' in dll and b'intro-clock' in dll
+          assert 'CoopScriptClock'.encode('utf-16le') in dll
+          assert 'CoopMusic'.encode('utf-16le') in dll and b'client=' in dll
+          assert b'effective TraceModelRegistry=1' in dll
+          assert b'effective TraceModelState=1' in dll
+          assert b'[KPCFix Co-op] model flags 2000=' in dll
+          assert b'[KPCFix Co-op] model types type2=' in dll
+          assert b'[KPCFix Co-op] model delta object=' in dll
+          assert b'[KPCFix Co-op] model type bucket=' in dll
+          assert b'[KPCFix Co-op] type2 masks any12000=' in dll
+          assert b'[KPCFix Co-op] model adjacent valid=' in dll
+          assert b'model registry=DISABLED' in dll
+          assert 'TraceModelRegistry'.encode('utf-16le') in dll
+          print('PASS: registry diagnostic build, effective INI state and fallback present')
+          PY
+      - name: Verify build metadata and source provenance
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          b=Path('server-tools/KPCServerTools.dll').read_bytes()
+          m=json.loads(Path('server-tools/SERVER_TOOLS_BUILD.json').read_text())
+          assert hashlib.sha256(b).hexdigest()==m['proxy_sha256']
+          assert len(b)==m['proxy_bytes']
+          print('PASS: tracked experimental artifact SHA256='+m['proxy_sha256'])
+          PY
+      - name: Stage experimental co-op MVP package (full Server Tools tree)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          python3 tools/package_release.py --component server --output-dir "${RUNNER_TEMP}/coop-mvp"
+          short="${GITHUB_SHA::7}"
+          name="KPCFix-Server-Tools-COOP-MVP-EXPERIMENTAL-${short}.zip"
+          cp "${RUNNER_TEMP}"/coop-mvp/KPCFix-Server-Tools-*.zip "dist/${name}"
+          (cd dist && sha256sum "${name}" > "${name}.sha256")
+          cp server-tools/SERVER_TOOLS_BUILD.json dist/
+          sha256sum server-tools/KPCServerTools.dll | tee dist/KPCServerTools.dll.sha256
+          cp coop/README.md dist/TEST-INSTRUCTIONS.md
+          cp coop/STATUS.md dist/STATUS.md
+          cp coop/tools/Invoke-CoopServerSmoke.ps1 dist/
+          cat > dist/README-FIRST.txt <<'TXT'
+          EXPERIMENTAL KPCFIX CO-OP MVP (kpc-coop/1). NOT A STABLE RELEASE.
+          Feature-branch build of KPCFix Server Tools with a chat lobby and the
+          co-op campaign (host: !campaign in chat). Playtest status: STATUS.md.
+          Follow TEST-INSTRUCTIONS.md and report the logs.
+          Back up server.dll, server.original.dll, winmm.dll, KPCServerTools.dll,
+          SERVER_TOOLS_BUILD.json and KPCServerTools.ini first. Extract the ZIP
+          into the game folder, run Setup-KPCServerTools.cmd, then start
+          KPC-Server-Launcher.cmd and choose Co-op campaign.
+          Verify: Get-FileHash .\KPCServerTools.dll equals proxy_sha256 in
+          SERVER_TOOLS_BUILD.json and the "build=coop-session-v2 ... sha256="
+          line at the top of KPCServerTools.log.
+          AllowCheats=0 must stay under [ServerTools].
+          No original proprietary game binaries, maps or assets are included.
+          TXT
+      - name: Verify packaged INI example meets launcher contract
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          instruction=(pathlib.Path('dist')/'README-FIRST.txt').read_text()+(pathlib.Path('dist')/'TEST-INSTRUCTIONS.md').read_text()
+          default=pathlib.Path('server-tools/KPCServerTools-default.ini').read_text()
+          readme=pathlib.Path('server-tools/README-Server-Tools.md').read_text()
+          assert 'AllowCheats=0' in default, 'Default INI must include launcher-required AllowCheats'
+          assert 'AllowCheats=0' in instruction, 'Experimental test instructions omitted AllowCheats'
+          assert 'AllowCheats=0' in readme, 'Documentation omitted AllowCheats'
+          print('PASS: launcher-required AllowCheats present in defaults, docs and test package')
+          PY
+      - name: Upload local-test files
+        uses: actions/upload-artifact@v4
+        with:
+          name: KPCFix-Coop-MVP-Session
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  launcher-ini-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse every tracked PowerShell script (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $failed = 0
+          foreach ($file in @(git ls-files '*.ps1')) {
+            $tokens = $null; $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors)
+            foreach ($e in $errors) { Write-Host "${file}:$($e.Extent.StartLineNumber): $($e.Message)"; $failed++ }
+          }
+          if ($failed) { throw "$failed PowerShell parse error(s)" }
+          Write-Host 'PASS: all tracked PowerShell scripts parse'
+      - name: Validate launcher INI compatibility without game files
+        shell: pwsh
+        run: ./tools/Test-KPCServerIni.ps1

@@ -1,7 +1,7 @@
 """Optional minimum local-server step (LocalServerMinStepMs): run the patched
 client.exe 0x664b2 slot with a synthetic server manager and record whether
 the frame is simulated (0x664d5, elapsed in st(0)) or skipped (0x665b2, with
-its elapsed time carried into [esi+0x218]). Default 16; 0 keeps clock_v2."""
+its elapsed time carried into [esi+0x218]). Default 0 keeps clock_v2."""
 import struct
 import sys
 import test_runtime
@@ -53,7 +53,7 @@ def frame(rig, elapsed, last=100.0):
 
 rig = Rig(settings={'LocalServerMinStepMs': 10}); rig.factory(); assert not rig.messages, rig.messages
 assert bytes(rig.u.mem_read(SLOT, 1)) == b'\xe9' and bytes(rig.u.mem_read(SLOT + 5, 30)) == b'\x90' * 30
-assert b'LocalServerMinStepMs=0x0000000a: minimum local-server step' in bytes(rig.logs)
+assert b'LocalServerMinStepMs=0x0000000a: EXPERIMENTAL minimum local-server step' in bytes(rig.logs)
 assert frame(rig, 0.012) == ('simulate', None)
 assert frame(rig, 0.010)[0] == 'simulate'                         # exactly the minimum runs
 kind, last = frame(rig, 0.006, last=100.0)

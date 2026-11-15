@@ -1,34 +1,44 @@
 <#
 .SYNOPSIS
- Native Windows smoke test of Server Tools on the real dedicated.exe, without clients.
+ Native Windows smoke test of the experimental co-op Server Tools DLL without clients.
 
 .DESCRIPTION
  Run this ONLY in a disposable copy of an installed game folder where
- Setup-KPCServerTools.cmd has already been run (Server Tools as winmm.dll).
- It drives the real launcher worker (Start-KPC-Selected-Server.ps1), so the
- real version check and INI rewrite run, starts PM01, types "quit" into the
- server's own console and checks KPCServerTools.log. Results go to a JSON
- report. It never writes game binaries; it writes kpc-gui-server.cfg and
- kpc-gui-maps.txt (as the launcher does), and the worker sets AllowCheats.
- PassThrough restores KPCServerTools.ini afterwards.
+ Setup-KPCServerTools.cmd has already been run. It drives the real launcher
+ worker (Start-KPC-Selected-Server.ps1), so the real version checks and INI
+ rewrite run, then types console commands into the dedicated server's own
+ console (nextlevel, quit) and checks KPCServerTools.log for the expected
+ markers. Results go to a JSON report. The script never writes game binaries.
+ It writes kpc-gui-server.cfg and kpc-gui-maps.txt (as the launcher does), and
+ the worker updates KPCServerTools.ini. PassThrough restores the INI afterwards.
 
- The server opens the game port from server-template.cfg; -nogamespy keeps it
- off the GameSpy master list.
+ The dedicated server opens its normal game port (server-template.cfg). It is
+ started with -nogamespy, so it is not announced to the GameSpy master list.
 
  It must run in its own console window (the worker and dedicated.exe share it):
-   Start-Process powershell.exe -Wait -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File tools\Invoke-ServerSmoke.ps1 -GameDir C:\KPCTest\smoke-master\Psycho -Mode Normal -Report C:\KPCTest\normal.json'
+   Start-Process powershell.exe -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File Invoke-CoopServerSmoke.ps1 -GameDir C:\KPCTest\Psycho -Mode Coop -Report C:\KPCTest\coop.json'
 
  Modes:
-  Normal      hooks installed on the stock object.lto, loaded as winmm.dll,
-              server frame installed (Europe-family server.dll) or reported
-              as not supported (USA server.dll).
-  PassThrough [ServerTools] Enabled=0: the original engine runs unhooked.
+  Coop        co-op MVP start on R1M2B, then console nextlevel twice
+              (R1M2C, then R1M3A), then quit.
+  Normal      PM01 deathmatch without the co-op box: CoopSession must be 0.
+  PassThrough [ServerTools] Enabled=0: the proxy must forward to the original.
+
+ Hold (Coop only, for client tests): with -CommandFile, the scripted
+ nextlevels are skipped. The server keeps running and every new line appended
+ to the command file is typed into the server console (for example
+ "say hello", "nextlevel", "list_ids"). "quit" ends the run; -HoldSeconds is
+ the upper bound. -MinPlayers temporarily sets [Coop] CoopMinPlayers (1-3) so
+ one client can drive the whole route; the INI is restored afterwards.
 #>
 param(
  [Parameter(Mandatory=$true)][string]$GameDir,
- [ValidateSet('Normal','PassThrough')][string]$Mode='Normal',
+ [ValidateSet('Coop','Normal','PassThrough')][string]$Mode='Coop',
  [Parameter(Mandatory=$true)][string]$Report,
- [int]$TimeoutSeconds=90
+ [int]$TimeoutSeconds=90,
+ [string]$CommandFile,
+ [int]$HoldSeconds=900,
+ [ValidateRange(0,3)][int]$MinPlayers=0
 )
 $ErrorActionPreference='Stop'
 $GameDir=(Resolve-Path -LiteralPath $GameDir).Path
@@ -129,10 +139,28 @@ $checks=[ordered]@{}
 function Check([string]$name,[bool]$ok){$script:checks[$name]=if($ok){'PASS'}else{'FAIL'}}
 
 $template=Get-Content -LiteralPath (Join-Path $GameDir 'server-template.cfg') -Raw
-$template=[regex]::Replace($template,'(?m)^"hostname".*$','"hostname" "KPCFix smoke test"')
-$map='worlds\deathmatch\PM01'
+$template=[regex]::Replace($template,'(?m)^"hostname".*$','"hostname" "KPCFix co-op smoke test"')
+if($Mode -eq 'Coop'){
+ $map='worlds\realm1\R1M2B'
+ foreach($pair in @(@('maxclients','3'),@('fraglimit','0'),@('timelimit','0'),@('keepitems','1'))){
+  $template=[regex]::Replace($template,'(?m)^"'+$pair[0]+'".*$',('"'+$pair[0]+'" "'+$pair[1]+'"'))
+ }
+ $maps=@('worlds\realm1\R1M2B','worlds\realm1\R1M2C','worlds\realm1\R1M3A')
+}else{
+ $map='worlds\deathmatch\PM01'
+ $maps=@($map)
+}
 Set-Content -LiteralPath (Join-Path $GameDir 'kpc-gui-server.cfg') $template -Encoding ASCII
-Set-Content -LiteralPath (Join-Path $GameDir 'kpc-gui-maps.txt') @($map) -Encoding ASCII
+Set-Content -LiteralPath (Join-Path $GameDir 'kpc-gui-maps.txt') $maps -Encoding ASCII
+if($CommandFile -and $Mode -ne 'Coop'){throw '-CommandFile is only supported with -Mode Coop.'}
+if($MinPlayers -gt 0){
+ $text=[IO.File]::ReadAllText($ini)
+ if($text -notmatch '(?im)^[ \t]*\[Coop\][ \t]*\r?\n'){throw 'KPCServerTools.ini has no [Coop] section.'}
+ $text=[regex]::Replace($text,'(?im)^[ \t]*CoopMinPlayers[ \t]*=[^\r\n]*(\r?\n)?','')
+ # Insert directly under [Coop], reusing that line's own newline sequence.
+ $text=[regex]::Replace($text,'(?im)^([ \t]*\[Coop\][ \t]*)(\r?\n)',('$1$2CoopMinPlayers='+$MinPlayers+'$2'))
+ [IO.File]::WriteAllText($ini,$text)
+}
 if($Mode -eq 'PassThrough'){
  $text=[IO.File]::ReadAllText($ini)
  if($text -notmatch '(?im)^[ \t]*Enabled[ \t]*='){throw 'KPCServerTools.ini has no Enabled key.'}
@@ -142,10 +170,11 @@ if($Mode -eq 'PassThrough'){
 $hash=(Get-FileHash -LiteralPath (Join-Path $GameDir 'KPCServerTools.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
 $serverHash=(Get-FileHash -LiteralPath (Join-Path $GameDir 'server.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
 $loaderHash=(Get-FileHash -LiteralPath (Join-Path $GameDir 'winmm.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
-# Europe/Germany/Italy server.dll; the server frame hook supports only this one.
-$europeServer=$serverHash -eq '83b7bce809948b6f70ed3f35a77a771b6087f1104d90d06a62ac3dc0d4bd37d5'
 # Windows PowerShell 5.1 does not quote array arguments; quote paths explicitly.
 $workerArgs='-NoProfile -ExecutionPolicy Bypass -File "'+(Join-Path $GameDir 'Start-KPC-Selected-Server.ps1')+'" -Map "'+$map+'" -Cheats Disabled'
+# The Coop checks follow the fixed test route (nextlevel R1M2B > R1M2C > R1M3A), so ask the
+# worker for that mode; a plain -Coop now starts the campaign (CoopCampaign=1).
+if($Mode -eq 'Coop'){$workerArgs+=' -Coop -CoopMode Route'}
 $events=New-Object System.Collections.Generic.List[string]
 $screen=''
 $exitCode=$null
@@ -157,7 +186,40 @@ try{
  if($Mode -ne 'PassThrough'){
   Check 'object hooks installed on stock object.lto' (Wait-Log 'Runtime object hooks installed; file unchanged' $TimeoutSeconds)
  }
- Start-Sleep -Seconds 11
+ if($Mode -eq 'Coop'){
+  Check 'session armed' (Wait-Log 'armed session armed kpc-coop/1 route=R1M2B>R1M2C>R1M3A' 10)
+  Start-Sleep -Seconds 8   # let the first world finish loading before nextlevel
+ }
+ if($Mode -eq 'Coop' -and $CommandFile){
+  if(-not (Test-Path -LiteralPath $CommandFile)){New-Item -ItemType File -Path $CommandFile | Out-Null}
+  $done=@(Get-Content -LiteralPath $CommandFile).Count
+  $events.Add("holding; forwarding new lines of $CommandFile")
+  $deadline=(Get-Date).AddSeconds($HoldSeconds)
+  while(-not $worker.HasExited -and (Get-Date) -lt $deadline){
+   $all=@(Get-Content -LiteralPath $CommandFile)
+   for(;$done -lt $all.Count;$done++){
+    $command=$all[$done].Trim()
+    if(-not $command -or $command -match '[\x00-\x1f]'){continue}
+    $events.Add("$((Get-Date).ToString('HH:mm:ss')) typed $command")
+    [KPCSmokeConsole]::Submit("$command`r")
+   }
+   Start-Sleep -Milliseconds 500
+  }
+ }elseif($Mode -eq 'Coop'){
+  # Native "start <map>" prepends that map to the maplist file, so the list is
+  # R1M2B, R1M2B, R1M2C, R1M3A: the first nextlevel reloads R1M2B.
+  $expect=@('R1M2B','R1M2C','R1M3A')
+  for($i=0;$i -lt $expect.Count;$i++){
+   $epoch=$i+1
+   [KPCSmokeConsole]::Submit("nextlevel`r"); $events.Add("typed nextlevel (expect $($expect[$i]))")
+   Check "nextlevel $epoch entered hooked NextLevel (epoch $epoch)" (Wait-Log ("e=$epoch seq=\d+ LOADING world-loading native NextLevel") $TimeoutSeconds)
+   Check "nextlevel $epoch loaded $($expect[$i]); not started, so phase stays LOBBY" (Wait-Log ("e=$epoch seq=\d+ LOBBY world-loaded "+'worlds\\realm1\\'+$expect[$i]+'$') $TimeoutSeconds)
+   Start-Sleep -Seconds 5
+  }
+ }else{
+  Start-Sleep -Seconds 8
+ }
+ Start-Sleep -Seconds 3
  $screen=[KPCSmokeConsole]::Screen()
  if(-not $worker.HasExited){[KPCSmokeConsole]::Submit("quit`r");$events.Add('typed quit')}
  if(-not $worker.WaitForExit(30000)){
@@ -167,30 +229,38 @@ try{
  }
  $worker.Refresh(); if($worker.HasExited){$exitCode=$worker.ExitCode}
 }finally{
- if($Mode -eq 'PassThrough'){[IO.File]::WriteAllBytes($ini,$iniBytes);$events.Add('restored KPCServerTools.ini')}
+ if($Mode -eq 'PassThrough' -or $MinPlayers -gt 0){[IO.File]::WriteAllBytes($ini,$iniBytes);$events.Add('restored KPCServerTools.ini')}
 }
 
 $lines=@(Read-NewLog)
-Check 'winmm.dll is the installed Server Tools' ($hash -eq $loaderHash)
-Check 'server.dll is not a Server Tools build' ($hash -ne $serverHash)
-Check 'loaded as winmm.dll' (@($lines | Where-Object { $_ -match 'Loaded as winmm\.dll; original server\.dll unchanged' }).Count -ge 1)
+$buildLine=@($lines | Where-Object { $_ -match 'build=coop-session-v[0-9]+ ' }) | Select-Object -First 1
 if($Mode -eq 'PassThrough'){
- Check 'no hook lines in pass-through' (-not @($lines | Where-Object { $_ -match 'hooks installed|server frame installed' }).Count)
-}elseif($europeServer){
- Check 'server frame installed' (@($lines | Where-Object { $_ -match 'Minimum server frame installed, ServerFrameMs=' }).Count -ge 1)
+ Check 'no co-op or hook lines in pass-through' (-not @($lines | Where-Object { $_ -match 'Co-op\]|hooks installed' }).Count)
 }else{
- Check 'server frame reported as not supported (USA server.dll)' (@($lines | Where-Object { $_ -match 'ServerFrameMs is not supported for this server\.dll' }).Count -ge 1)
+ Check 'winmm.dll is the installed Server Tools' ($hash -eq $loaderHash)
+ Check 'server.dll is not a Server Tools build' ($hash -ne $serverHash)
+ Check 'loaded as winmm.dll' (@($lines | Where-Object { $_ -match 'Loaded as winmm\.dll; original server\.dll unchanged' }).Count -ge 1)
+ if($Mode -eq 'Coop'){
+  Check 'build line names the loaded DLL hash' ([bool]$buildLine -and $buildLine.EndsWith("sha256=$hash"))
+  Check 'effective CoopSession=1' ([bool]@($lines | Where-Object { $_ -eq '[KPCFix Co-op] effective CoopSession=1' }).Count)
+  if(-not $CommandFile){Check 'no player events on an empty server' (-not @($lines | Where-Object { $_ -match '^\[KPCFix Co-op\] g=\d+ e=\d+ seq=\d+ \S+ (spawn|say|change|end-level|exit|exit-seen|presence|change-failed) ' }).Count)}
+  Check 'session world names match native Loaded world output' (@($lines | Where-Object { $_ -match 'world-loaded \(unknown\)' }).Count -eq 0)
+  Check 'object module loaded once in this server run' (@($lines | Where-Object { $_ -match 'Runtime object hooks installed' }).Count -eq 1)
+ }else{
+  Check 'co-op disabled for a normal start' (-not @($lines | Where-Object { $_ -match 'effective CoopSession=1|session armed' }).Count)
+ }
 }
 $failed=@($checks.Values | Where-Object { $_ -ne 'PASS' }).Count
 $result=[ordered]@{
  mode=$Mode; map=$map; date=(Get-Date).ToString('o'); os=[Environment]::OSVersion.VersionString
  result=$(if($failed){'FAIL'}else{'PASS'}); checks=$checks; events=$events; worker_exit=$exitCode
- kpcservertools_dll_sha256=$hash; server_dll_sha256=$serverHash; winmm_dll_sha256=$loaderHash
+ kpcservertools_dll_sha256=$hash; server_dll_sha256=$serverHash
+ winmm_dll_sha256=$loaderHash
  object_lto_sha256=(Get-FileHash -LiteralPath (Join-Path $GameDir 'object.lto') -Algorithm SHA256).Hash.ToLowerInvariant()
  dedicated_exe_sha256=(Get-FileHash -LiteralPath (Join-Path $GameDir 'dedicated.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
  log=$lines; console=$screen
 }
 $result | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $Report -Encoding UTF8
-Write-Host "[KPCFix Server Tools smoke] $Mode $($result.result); report: $Report"
+Write-Host "[KPCFix Co-op smoke] $Mode $($result.result); report: $Report"
 if($failed){exit 1}
 exit 0

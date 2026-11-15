@@ -35,32 +35,66 @@ init_hook:
  lea edi,[ebx+0x16e0]
  lea edx,[ebx+0x1690]
 init_register:
- # Find first: adding an existing list node would create a cycle.
+ # ECX=command table, EDX=add(name, fn), EDI=find(name), both thiscall.
  push ecx
  push edx
- lea eax,[ebp+command_name]
- push eax
- call edi
- pop edx
- pop ecx
- lea edi,[ebp+host_command]
- test eax,eax
- jz init_add
- mov [eax],edi
- jmp init_registered
-init_add:
  push edi
  lea eax,[ebp+command_name]
- push eax
- call edx
+ lea esi,[ebp+host_command]
+ call register_one
  test eax,eax
- jz init_done
-init_registered:
+ jz init_level
  mov dword ptr [ebp+STATE+4],1
+init_level:
+ # Co-op: "changelevel <world>" forwards to the C callback at STATE+8.
+ lea eax,[ebp+level_name]
+ lea esi,[ebp+level_command]
+ call register_one
+ add esp,12
 init_done:
  mov eax,[ebp+0x16de60]
  mov [esp+28],eax
  popad
+ popfd
+ ret
+# EAX=name, ESI=callback; [esp+4]=find, [esp+8]=add, [esp+12]=table.
+# Find first: adding an existing list node would create a cycle (an existing
+# node gets the callback). Returns EAX non-zero when registered.
+register_one:
+ push ebx
+ mov ebx,eax
+ mov ecx,[esp+16]
+ push ebx
+ call dword ptr [esp+12]
+ test eax,eax
+ jz 92f
+ mov [eax],esi
+ jmp 93f
+92: mov ecx,[esp+16]
+ push esi
+ push ebx
+ call dword ptr [esp+20]
+93: pop ebx
+ ret
+# Dedicated console "changelevel": argument block as kpc_cheats (count, words).
+level_command:
+ pushfd
+ pushad
+ call 94f
+94: pop ebp
+ sub ebp,offset 94b
+ mov eax,[esp+12]
+ mov esi,[eax+8]
+ mov eax,[ebp+STATE+8]
+ test eax,eax
+ jz 95f
+ push esi
+ call eax
+ add esp,4
+ jmp 96f
+95: lea edx,[ebp+level_off]
+ call print_cstring
+96: popad
  popfd
  ret
 # Produce the flags consumed by the original JNE multiplayer rejection.
@@ -259,6 +293,8 @@ command_name: .asciz "kpc_cheats"
 policy_on: .asciz "[KPCFix Server Tools] Cheats enabled"
 policy_off: .asciz "[KPCFix Server Tools] Cheats disabled"
 policy_usage: .asciz "[KPCFix Server Tools] Usage: kpc_cheats 0 or kpc_cheats 1; kpc_cheats shows status"
+level_name: .asciz "changelevel"
+level_off: .asciz "[KPCFix Server Tools] changelevel needs the co-op campaign ([Coop] CoopSession=1, CoopCampaign=1)"
 initial_mode: .byte 1
 
 # All entry hooks preserve the caller's flags and registers.

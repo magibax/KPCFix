@@ -4,7 +4,11 @@
 #include "ui.h"
 
 #include "shell_layout.h"
+#include "loading.h"
+#include "netwatch.h"
+#include "focus.h"
 #include "console.h"
+#include "camera.h"
 #define KPC_VERSION "KPCFix 1.13 for Windows"
 #define KPC_CLOCK_DEFAULT 1
 const ShellLayout *g_shell_layout;
@@ -40,7 +44,7 @@ U32 g_input_late_events,g_input_zero_intervals,g_input_first_late_delta;
 static int late_event_reported;
 void *g_original_ftol;
 double g_carries[8];
-/* Minimum local-server step (minstep_hook.S); 0 = Timing V3 clock_v2 only. */
+/* Optional minimum local-server step (minstep_hook.S); 0 = Timing V3 clock_v2. */
 float g_min_step_seconds;
 static U32 min_step_ms;
 extern void local_server_min_step(void);
@@ -101,6 +105,7 @@ static void log_text(const char *text){
     DWORD done;
     if(log_handle!=INVALID_HANDLE_VALUE)WriteFile(log_handle,text,text_length(text),&done,NULL);
 }
+static void kpc_log_text(const char *text){log_text(text);}
 static void log_hex(U32 value){
     char out[11];U32 i;static const char digits[]="0123456789abcdef";
     out[0]='0';out[1]='x';for(i=0;i<8;i++)out[i+2]=digits[(value>>(28-4*i))&15];out[10]=0;log_text(out);
@@ -310,12 +315,13 @@ static int valid_image(const U8 *base,U32 image_size,U32 preferred){
     return dword(base+pe+24+56)==image_size&&dword(base+pe+24+28)==preferred;
 }
 
+#define EDIT_CAP 96u /* one transaction: cshell (HUD, UI, chat, focus...) or client */
 typedef struct {U8 *address;U32 length;U8 before[40],after[40];DWORD protection;int touched;} Edit;
-static int add_edit(Edit edits[48],U32 *count,U8 *address,const U8 *before,const U8 *after,U32 length){
+static int add_edit(Edit edits[EDIT_CAP],U32 *count,U8 *address,const U8 *before,const U8 *after,U32 length){
     Edit *e;
     if(length>40||!equal_bytes(address,before,length))return 0;
     if(equal_bytes(before,after,length))return 1;
-    if(*count>=48)return 0;
+    if(*count>=EDIT_CAP)return 0;
     e=&edits[(*count)++];e->address=address;e->length=length;e->protection=0;e->touched=0;copy_bytes(e->before,before,length);copy_bytes(e->after,after,length);return 1;
 }
 static int apply_edit(Edit *e){
@@ -338,7 +344,7 @@ static int undo_edit(Edit *e){
     flushed=FlushInstructionCache(GetCurrentProcess(),e->address,e->length);
     return restored&&flushed;
 }
-static int commit_edits(Edit edits[48],U32 count){
+static int commit_edits(Edit edits[EDIT_CAP],U32 count){
     U32 i,j;
     for(i=0;i<count;i++)if(!equal_bytes(edits[i].address,edits[i].before,edits[i].length))return 0;
     for(i=0;i<count;i++){
@@ -361,7 +367,7 @@ __attribute__((noipa)) U32 WINAPI kpc_bind_ip(const char *ip){
     if(!ip||!*ip)return 0;
     return original_bind_inet_addr(ip);
 }
-static int queue_bind_fix(Edit edits[48],U32 *count,U8 *base){
+static int queue_bind_fix(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     U8 before[6]={0xff,0x15,0,0,0,0},after[6];
     if(!GetPrivateProfileIntW(L"Multiplayer",L"EmptyBindIPFix",1,ini_path))return 1;
     original_bind_inet_addr=(void *)dword(base+0x97288);
@@ -373,7 +379,7 @@ static int queue_bind_fix(Edit edits[48],U32 *count,U8 *base){
     return 1;
 }
 
-static int queue_net_trace(Edit edits[48],U32 *count,U8 *base){
+static int queue_net_trace(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     static const U32 sites[7]={0x97284,0x972a0,0x972a8,0x9728c,0x972a4,0x97290,0x9729c};
     void *targets[7]={(void *)kpc_net_startup,(void *)kpc_net_cleanup,(void *)kpc_net_socket,(void *)kpc_net_close,(void *)kpc_net_bind,(void *)kpc_net_send,(void *)kpc_net_receive};
     U8 before[4],after[4];U32 i,values[7];
@@ -391,7 +397,7 @@ static int queue_net_trace(Edit edits[48],U32 *count,U8 *base){
 }
 
 /* Redirect only the menu's sensitivity operands; shared constants have other users. */
-static int queue_sensitivity(Edit edits[48],U32 *count,U8 *base){
+static int queue_sensitivity(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     const U32 *sites=g_shell_layout->sensitivity_sites;
     const U32 *values=g_shell_layout->sensitivity_constants;
     const float *targets[3]={&sensitivity_maximum,&sensitivity_minimum,&sensitivity_inverse};
@@ -410,7 +416,7 @@ static int queue_sensitivity(Edit edits[48],U32 *count,U8 *base){
 
 /* Limit scaling to the HUD's own panel draws, glyphs and crosshair calls.
  * No renderer surfaces, global resolution values or menu draw calls change. */
-static int queue_hud(Edit edits[48],U32 *count,U8 *base){
+static int queue_hud(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     typedef struct {U32 length;U8 before[7];void (*entry)(void);} HudSite;
     static const HudSite sites[]={
         {5,{0xff,0x50,0x04,0x8b,0x16},hud_panel_entry},
@@ -471,7 +477,7 @@ static int queue_hud(Edit edits[48],U32 *count,U8 *base){
 
 /* Additional reviewed UI paths. Each option queues into the SAME cshell
  * transaction as the established ground/sensitivity/HUD changes. */
-static int queue_ui(Edit edits[48],U32 *count,U8 *base){
+static int queue_ui(Edit edits[EDIT_CAP],U32 *count,U8 *base){
     U8 before[7],after[7];U32 i;
     if(g_cursor_percent!=100){
         static const U8 dims[6]={0xff,0x92,0x74,0x01,0x00,0x00};
@@ -520,10 +526,203 @@ static int queue_ui(Edit edits[48],U32 *count,U8 *base){
 }
 
 /* Called after LoadLibrary returns, before its caller can use cshell exports. */
+/* Campaign loading art (loading.c): the PreLoadWorld vtable slot, the 0x69
+ * close call and the per-frame screen draw call, all original values checked. */
+/* Chat and server message lifetime ([Multiplayer] ChatMessageSeconds).
+ * The shell's message handler (0xcb38d) starts every message's display time
+ * at 3.0 s unless the message carries its own (flag 2). The immediate of that
+ * MOV [ESP+0x10], imm32 is replaced; the instruction stays the same. */
+static U32 g_chat_seconds=8;
+static int queue_chat(Edit edits[EDIT_CAP],U32 *count,U8 *base){
+    static const U8 before[8]={0xc7,0x44,0x24,0x10,0x00,0x00,0x40,0x40};
+    U8 after[8];float seconds=(float)g_chat_seconds;U32 bits;
+    if(g_chat_seconds==3)return 1;
+    if(!g_shell_layout->chat_duration){log_text("Chat message time: not verified for this cshell edition; stock 3 s retained.\r\n");return 1;}
+    copy_bytes(&bits,&seconds,4);copy_bytes(after,before,4);store32(after+4,bits);
+    return add_edit(edits,count,base+g_shell_layout->chat_duration,before,after,8);
+}
+/* Chat typing: drop key-bound actions while the message editor types (console.c). */
+/* Also the scoreboard key held (console.c): OnCommandOn and OnCommandOff. */
+static U32 g_spawn_lightning_off;
+static int queue_chat_actions(Edit edits[EDIT_CAP],U32 *count,U8 *base){
+    const ShellLayout *L=g_shell_layout;U8 before[4],after[4];
+    if(g_scoreboard_hold&&(!L->command_off_slot||!L->command_slot||!L->screen_close)){
+        g_scoreboard_hold=0;log_text("Scoreboard hold: not verified for this cshell edition; the key toggles as stock.\r\n");
+    }
+    if(g_chat_clipboard&&!L->chat_key_slot){g_chat_clipboard=0;log_text("Chat clipboard keys: not verified for this cshell edition; stock editor keys.\r\n");}
+    if(g_chat_scrollback&&(!L->chat_key_slot||!L->chat_add_call)){g_chat_scrollback=0;log_text("Chat scrollback: not verified for this cshell edition.\r\n");}
+    g_command_shell=base;
+    if(g_sp_chat&&(!L->chat_gate_call||!L->command_slot||!L->chat_list)){g_sp_chat=0;log_text("Single-player chat: not verified for this cshell edition.\r\n");}
+    if(g_sp_chat){
+        U8 call_before[5],call_after[5],store_before[4],store_after[4];
+        near_call(call_before,base+L->chat_gate_call,base+L->multiplayer_test);near_call(call_after,base+L->chat_gate_call,kpc_chat_gate);
+        if(!add_edit(edits,count,base+L->chat_gate_call,call_before,call_after,5))return 0;
+        store32(store_before,(U32)(base+L->chat_done));store32(store_after,(U32)kpc_chat_done);
+        if(!add_edit(edits,count,base+L->chat_done_store+6u,store_before,store_after,4))return 0;
+    }
+    if(g_menu_disconnect&&L->main_quit_call&&L->enemy_api){
+        U8 call_before[5],call_after[5];
+        near_call(call_before,base+L->main_quit_call,base+L->quit_dialog);near_call(call_after,base+L->main_quit_call,kpc_main_quit);
+        if(!add_edit(edits,count,base+L->main_quit_call,call_before,call_after,5))return 0;
+    }
+    if(g_chat_blocks_actions||g_scoreboard_hold||g_sp_chat){   /* all use OnCommandOn */
+        if(!L->command_slot){g_chat_blocks_actions=0;log_text("Chat typing: not verified for this cshell edition; key actions unchanged.\r\n");return 1;}
+        store32(before,(U32)(base+L->command_on));store32(after,(U32)kpc_command_on);
+        if(!add_edit(edits,count,base+L->command_slot,before,after,4))return 0;
+    }
+    if(g_scoreboard_hold){
+        store32(before,(U32)(base+L->command_off));store32(after,(U32)kpc_command_off);
+        if(!add_edit(edits,count,base+L->command_off_slot,before,after,4))return 0;
+    }
+    if(g_chat_scrollback){
+        U8 call_before[5],call_after[5];
+        near_call(call_before,base+L->chat_add_call,base+L->chat_add);near_call(call_after,base+L->chat_add_call,kpc_chat_add);
+        if(!add_edit(edits,count,base+L->chat_add_call,call_before,call_after,5))return 0;
+    }
+    if(g_chat_long&&!L->chat_insert_call){g_chat_long=0;log_text("Long chat lines: not verified for this cshell edition; 127 characters.\r\n");}
+    if(g_chat_long){
+        static const U8 scroll_before[5]={0x83,0xff,0x7f,0x7d,0x4a},scroll_after[5]={0x90,0x90,0x90,0x90,0x90};
+        static const U8 width_before[6]={0x8b,0xb8,0x10,0x02,0x00,0x00},width_after[6]={0xbf,0x80,0x02,0x00,0x00,0x90};
+        U8 call_before[5],call_after[5];
+        near_call(call_before,base+L->chat_insert_call,base+L->chat_insert);near_call(call_after,base+L->chat_insert_call,kpc_chat_insert);
+        if(!add_edit(edits,count,base+L->chat_insert_call,call_before,call_after,5))return 0;
+        if(!add_edit(edits,count,base+L->chat_scroll_cap,scroll_before,scroll_after,5))return 0;
+        if(!add_edit(edits,count,base+L->chat_width,width_before,width_after,6))return 0;
+        store32(before,(U32)(base+L->chat_escape));store32(after,(U32)kpc_chat_escape);
+        if(!add_edit(edits,count,base+L->chat_escape_slot,before,after,4))return 0;
+        near_call(call_before,base+L->list_update_call,base+L->list_update);near_call(call_after,base+L->list_update_call,kpc_list_update);
+        if(!add_edit(edits,count,base+L->list_update_call,call_before,call_after,5))return 0;
+        if(!g_chat_scrollback){   /* the add hook also guards long lines */
+            near_call(call_before,base+L->chat_add_call,base+L->chat_add);near_call(call_after,base+L->chat_add_call,kpc_chat_add);
+            if(!add_edit(edits,count,base+L->chat_add_call,call_before,call_after,5))return 0;
+        }
+    }
+    if(g_chat_hide_loading&&L->list_draw_call){
+        U8 call_before[5],call_after[5];
+        near_call(call_before,base+L->list_draw_call,base+L->list_draw);near_call(call_after,base+L->list_draw_call,kpc_list_draw);
+        if(!add_edit(edits,count,base+L->list_draw_call,call_before,call_after,5))return 0;
+    }
+    if((g_chat_scrollback||g_chat_history||g_chat_lower_font)&&L->chat_init_slot){
+        store32(before,(U32)(base+L->chat_init));store32(after,(U32)kpc_chat_init);
+        if(!add_edit(edits,count,base+L->chat_init_slot,before,after,4))return 0;
+    }
+    if(g_chat_in_cinematics&&L->shell_key_slot){
+        store32(before,(U32)(base+L->shell_key));store32(after,(U32)kpc_shell_key);
+        if(!add_edit(edits,count,base+L->shell_key_slot,before,after,4))return 0;
+    }
+    if(g_chat_clipboard||g_chat_long||g_chat_hide_loading){   /* highlight, bar placement, hiding */
+        store32(before,(U32)(base+L->chat_draw));store32(after,(U32)kpc_chat_draw);
+        if(!add_edit(edits,count,base+L->chat_draw_slot,before,after,4))return 0;
+    }
+    if(!g_chat_clipboard&&!g_chat_scrollback&&!g_chat_long&&!g_chat_history&&!g_chat_hide_loading)return 1;   /* these use the editor's key slot */
+    store32(before,(U32)(base+L->chat_key));store32(after,(U32)kpc_chat_key);
+    if(!add_edit(edits,count,base+L->chat_key_slot,before,after,4))return 0;
+    if(!g_spawn_lightning_off||!L->spawn_bolt)return 1;
+    {   /* Spawn lightning (SpawnLightning=0): "jl" -> "jmp" over the bolt (FX 0x2b) in Respawn Player. */
+        static const U8 bolt_before[2]={0x7c,0x20},bolt_after[2]={0xeb,0x20};
+        return add_edit(edits,count,base+L->spawn_bolt,bolt_before,bolt_after,2);
+    }
+}
+/* Window-shard diagnostic: the shard manager's handler slot (console.c). */
+static int queue_window_watch(Edit edits[EDIT_CAP],U32 *count,U8 *base){
+    const ShellLayout *L=g_shell_layout;U8 before[4],after[4];
+    if(!g_window_watch&&!g_window_hide)return 1;
+    if(!L->window_break_slot){g_window_watch=0;g_window_hide=0;return 1;}
+    g_window_shell=base;
+    store32(before,(U32)(base+L->window_break));store32(after,(U32)kpc_window_break);
+    return add_edit(edits,count,base+L->window_break_slot,before,after,4);
+}
+/* Keep running on focus loss: the OnEvent 4/3 music calls (focus.c). */
+static int queue_focus_music(Edit edits[EDIT_CAP],U32 *count,U8 *base){
+    const ShellLayout *L=g_shell_layout;U8 before[5],after[5];
+    if(!g_focus_enabled)return 1;
+    /* The renderer is kept only in a world (focus.c); without a verified shell
+     * global it is never kept. */
+    if(L->client_shell_global)g_focus_shell_slot=base+L->client_shell_global;
+    if(!L->music_pause_call){log_text("Focus loss: music hooks not verified for this cshell edition; music pauses as stock.\r\n");return 1;}
+    g_focus_shell=base;
+    near_call(before,base+L->music_pause_call,base+L->music_pause);near_call(after,base+L->music_pause_call,kpc_music_pause);
+    if(!add_edit(edits,count,base+L->music_pause_call,before,after,5))return 0;
+    near_call(before,base+L->music_resume_call,base+L->music_resume);near_call(after,base+L->music_resume_call,kpc_music_resume);
+    if(!add_edit(edits,count,base+L->music_resume_call,before,after,5))return 0;
+    /* Setup > Audio checkbox (ui.c): the Audio screen's vtable slots. */
+    if(!L->audio_vtable){log_text("Focus loss: Audio-menu checkbox not verified for this cshell edition; console variable only.\r\n");return 1;}
+    {
+        const U32 offsets[5]={0x08,0x0c,0x10,0x14,0x18};
+        const U32 originals[5]={L->audio_init,L->audio_term,L->audio_draw,L->audio_move,L->audio_event};
+        void *const hooks[5]={(void *)kpc_audio_init,(void *)kpc_audio_term,(void *)kpc_audio_draw,(void *)kpc_audio_move,(void *)kpc_audio_event};
+        U32 i;
+        g_audio_shell=base;
+        for(i=0;i<5;i++){
+            store32(before,(U32)(base+originals[i]));store32(after,(U32)hooks[i]);
+            if(!add_edit(edits,count,base+L->audio_vtable+offsets[i],before,after,4))return 0;
+        }
+    }
+    return 1;
+}
+/* Smooth scripted cameras: the sample store call (camera.c). */
+static int queue_camera(Edit edits[EDIT_CAP],U32 *count,U8 *base){
+    const ShellLayout *L=g_shell_layout;U8 before[5],after[5];
+    if(!g_camera_smooth)return 1;
+    if(!L->camera_set_call){g_camera_smooth=0;log_text("Cutscene camera smoothing: not verified for this cshell edition; stock camera samples.\r\n");return 1;}
+    near_call(before,base+L->camera_set_call,base+L->camera_set);near_call(after,base+L->camera_set_call,kpc_camera_set);
+    g_camera_shell=base;
+    return add_edit(edits,count,base+L->camera_set_call,before,after,5);
+}
+static int queue_loading(Edit edits[EDIT_CAP],U32 *count,U8 *base){
+    const ShellLayout *L=g_shell_layout;U8 before[5],after[5];
+    if(!g_loading_enabled)return 1;
+    if(!L->preload_slot){g_loading_enabled=0;log_text("Campaign loading art: not verified for this cshell edition; stock loading retained.\r\n");return 1;}
+    store32(before,(U32)(base+L->preload_world));store32(after,(U32)kpc_preload_world);
+    if(!add_edit(edits,count,base+L->preload_slot,before,after,4))return 0;
+    near_call(before,base+L->close_call,base+L->screen_close);near_call(after,base+L->close_call,kpc_close_on_entry);
+    if(!add_edit(edits,count,base+L->close_call,before,after,5))return 0;
+    near_call(before,base+L->draw_call,base+L->screen_draw);near_call(after,base+L->draw_call,kpc_draw_screen);
+    if(!add_edit(edits,count,base+L->draw_call,before,after,5))return 0;
+    if(!g_loading_hold)return 1;
+    if(!L->spawn_reply_call){g_loading_hold=0;log_text("Loading picture spawn hold: not verified for this cshell edition; stock spawn timing retained.\r\n");return 1;}
+    near_call(before,base+L->spawn_reply_call,base+L->spawn_reply);near_call(after,base+L->spawn_reply_call,kpc_spawn_reply);
+    if(!add_edit(edits,count,base+L->spawn_reply_call,before,after,5))return 0;
+    near_call(before,base+L->initvars_call,base+L->spawn_initvars);near_call(after,base+L->initvars_call,kpc_spawn_initvars);
+    if(!add_edit(edits,count,base+L->initvars_call,before,after,5))return 0;
+    if(g_sp_loading_ms&&L->sp_show_call){
+        near_call(before,base+L->sp_show_call,base+L->screen_show);near_call(after,base+L->sp_show_call,kpc_sp_show);
+        if(!add_edit(edits,count,base+L->sp_show_call,before,after,5))return 0;
+        near_call(before,base+L->enter_close_call,base+L->screen_close);near_call(after,base+L->enter_close_call,kpc_sp_enter_close);
+        if(!add_edit(edits,count,base+L->enter_close_call,before,after,5))return 0;
+        near_call(before,base+L->sp_unpause_call,base+L->pause_request);near_call(after,base+L->sp_unpause_call,kpc_sp_unpause);
+        if(!add_edit(edits,count,base+L->sp_unpause_call,before,after,5))return 0;
+    }
+    if((g_loading_43||g_loading_filter)&&L->blit_sp_call){
+        static const U8 sp_before[6]={0xff,0x92,0x8c,0x01,0x00,0x00},mp_before[6]={0xff,0x91,0x8c,0x01,0x00,0x00};
+        U8 blit_after[6];
+        near_call(blit_after,base+L->blit_sp_call,kpc_loading_blit);blit_after[5]=0x90;
+        if(!add_edit(edits,count,base+L->blit_sp_call,sp_before,blit_after,6))return 0;
+        near_call(blit_after,base+L->blit_mp_call,kpc_loading_blit);blit_after[5]=0x90;
+        if(!add_edit(edits,count,base+L->blit_mp_call,mp_before,blit_after,6))return 0;
+    }
+    if((g_clean_music||g_level_picture||g_stop_sounds_on_change)&&!L->change_level_call){g_clean_music=0;g_level_picture=0;g_stop_sounds_on_change=0;log_text("Clean music / level change picture: not verified for this cshell edition; stock level changes.\r\n");}
+    if(g_clean_music||g_level_picture||g_stop_sounds_on_change){
+        near_call(before,base+L->change_level_call,base+L->change_level);near_call(after,base+L->change_level_call,kpc_change_levels);
+        if(!add_edit(edits,count,base+L->change_level_call,before,after,5))return 0;
+    }
+    if(g_clean_music){
+        near_call(before,base+L->enter_wipe_call,base+L->music_unload);near_call(after,base+L->enter_wipe_call,kpc_enter_music);
+        if(!add_edit(edits,count,base+L->enter_wipe_call,before,after,5))return 0;
+    }
+    if(g_keep_music_on_death&&L->death_music_call){
+        near_call(before,base+L->death_music_call,base+L->music_intensity);near_call(after,base+L->death_music_call,kpc_death_music);
+        if(!add_edit(edits,count,base+L->death_music_call,before,after,5))return 0;
+    }
+    if(!g_loading_sync&&!g_sp_loading_ms)return 1;
+    if(!L->message_slot){g_loading_sync=0;log_text("Synchronised load: not verified for this cshell edition; the minimum time applies.\r\n");return 1;}
+    store32(before,(U32)(base+L->on_message));store32(after,(U32)kpc_shell_message);
+    return add_edit(edits,count,base+L->message_slot,before,after,4);
+}
 static int patch_shell(HMODULE module){
     WCHAR path[PATH_CAP];U8 digest[32],movement_call[7],guard_call[5];
     static const U8 original_move[7]={0x8b,0x46,0x38,0x50,0xff,0x52,0x40};U32 file_size,count=0,n;U8 *base=(U8 *)module;
-    const ShellProfile *profile;Edit edits[48];int result=0;
+    const ShellProfile *profile;Edit edits[EDIT_CAP];int result=0;
     n=GetModuleFileNameW(module,path,PATH_CAP);
     if(!n||n>=PATH_CAP||!basename_is(path,L"cshell.dll"))return 1;
     if(__sync_val_compare_and_swap(&movement_lock,0,1)!=0){report_error("Concurrent cshell loading prevented safe movement-patch installation. Restart with the tested V3/V5 setup.");return 0;}
@@ -541,11 +740,36 @@ static int patch_shell(HMODULE module){
        !add_edit(edits,&count,move,original_move,movement_call,7)){
         report_error("Unexpected movement dispatch in cshell.dll.");goto done;
     }
-    if(!queue_sensitivity(edits,&count,base)||!queue_hud(edits,&count,base)||!queue_ui(edits,&count,base)||!commit_edits(edits,count)){
+    if(!queue_sensitivity(edits,&count,base)||!queue_hud(edits,&count,base)||!queue_ui(edits,&count,base)||
+       !queue_loading(edits,&count,base)||!queue_chat(edits,&count,base)||!queue_chat_actions(edits,&count,base)||!queue_focus_music(edits,&count,base)||!queue_window_watch(edits,&count,base)||!queue_camera(edits,&count,base)||!commit_edits(edits,count)){
         report_error("UI/HUD/sensitivity/movement instructions differ or their memory update failed. No changes in this cshell transaction were retained.");goto done;
     }
     g_hud_shell=base;
-    g_ui_shell=base;g_rate_setter_tail=base+g_shell_layout->rate_setter+6;
+    g_ui_shell=base;g_rate_setter_tail=base+g_shell_layout->rate_setter+6;g_loading_shell=base;
+    if(g_net_timeout_enabled){
+        if(g_shell_layout->client_shell_global)g_net_shell_slot=base+g_shell_layout->client_shell_global;
+        else log_text("Server timeout: not verified for this cshell edition; stock 120 s retained.\r\n");
+    }
+    if(g_loading_enabled){log_text("Campaign loading art: original R?M? pictures in multiplayer campaign loads, minimum ms=");log_hex(g_loading_min_ms);log_text(".\r\n");}
+    if(g_chat_seconds!=3&&g_shell_layout->chat_duration){log_text("Chat message time: seconds=");log_hex(g_chat_seconds);log_text(" (stock 3).\r\n");}
+    if(g_camera_smooth&&g_shell_layout->camera_set_call)log_text("Cutscene camera smoothing: server camera samples interpolated every frame.\r\n");
+    if(g_chat_blocks_actions)log_text("Chat typing: key-bound actions (noclip, movement...) are ignored while a message is being typed.\r\n");
+    if(g_scoreboard_hold)log_text("Scoreboard hold: the scoreboard shows while its key is held and closes on release.\r\n");
+    if(g_sp_loading_ms&&g_shell_layout->sp_show_call)log_text("Single-player loading picture: shown for at least SinglePlayerLoadingMs (game paused behind it).\r\n");
+    if(g_loading_43&&g_shell_layout->blit_sp_call)log_text("Loading pictures: drawn 4:3 (Cinematics4x3).\r\n");
+    if(g_min_update_rate)log_text("Multiplayer: at least MinUpdateRate object updates per second requested from the server.\r\n");
+    if(g_chat_history)log_text("Chat history: Up / Down in the chat bar recall sent lines.\r\n");
+    if(g_chat_lower_font&&g_shell_layout->font_init)log_text("Chat bar: lowercase font requested (ChatLowercaseFont).\r\n");
+    if(g_chat_hide_loading)log_text("Chat: hidden while a loading picture or level change is shown.\r\n");
+    if(g_chat_in_cinematics)log_text("Chat: the chat bar can be opened during cutscenes; Space in it does not skip them.\r\n");
+    if(g_chat_long)log_text("Long chat lines: up to 200 characters; Esc clears the line; incoming lines kept to 254 characters with ## broken up.\r\n");
+    if(g_spawn_lightning_off&&g_shell_layout->spawn_bolt)log_text("Spawn lightning: off (SpawnLightning=0).\r\n");
+    if(g_level_picture&&g_loading_enabled)log_text("Level change: the next world's loading picture (or a black screen) appears as soon as the level change starts.\r\n");
+    if(g_chat_scrollback)log_text("Chat scrollback: Page Up / Page Down in the chat box show earlier messages again (last 64 kept).\r\n");
+    if(g_chat_clipboard)log_text("Chat clipboard keys: Ctrl+A selects the line, Ctrl+C / Ctrl+X copy / cut it, Ctrl+V pastes (127 characters at most).\r\n");
+    if(g_loading_enabled&&g_loading_hold)log_text("Loading picture spawn hold: the player enters the world when the picture's minimum time has passed.\r\n");
+    if(g_loading_enabled&&g_loading_hold&&g_clean_music)log_text("Clean music: on multiplayer level changes the old song stops at a bar line and the new one starts when the world appears.\r\n");
+    if(g_loading_enabled&&g_loading_hold&&g_loading_sync)log_text("Synchronised load: with a co-op server's request, every player enters the world together (messages 0x70/0x71).\r\n");
     log_text("Ground contact: V5 applied in memory.\r\n");
     kpc_status|=GROUND_READY|GROUND_RUNTIME;
     log_text("Sensitivity range: percent of original=");log_hex(sensitivity_range_percent);
@@ -569,7 +793,7 @@ extern void *g_movie_tail;
 extern U32 g_movie_filter;
 static int install_game_fixes(void){
     U8 digest[32],replacement[16],before_iat[4],after_iat[4];U32 size,i,count=0,n;
-    U8 *base=(U8 *)GetModuleHandleW(NULL);Edit edits[48];HMODULE pinned,loaded;
+    U8 *base=(U8 *)GetModuleHandleW(NULL);Edit edits[EDIT_CAP];HMODULE pinned,loaded;
     if(!paths_ready){report_error("Game path is unavailable or too long. No game fixes were applied.");return 0;}
     if(!basename_is(main_path,L"client.exe")){log_text("Non-game host: input forwarding only.\r\n");return 1;}
     if(!GetPrivateProfileIntW(L"KPCFix",L"Enabled",1,ini_path)){
@@ -627,12 +851,67 @@ static int install_game_fixes(void){
     if(g_tooltip_percent<50||g_tooltip_percent>400){
         report_error("[Tooltip] ScalePercent must be 0 (follow HUD), or an integer from 50 to 400. No client changes were applied.");return 0;
     }
+    {
+        U32 seconds=GetPrivateProfileIntW(L"Multiplayer",L"ServerTimeoutSeconds",15,ini_path);
+        if(seconds&&(seconds<5||seconds>120)){
+            report_error("[Multiplayer] ServerTimeoutSeconds must be 0 (stock 120 s) or an integer from 5 to 120. No client changes were applied.");return 0;
+        }
+        g_net_timeout_enabled=seconds!=0;g_net_timeout_seconds=(float)seconds;
+    }
     min_step_ms=GetPrivateProfileIntW(L"KPCFix",L"LocalServerMinStepMs",16,ini_path);
     if(min_step_ms>50){
         report_error("[KPCFix] LocalServerMinStepMs must be 0 (off) or an integer from 1 to 50. No client changes were applied.");return 0;
     }
     g_min_step_seconds=(float)min_step_ms*0.001f;
+    /* The hooks are always installed; the INI value is the console variable's
+     * default, which the console or the Setup > Audio checkbox can change. */
+    g_focus_enabled=1;
+    g_focus_default=GetPrivateProfileIntW(L"Multiplayer",L"KeepAudioOnFocusLoss",1,ini_path)!=0;
     g_console_key_fix=GetPrivateProfileIntW(L"KPCFix",L"ConsoleKeyFix",1,ini_path)!=0;
+    g_chat_blocks_actions=GetPrivateProfileIntW(L"Multiplayer",L"ChatBlocksActions",1,ini_path)!=0;
+    g_sp_chat=GetPrivateProfileIntW(L"Multiplayer",L"SinglePlayerChat",1,ini_path)!=0;
+    g_menu_disconnect=GetPrivateProfileIntW(L"Multiplayer",L"MenuDisconnect",1,ini_path)!=0;
+    g_scoreboard_hold=GetPrivateProfileIntW(L"Multiplayer",L"ScoreboardHold",1,ini_path)!=0;
+    g_chat_clipboard=GetPrivateProfileIntW(L"Multiplayer",L"ChatClipboard",1,ini_path)!=0;
+    g_chat_scrollback=GetPrivateProfileIntW(L"Multiplayer",L"ChatScrollback",1,ini_path)!=0;
+    g_chat_long=GetPrivateProfileIntW(L"Multiplayer",L"ChatLongMessages",1,ini_path)!=0;
+    g_chat_history=GetPrivateProfileIntW(L"Multiplayer",L"ChatHistory",1,ini_path)!=0;
+    g_chat_lower_font=GetPrivateProfileIntW(L"Multiplayer",L"ChatLowercaseFont",1,ini_path)!=0;
+    g_chat_hide_loading=GetPrivateProfileIntW(L"Multiplayer",L"ChatHideOnLoading",1,ini_path)!=0;
+    g_chat_in_cinematics=GetPrivateProfileIntW(L"Multiplayer",L"ChatInCinematics",1,ini_path)!=0;
+    g_spawn_lightning_off=GetPrivateProfileIntW(L"Multiplayer",L"SpawnLightning",0,ini_path)==0;
+    g_level_picture=GetPrivateProfileIntW(L"Multiplayer",L"LevelChangePicture",1,ini_path)!=0;
+    g_sp_loading_ms=GetPrivateProfileIntW(L"KPCFix",L"SinglePlayerLoadingMs",5000,ini_path);
+    if(g_sp_loading_ms>30000u)g_sp_loading_ms=30000u;
+    g_loading_43=GetPrivateProfileIntW(L"AspectRatio",L"Cinematics4x3",1,ini_path)!=0;
+    g_loading_filter=GetPrivateProfileIntW(L"AspectRatio",L"LoadingPictureFilter",1,ini_path)!=0;
+    g_min_update_rate=GetPrivateProfileIntW(L"Multiplayer",L"MinUpdateRate",60,ini_path);
+    if(g_min_update_rate>60u)g_min_update_rate=60u;
+    g_window_watch=GetPrivateProfileIntW(L"Multiplayer",L"LogWindowBreaks",1,ini_path)!=0;
+    g_window_hide=GetPrivateProfileIntW(L"Multiplayer",L"HideBrokenWindow",1,ini_path)!=0;
+    g_camera_smooth=GetPrivateProfileIntW(L"Multiplayer",L"SmoothCutsceneCamera",1,ini_path)!=0;
+    g_focus_resync=g_focus_enabled&&GetPrivateProfileIntW(L"Multiplayer",L"ResyncAudioOnFocus",1,ini_path)!=0;
+    g_focus_keep_render=GetPrivateProfileIntW(L"Multiplayer",L"KeepRendererOnFocusLoss",1,ini_path)!=0;
+    g_focus_keep_everywhere=GetPrivateProfileIntW(L"Multiplayer",L"KeepRendererEverywhere",1,ini_path)!=0;
+    g_focus_log=kpc_log_text;
+    if(GetPrivateProfileIntW(L"Multiplayer",L"BackgroundFullSpeed",1,ini_path))kpc_focus_full_speed();
+    g_focus_no_animation=GetPrivateProfileIntW(L"Multiplayer",L"NoWindowAnimation",1,ini_path)!=0;
+    g_loading_enabled=GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingArt",1,ini_path)!=0;
+    g_loading_min_ms=GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingMinimumMs",5000,ini_path);
+    g_loading_hold=g_loading_enabled&&GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingHoldSpawn",1,ini_path)!=0;
+    g_loading_sync=g_loading_hold&&GetPrivateProfileIntW(L"Multiplayer",L"CampaignLoadingSync",1,ini_path)!=0;
+    g_clean_music=g_loading_hold&&GetPrivateProfileIntW(L"Multiplayer",L"CleanMusic",1,ini_path)!=0;
+    g_keep_music_on_death=GetPrivateProfileIntW(L"Multiplayer",L"KeepMusicOnDeath",1,ini_path)!=0;
+    g_stop_sounds_on_change=GetPrivateProfileIntW(L"Multiplayer",L"StopSoundsOnLevelChange",1,ini_path)!=0;
+    g_intro_picture_hold=GetPrivateProfileIntW(L"Multiplayer",L"IntroPictureHold",1,ini_path)!=0;
+    g_chat_seconds=GetPrivateProfileIntW(L"Multiplayer",L"ChatMessageSeconds",8,ini_path);
+    if(g_chat_seconds<1||g_chat_seconds>60){
+        report_error("[Multiplayer] ChatMessageSeconds must be an integer from 1 to 60 (stock 3). No client changes were applied.");return 0;
+    }
+    g_loading_log=kpc_log_text;
+    if(g_loading_min_ms>30000){
+        report_error("[Multiplayer] CampaignLoadingMinimumMs must be an integer from 0 to 30000. No client changes were applied.");return 0;
+    }
     g_lock_input_rate=!stock_mouse && GetPrivateProfileIntW(L"KPCFix",L"LockInputRate",1,ini_path)!=0;
     g_hide_input_rate=g_lock_input_rate&&GetPrivateProfileIntW(L"KPCFix",L"HideInputRate",1,ini_path)!=0;
     normalize_configs_enabled=g_lock_input_rate&&GetPrivateProfileIntW(L"KPCFix",L"NormalizeInputRateConfigs",1,ini_path)!=0;
@@ -689,6 +968,78 @@ static int install_game_fixes(void){
     store32(after_iat,(U32)kpc_load_library_a);
     if(!add_edit(edits,&count,base+0x971f0,before_iat,after_iat,4))return 0;
     if(!queue_bind_fix(edits,&count,base)){report_error("Bind address patch validation failed. No client edits applied.");return 0;}
+    if(g_focus_enabled){
+        static const U32 sites[2]={0x6d5c,0x6cdb},targets[2]={0x74b90,0x74c10};
+        void *const hooks[2]={(void *)kpc_focus_release,(void *)kpc_focus_restore};
+        U8 before[5];
+        g_focus_client=base;
+        for(i=0;i<2;i++){
+            near_call(before,base+sites[i],base+targets[i]);near_call(replacement,base+sites[i],hooks[i]);
+            if(!add_edit(edits,&count,base+sites[i],before,replacement,5)){
+                report_error("The original focus-change sound calls differ. No client edits were applied.");return 0;
+            }
+        }
+        /* Focus-loss render shutdown (music pause marker) and the local
+         * server's active-window test (focus.c). */
+        near_call(before,base+0x6d1d,base+0x53980);near_call(replacement,base+0x6d1d,kpc_focus_term_render);
+        if(!add_edit(edits,&count,base+0x6d1d,before,replacement,5)){
+            report_error("The original focus-loss render shutdown call differs. No client edits were applied.");return 0;
+        }
+        near_call(before,base+0x157c5,base+0x287b0);near_call(replacement,base+0x157c5,kpc_focus_active);
+        if(!add_edit(edits,&count,base+0x157c5,before,replacement,5)){
+            report_error("The original local-server focus test differs. No client edits were applied.");return 0;
+        }
+        {   /* Main loop DispatchMessageA (focus.c kpc_dispatch: slow-message log, window animation off). */
+            static const U8 dispatch_before[6]={0xff,0x15,0x54,0x72,0xd3,0x01};
+            near_call(replacement,base+0x69cb,kpc_dispatch);replacement[5]=0x90;
+            if(!add_edit(edits,&count,base+0x69cb,dispatch_before,replacement,6)){
+                report_error("The original main-loop DispatchMessageA call differs. No client edits were applied.");return 0;
+            }
+        }
+        if(g_focus_keep_render){
+            static const U32 world_sites[2]={0x158e3,0x15922};
+            near_call(before,base+0x6c97,base+0x534f0);near_call(replacement,base+0x6c97,kpc_focus_init_render);
+            if(!add_edit(edits,&count,base+0x6c97,before,replacement,5)){
+                report_error("The original focus-regain render restart call differs. No client edits were applied.");return 0;
+            }
+            for(i=0;i<2;i++){
+                near_call(before,base+world_sites[i],base+0x287b0);near_call(replacement,base+world_sites[i],kpc_focus_world_active);
+                if(!add_edit(edits,&count,base+world_sites[i],before,replacement,5)){
+                    report_error("The original client-world focus test differs. No client edits were applied.");return 0;
+                }
+            }
+        }
+        if(g_focus_resync){
+            near_call(before,base+0x13bcd,base+0x73bb0);near_call(replacement,base+0x13bcd,kpc_sound_update);
+            if(!add_edit(edits,&count,base+0x13bcd,before,replacement,5)){
+                report_error("The original per-frame sound update call differs. No client edits were applied.");return 0;
+            }
+        }
+    }
+    if(g_camera_smooth)g_camera_clock=(U32 (WINAPI *)(void))dword(base+0x97278);
+    if(g_loading_hold||g_camera_smooth){
+        /* Per-frame tick (spawn hold release, camera smoothing): the client update's call. */
+        U8 before[5];
+        near_call(before,base+0x13876,base+0x13bb0);near_call(replacement,base+0x13876,kpc_client_frame);
+        if(!add_edit(edits,&count,base+0x13876,before,replacement,5)){
+            report_error("The original client update call differs. No client edits were applied.");return 0;
+        }
+        g_loading_client=base;
+        /* New connection marker: the "Got ID packet" console print. */
+        near_call(before,base+0x6986e,base+0x1c8d0);near_call(replacement,base+0x6986e,kpc_new_connection_print);
+        if(!add_edit(edits,&count,base+0x6986e,before,replacement,5)){
+            report_error("The original connection ID print call differs. No client edits were applied.");return 0;
+        }
+        g_id_print_target=(U32)(base+0x1c8d0);
+    }
+    if(g_chat_blocks_actions){
+        /* Chat typing: the engine's input-enabled read in the command update (console.c). */
+        static const U8 input_before[6]={0x8b,0x88,0x14,0x10,0x00,0x00};
+        near_call(replacement,base+0x23c84,kpc_input_state_entry);replacement[5]=0x90;
+        if(!add_edit(edits,&count,base+0x23c84,input_before,replacement,6)){
+            report_error("The original input-state read differs. No client edits were applied.");return 0;
+        }
+    }
     if(g_console_key_fix){
         /* Console key: drop the character the toggle key types (console.c). */
         static const U8 char_before[5]={0x83,0xf8,0x60,0x74,0x45};
@@ -700,6 +1051,16 @@ static int install_game_fixes(void){
         near_call(replacement,base+0x700a,kpc_console_char_entry);
         if(!add_edit(edits,&count,base+0x700a,char_before,replacement,5)){
             report_error("The original console character test differs. No client edits were applied.");return 0;
+        }
+    }
+    if(g_net_timeout_enabled){
+        static const U8 before[14]={0x8b,0x4e,0x30,0xd9,0x46,0x74,0xd8,0x59,0x4c,0xdf,0xe0,0xf6,0xc4,0x41};
+        static const U8 tail[2]={0x75,0x33};
+        if(!equal_bytes(base+0x4b50a,tail,2)){report_error("The original connection timeout branch differs. No client edits were applied.");return 0;}
+        near_call(replacement,base+0x4b4fc,net_timeout_compare);
+        for(i=5;i<14;i++)replacement[i]=0x90;
+        if(!add_edit(edits,&count,base+0x4b4fc,before,replacement,14)){
+            report_error("The original connection timeout comparison differs. No client edits were applied.");return 0;
         }
     }
     if(!queue_net_trace(edits,&count,base)){report_error("Network trace import transaction could not be prepared. No client edits were applied.");return 0;}
@@ -722,8 +1083,13 @@ static int install_game_fixes(void){
     kpc_status|=TIMING_READY|ANIMATION_READY;
     kpc_status|=TIMING_RUNTIME|ANIMATION_RUNTIME;
     log_text("Timing V3: clock guard and 8 independent carries applied in memory.\r\n");
-    if(min_step_ms){log_text("LocalServerMinStepMs=");log_hex(min_step_ms);log_text(": minimum local-server step; shorter frames are carried, not simulated.\r\n");}
+    if(min_step_ms){log_text("LocalServerMinStepMs=");log_hex(min_step_ms);log_text(": EXPERIMENTAL minimum local-server step; shorter frames are carried, not simulated.\r\n");}
+    if(g_focus_enabled){log_text("Focus loss: KeepAudioOnFocusLoss default=");log_hex(g_focus_default);log_text(" (1: sounds, music and a local game keep running in every mode; console variable and Setup > Audio).\r\n");}
+    if(g_chat_blocks_actions)log_text("Chat typing: no command (movement, fire, invulnerability...) is sent to the server while a message is being typed.\r\n");
     if(g_console_key_fix)log_text("Console key: the character typed by the console toggle key is not added to the console line.\r\n");
+    if(g_focus_enabled)log_text(g_focus_keep_render?"Focus loss: KeepRendererOnFocusLoss=1 (with KeepAudioOnFocusLoss on, the renderer and client world keep running; input is released).\r\n":"Focus loss: KeepRendererOnFocusLoss=0 (stock renderer shutdown on focus loss).\r\n");
+    if(g_focus_resync)log_text("Focus regain: kept sounds re-synchronised to real time 300 ms after the window returns.\r\n");
+    if(g_net_timeout_enabled){log_text("Server timeout: in-world multiplayer connection seconds=");log_hex((U32)g_net_timeout_seconds);log_text(" (stock 120 s elsewhere).\r\n");}
     log_text(input_clock_enabled?"Input clock v2: timeGetTime plus delayed/zero interval guards; no global clock hook.\r\n":"InputClock=0: original input clocks and intervals retained; Timing V3/Ground V5 remain enabled.\r\n");
     if(GetModuleHandleExW(0,L"cshell.dll",&loaded)){
         i=(U32)patch_shell(loaded);

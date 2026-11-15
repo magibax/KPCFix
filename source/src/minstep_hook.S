@@ -1,7 +1,7 @@
 .intel_syntax noprefix
 .section .text
-# Minimum local-server step ([KPCFix] LocalServerMinStepMs, default 16; 0
-# = Timing V3 clock_v2 alone). Installed in the same 35-byte
+# Optional minimum local-server step ([KPCFix] LocalServerMinStepMs, default 0
+# = off; Timing V3's clock_v2 is used instead). Installed in the same 35-byte
 # slot client.exe 0x664b2 as clock_v2 (jmp here + nops). Context (stock code):
 #   esi = server manager; [esi+0x214] = this frame's elapsed seconds, computed
 #   each call as now - [esi+0x218] with [esi+0x218] = now (0x6638f-0x663a1);

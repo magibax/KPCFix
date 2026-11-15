@@ -28,7 +28,7 @@
 #      client ZIP is skipped (package_release.py checks its SHA-256).
 #   3. dist/client/ gets the three files a test PC needs (dinput.dll, KPCFix.ini,
 #      DDrawCompat-CLIENT.ini, with SHA256.txt).
-#
+#      On a co-op branch dist/ also gets COOP-README.md, COOP-STATUS.md and COOP-CONFIGURATION.md.
 # The ZIPs contain tracked files only: `git add` a new shipped file and add its
 # line to the manifest first, or packaging stops with "Manifest/tree mismatch".
 #
@@ -173,6 +173,12 @@ package() {
             echo "client: ZIP SKIPPED: no ddraw.dll (pass --ddraw <path> or set KPC_DDRAW)" >&2
             return 1
         fi
+    fi
+    # Co-op branches: the test guide, status and settings go with the test builds.
+    if [ -d "$ROOT/coop" ]; then
+        cp "$ROOT/coop/README.md" "$ROOT/dist/COOP-README.md"
+        cp "$ROOT/coop/STATUS.md" "$ROOT/dist/COOP-STATUS.md"
+        cp "$ROOT/coop/CONFIGURATION.md" "$ROOT/dist/COOP-CONFIGURATION.md"
     fi
     echo "package: output in $ROOT/dist"
 }

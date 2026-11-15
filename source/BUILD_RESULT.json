@@ -1,8 +1,8 @@
 {
   "output": "dinput.dll",
   "platform": "windows",
-  "sha256": "288bce4efd01e986fc11e77d8d119488b67993ae39ad67830f22ab79daaf7dad",
-  "bytes": 44032,
+  "sha256": "b676e832823309a4b1186cf6850cffe6627180c091ef757d5cd0772ca61b2ce9",
+  "bytes": 88576,
   "exports": [
     "DirectInputCreateA",
     "DirectInputCreateW",
@@ -17,8 +17,8 @@
   "elf_to_coff": [
     {
       "object": "kpcfix.obj",
-      "dir32": 707,
-      "rel32": 180
+      "dir32": 1128,
+      "rel32": 220
     },
     {
       "object": "sha256.obj",
@@ -32,8 +32,8 @@
     },
     {
       "object": "ui.obj",
-      "dir32": 29,
-      "rel32": 0
+      "dir32": 84,
+      "rel32": 3
     },
     {
       "object": "configs.obj",
@@ -46,9 +46,34 @@
       "rel32": 5
     },
     {
+      "object": "loading.obj",
+      "dir32": 436,
+      "rel32": 23
+    },
+    {
       "object": "console.obj",
-      "dir32": 6,
-      "rel32": 4
+      "dir32": 322,
+      "rel32": 23
+    },
+    {
+      "object": "camera.obj",
+      "dir32": 75,
+      "rel32": 2
+    },
+    {
+      "object": "netwatch.obj",
+      "dir32": 2,
+      "rel32": 0
+    },
+    {
+      "object": "netwatch_hook.obj",
+      "dir32": 1,
+      "rel32": 1
+    },
+    {
+      "object": "focus.obj",
+      "dir32": 171,
+      "rel32": 21
     },
     {
       "object": "minstep_hook.obj",

@@ -2,6 +2,8 @@
 
 Fixes for *KISS: Psycho Circus – The Nightmare Child* on modern Windows.
 
+> **Co-op branch.** This build includes the experimental co-op campaign and extra client features that are still being tested. See [coop/README.md](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/README.md). For the stable release, use the [Releases](https://github.com/magibax/KPCFix/releases) page.
+
 KPCFix works with the Europe/UK, US, German and Italian (Covermount) editions of the game, patched to version **1.13**.
 
 ## What it fixes

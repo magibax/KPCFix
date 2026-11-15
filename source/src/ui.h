@@ -9,6 +9,12 @@ extern void ui_cursor_dims_entry(void),ui_cursor_draw_entry(void),ui_tooltip_fon
 U32 CDECL kpc_rate_value(void *,void *,const char *);
 U32 __attribute__((thiscall)) kpc_mouse_menu_ready(void *);
 U32 __attribute__((thiscall)) kpc_mouse_menu_key(void *,U32,U32);
+extern U8 *g_audio_shell;
+U32 __attribute__((thiscall)) kpc_audio_init(void *);
+U32 __attribute__((thiscall)) kpc_audio_term(void *);
+U32 __attribute__((thiscall)) kpc_audio_draw(void *,U32);
+U32 __attribute__((thiscall)) kpc_audio_move(void *);
+U32 __attribute__((thiscall)) kpc_audio_event(void *,U32,U32);
 void CDECL kpc_normalize_configs(const WCHAR *);
 void CDECL kpc_config_notice(const WCHAR *,const char *);
 #endif

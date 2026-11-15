@@ -3,7 +3,8 @@ Usage: python server-tools-source/build_dll.py
 Requires gcc with -m32 support and GNU binutils.
 """
 from pathlib import Path
-import hashlib,json,struct,subprocess
+from concurrent.futures import ThreadPoolExecutor
+import hashlib,json,os,struct,subprocess
 from pe_build import elf_to_coff,run
 root=Path(__file__).resolve().parent;package=root.parent;work=root/'build';work.mkdir(exist_ok=True)
 # Assemble the previously tested object-relative runtime hooks.
@@ -51,7 +52,18 @@ runtime_print:
  call eax
  pop ebp
  ret
-'''%symbols['console_line'])
+# Co-op lobby: C ABI adapter into the Windows-tested chat broadcast routine
+# (the same path that announces cheat permission changes).
+.global runtime_broadcast
+runtime_broadcast:
+ push ebp
+ mov ebp,[esp+8]
+ mov edx,[esp+12]
+ lea eax,[ebp+%d]
+ call eax
+ pop ebp
+ ret
+'''%(symbols['console_line'],symbols['broadcast_only']))
 # winmm.dll forwarding (proxy.c winmm_attach): one jump stub per named export
 # of the system winmm.dll, through a slot table filled at load. A name the
 # system DLL lacks keeps winmm_missing (returns 0).
@@ -65,16 +77,17 @@ w+='.global winmm_count\nwinmm_count:\n .long %d\n'%len(winmm)
 w+=''.join('wmn_%d: .asciz "%s"\n'%(i,v) for i,v in enumerate(winmm))
 (work/'winmm_stubs.S').write_text(w)
 flags=['-m32','-O2','-std=c11','-ffreestanding','-fno-builtin','-fno-pic','-fno-pie','-fno-stack-protector','-fstack-clash-protection','-fno-asynchronous-unwind-tables','-fno-unwind-tables','-fno-ident','-fshort-wchar','-mno-sse','-mno-mmx','-mpreferred-stack-boundary=2','-mincoming-stack-boundary=2','-Wall','-Wextra','-I',str(root/'src'),'-I',str(work)]
-objects=[]
-for name in ['proxy.c','sha256.c','runtime_print.S','winmm_stubs.S']:
+def compile_one(name):
  src=work/name if name.endswith('.S') else root/'src'/name;elf=work/(src.stem+'.elf.o');obj=work/(src.stem+'.obj')
  if name.endswith('.c'):run(['gcc',*flags,'-c',src,'-o',elf])
  else:run(['as','--32',src,'-o',elf])
- elf_to_coff(elf,obj);objects.append(obj)
+ elf_to_coff(elf,obj);return obj
+# Sources compile in parallel (one per CPU); map() keeps list order, so the link order is unchanged.
+with ThreadPoolExecutor(max_workers=os.cpu_count() or 1) as pool:objects=list(pool.map(compile_one,['proxy.c','sha256.c','runtime_print.S','winmm_stubs.S']))
 # Import library generated from build-only stubs; no system DLL is shipped.
 (work/'stub.S').write_text('.text\n.global api_stub\napi_stub:\n ret\n')
 run(['as','--32',work/'stub.S','-o',work/'stub.o']);elf_to_coff(work/'stub.o',work/'stub.obj')
-apis=['GetModuleHandleW','GetModuleFileNameW','LoadLibraryW','GetProcAddress','DisableThreadLibraryCalls','GetCurrentProcess','VirtualProtect','VirtualQuery','FlushInstructionCache','CreateFileW','GetFileSizeEx','ReadFile','WriteFile','CloseHandle','GetPrivateProfileIntW','GetStdHandle','ExitProcess','GetSystemDirectoryW']
+apis=['GetModuleHandleW','GetModuleFileNameW','LoadLibraryW','GetProcAddress','DisableThreadLibraryCalls','GetCurrentProcess','VirtualProtect','VirtualQuery','FlushInstructionCache','CreateFileW','GetFileSizeEx','ReadFile','WriteFile','CloseHandle','GetPrivateProfileIntW','GetPrivateProfileStringW','GetStdHandle','ExitProcess','GetTickCount','GetSystemDirectoryW']
 (work/'KERNEL32.def').write_text('LIBRARY KERNEL32.dll\nEXPORTS\n'+''.join(' '+v+'=api_stub\n' for v in apis))
 run(['ld','-m','i386pe','--dll','--entry','_api_stub','--no-insert-timestamp','--out-implib',work/'KERNEL32.a','-o',work/'KERNEL32.build-only.dll',work/'stub.obj',work/'KERNEL32.def'])
 (work/'server.def').write_text('LIBRARY server.dll\nEXPORTS\n CreateServer=CreateServer @1\n DeleteServer=DeleteServer @2\n'+
@@ -90,6 +103,55 @@ for line in subprocess.check_output(['nm','-an',str(work/'server.unstripped.dll'
   try:a=int(v[0],16)
   except ValueError:continue
   if 0x69000000<=a<0x69100000:proxy_symbols[v[2]]=a-0x69000000
-report=dict(previous_proxy_hashes=['8de76e10a81be3ceb1ca13b93fe2c9606dc5bf0f7a27784592b15bb7698f0807','bac7696bc79f10b637134b7bbffea1ead01e67c8207452f5c3f339a8b5a353d4','67a6be68223efb0321d41f270ae10923f0d6073731de57a61b600794c3f0eeea'],proxy_sha256=hashlib.sha256(out.read_bytes()).hexdigest(),proxy_bytes=out.stat().st_size,proxy_symbols=proxy_symbols,hook_symbols=symbols,patches=patches,hook_bytes=len(code),exports=['CreateServer','DeleteServer'],winmm_exports=len(winmm))
+# Fixed, reviewed upgrade allowlist. Never inherit arbitrary hashes from a
+# previous JSON manifest: future candidates require explicit review and
+# supported Windows upgrade evidence before being added here.
+new_hash=hashlib.sha256(out.read_bytes()).hexdigest()
+previous_proxies=[
+    '6d6b76ab4b04842464fc11a4e18e6a6c81f3318271d31b9602cb4604e889d380',
+    '67a6be68223efb0321d41f270ae10923f0d6073731de57a61b600794c3f0eeea',
+    '9b6bd69e894925e6b31f1ed32b6ff82331af104e2c20fbb6aeb43dc4bef5be9a',
+    '66653630a0b717a70c3dd51a3b97efd75bd9b20495bd0b4d089b914b60942a37',
+    'c2486afa934b7216486891dc640929018ec02cdd4341734c9adc7889bff94c3b',
+    '354a75a1d56968a69ab47539a715f805c210fdcddab02ec0aa0c2fa93ceacd2b',
+    '23dd5de7f099c04706d2a59603bb88763d21bbde2cd9053cf6ebade935598b08',
+    '7112b5ed97f94f8b7cd84bc80f7fdc945f0fb02e1a1cc6ad8f574b9b70d6d373',
+    'a63d186bb4995e471651f7d9c42089eea784e07c6d5ef76355936fa71e3a7e6c',
+    'b0404468077d0aec012fa9268618d375b99361d16dc669178dc8df0c45f0fa38',
+    '8de76e10a81be3ceb1ca13b93fe2c9606dc5bf0f7a27784592b15bb7698f0807',
+    'bac7696bc79f10b637134b7bbffea1ead01e67c8207452f5c3f339a8b5a353d4',
+    # spawn-list-control-v8 (f94affd): previously tracked experimental DLL;
+    # reviewed so testers can upgrade it in place to the co-op session build.
+    '7ea0dfa44dc7870579de6b4e6ffea9018903b7525c3aa7d1b8c9d91013d3fc0d',
+    # coop-session-v1 first CI artifact (d8e3420, PR #10); same protocol.
+    '3048d6f3dcab6959628edc77fd5a5f5b164a455e346965b11ee0c61ba7eb4257',
+    # coop-session-v1 262b6ead: native Windows server smoke and live one-client
+    # lobby/!start/!next test on 2026-11-11 (C:\KPCTest\smoke1).
+    '262b6ead146e2ca33639d5ecf6435e67b9e42033de7fa1aae57bc06891bc0f5d',
+    # coop-session-v2 0018a3f8 (c681e38): live natural R1M2B -> R1M2C and
+    # R1M2C mirror -> R1M3A transitions with one client on 2026-11-11.
+    '0018a3f8b655bb616cf07be8737378716855365045b643946ee9db97ec143557',
+    # coop-session-v2 565dec76 (8917a76): live scoreboard-free natural
+    # transitions R1M2B -> R1M2C -> R1M3A with one client on 2026-11-11.
+    '565dec766967ceede2a010969a9f851f2232b2e7d213f2d2878f887c18c67758',
+    # coop-session-v2 e17c150f (a225ef6): live per-player DirectMusic, also
+    # on a second laptop joining an active server (2026-11-11).
+    'e17c150ff920aa9865fe06c8e0109bad9426215cfb1fdf943115af67be7dbf27',
+    # coop-session-v2 13ca1d0a (219d461): live two-client R1M3A intro
+    # (desktop + laptop, 2026-11-11); narration trailed the script clock.
+    '13ca1d0a7c17986dcbdc3f360bf82f92084584864824b623854fb57b1f10364b',
+    # coop-session-v2 e86bb352 (2b76ef4): CoopScriptClock; desktop + laptop
+    # confirmed the subtitle/narration cadence fix (2026-11-11).
+    'e86bb352df4a726c2a6c0d689df93ce39414cd5cc8206b959892add58f2e257d',
+    # coop-session-v2 1b8816cb (5a07895): pass 2 (sound clock, health bars,
+    # spawners, start scoreboard); native server smoke only, installed in smoke3.
+    '1b8816cbeafb48ca9e058bda48363847c807d47d1982bd17a4eb40615097f523',
+    # coop-session-v2 009eacd6 (abeebbb): campaign graph; the user played
+    # the realm intros (R1M0 intro exit to R1M1A logged in smoke3), 2026-11-11.
+    '009eacd65ebc03627389a0bcac901193e33393b3188d1445d70d3d130546ab71',
+]
+if new_hash in previous_proxies:
+ raise SystemExit('Current proxy SHA-256 unexpectedly appears in the previous allowlist')
+report=dict(previous_proxy_hashes=previous_proxies,proxy_sha256=new_hash,proxy_bytes=out.stat().st_size,proxy_symbols=proxy_symbols,hook_symbols=symbols,patches=patches,hook_bytes=len(code),exports=['CreateServer','DeleteServer'],winmm_exports=len(winmm))
 (package/'SERVER_TOOLS_BUILD.json').write_text(json.dumps(report,indent=2)+'\n')
 print(out,report['proxy_bytes'],report['proxy_sha256'])
