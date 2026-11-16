@@ -1,6 +1,6 @@
 # KPCFix
 
-Fixes for *KISS: Psycho Circus – The Nightmare Child* on modern Windows.
+Fixes for *KISS: Psycho Circus – The Nightmare Child* for modern PCs.
 
 > **Co-op branch.** This build includes the experimental co-op campaign and extra client features that are still being tested. See [coop/README.md](https://github.com/magibax/KPCFix/blob/coop/mvp-lobby/coop/README.md). For the stable release, use the [Releases](https://github.com/magibax/KPCFix/releases) page.
 
@@ -8,13 +8,17 @@ KPCFix works with the Europe/UK, US, German and Italian (Covermount) editions of
 
 ## What it fixes
 
-- **Frame rate.** Above 60 FPS the original game breaks: narration drifts, scripted scenes and camera pans run fast, animations stutter and some enemies get stuck. KPCFix fixes the game's timing, so everything runs at normal speed at any frame rate. By default the game runs at your monitor's refresh rate with VSync.
-- **Mouse.** Camera turning and the menu cursor are smooth, and the sensitivity slider gives finer control at low settings.
-- **HUD size.** The HUD, menu cursor and tooltips scale together. The default is 150%, which suits 1920×1080.
-- **Multiplayer.** You can join a server straight after starting the game. You no longer have to load a local map first.
-- **Smaller fixes.** Movies play in 4:3 instead of stretched. The console key no longer types a stray character.
+- **Frame rate.** Running the game above 60fps causes numerous issues with scripted sequences and AI. KPCFix fixes the game's timing, so everything runs at normal speed at any frame rate. By default the game runs at your monitor's refresh rate with VSync.
+- **Mouse.** Mouse input is buggy on modern machines (choppy, dropping inputs, limited to a 60hz polling rate). KPCFix resolves all of this, giving buttery smooth mouse input at all framerates, particularly noticable above 60fps. The "Input Rate" slider has been removed (it sets the interval over which an "average" of mouse inputs is taken, so it's rather misleading), and the sensitivity slider range has been tweaked to suit modern mice.
+- **HUD size.** The HUD, menu cursor and tooltips scale together. The default is 150%, which suits 1920×1080. For 4K, set to 300%.
+- **Multiplayer.** You can join a server straight after starting the game. A bug prevented joining any multiplayer game unless you loaded a local map first.
+- **Smaller fixes.** Movies and loading screens are shown in their intended 4:3 aspect ratio, with optional smoothing enabled by default. The console key no longer types a stray character. 
 
 Every option is in `KPCFix.ini` and in the [configuration reference](https://github.com/magibax/KPCFix/blob/master/docs/CONFIGURATION.md).
+
+## Issues
+
+Please report any bugs you find. Increasing the minimum simulation step to 16ms seems to have ironed out most issues, but some may remain.
 
 ## Install
 
@@ -29,7 +33,7 @@ Run `Check-KPCVersion.cmd` again whenever you reinstall or repatch the game.
 
 1. Run `Launch-KPCFix.cmd`. The first time, it sets the game to 1920×1080 and opens the game launcher.
 2. In the launcher, open **Display** and pick your resolution.
-3. Start the game. Create or pick a profile with the **same** resolution.
+3. Start the game. If you are using a pre-existing user profile, set your desired resolution in the video settings once you load the profile in-game.
 
 After that you can start the game with `Psycho.exe` as usual.
 
@@ -46,8 +50,6 @@ To change it, edit `DDrawCompat-CLIENT.ini` and restart the game:
 | Cap at 60 FPS | `FpsLimiter = flipend(60)` |
 | Cap at another rate, such as 120 FPS | `FpsLimiter = flipend(120)` |
 | Turn off VSync and every cap | `FullscreenMode = exclusive(0)`, `VSync = off`, `FpsLimiter = off` |
-
-Without VSync the picture may tear. If a scripted scene misbehaves at a high frame rate, cap at 60 FPS and play it again.
 
 ## Settings
 
@@ -76,7 +78,6 @@ Edit `KPCFix.ini` and restart the game. Each option is explained in the file. Th
 It adds:
 - a graphical launcher for all 59 maps;
 - server rule settings;
-- cheat permission that you can switch on and off live;
 - chat shown in the server console;
 - real-time server timing.
 
