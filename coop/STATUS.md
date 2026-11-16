@@ -37,7 +37,6 @@ Not run: `run_checks.py` (it runs in CI) and the two-PC test of round 6.
 - `!changelevel` to any world.
 - `!difficulty`, `!reset`.
 - Exits: host-only, and only to the next world in campaign order. Script exits in the R?M0 intros work.
-- The R1M1A victory sequence is host-only.
 
 **Loading**
 - Synchronised loading behind the picture.
@@ -106,15 +105,8 @@ Not yet confirmed:
 ## Open bugs and work
 
 **Bugs**
-- Weapons dropped at death sometimes stay even with a lifetime set. Reported by the user; static analysis doesn't explain it.
-- Switches and levers are not host-only yet (`CSwitch` `0x44dd6`).
 - The collectables HUD shows the deathmatch list in co-op (cshell `0xa41c8`).
-- A breakable is sometimes missing on one client until a minimise and restore.
-- A spawn trapped in the ground at R1M3A.
 - A held spawn reply is still sent after disconnecting to the menu.
-- First armour shard: everyone watches its cutscene and gets the slot-1 weapon and armour (N4).
-- Wooden-box debris (N15).
-- A dropped client still shows as connected (N18).
 - Original-game jukebox bug in R1M1A, R2M1A and R4M1A. Fix idea: on `jukeoff`, also `script_object_abort musicfader` and restore the intensity.
 
 **Work**
@@ -127,9 +119,3 @@ Not yet confirmed:
 - The Audio checkbox for the German and Italian shells.
 
 **Port to `master` when ready:** `ChatBlocksActions`, `KeepAudioOnFocusLoss` and `ResyncAudioOnFocus`.
-
-## If a test fails
-
-1. Find the matching `[KPCFix Co-op]` lines in `KPCServerTools.log`: they include the epoch, the phase and the event. Then check the client's `KPCFix.log` around the same time.
-2. Confirm the cause in the log and the disassembly before changing code. A plausible explanation can be wrong.
-3. If the logs don't show the cause, add logging for the next round instead of guessing.
