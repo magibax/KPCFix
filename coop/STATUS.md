@@ -123,6 +123,7 @@ Not yet confirmed:
 - "LogWindowBreaks" defaults to 0 as it's for diagnostics, and breakables are currently working in coop.
 - `!op` and `!deop` (N7).
 - `!reload` (N17).
+- Bring 4:3 aspect ratio for loading screens to the master branch.
 - Measure the cost of the per-frame player-list walk before caching it. A cache risks stale handles.
 - Map the USA `server.dll` for the server-frame and sound clocks.
 - The Audio checkbox for the German and Italian shells.
