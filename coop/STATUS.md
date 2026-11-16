@@ -115,6 +115,7 @@ Not yet confirmed:
 - Equal campaign pickups, with death restoring them exactly (N5).
 - Switchable friendly fire from chat `!friendlyfire`
 - An ammo-share switch, `!ammoshare` (N6).
+- Increase default HUD scale from 150 to 200.
 - Drop "CoopCampaign" flag as we no longer need the three map test route. The default behaviour will be the full 48 map campaign.
 - Drop "CoopLobbyWorld" flag - bring over the server launcher behaviour (random deathmatch map each time). We no longer use R1M2B as a safe fallback.
 - "CoopMaxPlayers" increase from 3 to a sensible limit for the engine.
