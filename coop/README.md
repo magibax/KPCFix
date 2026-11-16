@@ -28,7 +28,7 @@ This branch adds co-op through the whole *KISS Psycho Circus* campaign for up to
 - With KPCFix clients, everyone waits until all players have loaded (60 s at most), then enters together, and the cutscene starts.
 
 **Also**
-- Enemy health bars, smooth cutscene cameras, per-player music, and breakable windows and crates that work for every client.
+- Enemy health bars, smooth cutscene cameras, per-player music, and breakables that work for every client.
 
 Players without the KPCFix client can still join. They get no loading picture or synchronised entry, and the other client-side fixes are missing.
 
