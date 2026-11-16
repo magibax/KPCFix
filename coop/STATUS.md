@@ -110,8 +110,17 @@ Not yet confirmed:
 - Original-game jukebox bug in R1M1A, R2M1A and R4M1A. Fix idea: on `jukeoff`, also `script_object_abort musicfader` and restore the intensity.
 
 **Work**
+- Music system. It's a bit convoluted at the moment. "CleanMusic" needs particular attention - music transitions during map loads can sound a bit off. We want multiplayer/coop music to perform exactly as it does in singleplayer, except the loading screen now stays for 5 seconds rather than less than a second (due to modern PCs loading the maps quickly). 
+- Tweak menu "Quit" button. "MenuDisconnect" tooltip indicating the action pressing quit will take. (connected to server = disconnect, no map loaded/singleplayer = quit)
 - Equal campaign pickups, with death restoring them exactly (N5).
+- Switchable friendly fire from chat `!friendlyfire`
 - An ammo-share switch, `!ammoshare` (N6).
+- Drop "CoopCampaign" flag as we no longer need the three map test route. The default behaviour will be the full 48 map campaign.
+- Drop "CoopLobbyWorld" flag - bring over the server launcher behaviour (random deathmatch map each time). We no longer use R1M2B as a safe fallback.
+- "CoopMaxPlayers" increase from 3 to a sensible limit for the engine.
+- Drop "CoopIntermission" and "CoopStartScoreboard" keeping behaviour as set to 0.
+- Drop "CoopTestStartWorld", "CoopIntroAll", as not needed.
+- "LogWindowBreaks" defaults to 0 as it's for diagnostics, and breakables are currently working in coop.
 - `!op` and `!deop` (N7).
 - `!reload` (N17).
 - Measure the cost of the per-frame player-list walk before caching it. A cache risks stale handles.
