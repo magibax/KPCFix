@@ -33,12 +33,12 @@ Older GitHub Releases were deleted; their tags remain. Never move or reuse a tag
    - runs the server assembly harness, the packaging tests and the PowerShell parse and INI tests on Windows;
    - builds candidate ZIPs as artifacts.
 3. Run the in-game checks for that product, using the candidate ZIP.
-4. Bump `tools/release_versions.json` if it isn't already, then tag the verified commit:
+4. Bump `tools/release_versions.json` if it isn't already. The bump is a commit of its own: wait for **release-integrity** to pass on it, then tag that commit, not an earlier one:
    ```sh
    git tag -a server-tools-v1.1.0 <commit> -m "KPCFix Server Tools v1.1.0"
    git push origin server-tools-v1.1.0
    ```
-5. The tag push rebuilds and checks the product again, then creates the GitHub Release with the ZIP and a `.zip.sha256` file. Check the release's commit and ZIP hash.
+5. The tag push rebuilds and checks the product again and runs the Windows script tests. Only if both pass does it create the GitHub Release with the ZIP and a `.zip.sha256` file. Check the release's commit and ZIP hash. If the tag's run fails, nothing is published: fix the cause on `master` and release under the next version.
 
 ## Packages
 

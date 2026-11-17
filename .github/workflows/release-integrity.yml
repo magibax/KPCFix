@@ -186,7 +186,7 @@ jobs:
 
   publish-client:
     if: startsWith(github.ref, 'refs/tags/kpcfix-v')
-    needs: [client]
+    needs: [client, launcher-ini-windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -209,7 +209,7 @@ jobs:
 
   publish-server:
     if: startsWith(github.ref, 'refs/tags/server-tools-v')
-    needs: [server]
+    needs: [server, launcher-ini-windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
