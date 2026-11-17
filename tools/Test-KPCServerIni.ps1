@@ -49,6 +49,24 @@ try {
   [IO.File]::WriteAllText($plain,"[ServerTools]`r`nAllowCheats=1`r`n",([Text.UTF8Encoding]::new($false)))
   $withoutBom=[KPCTest.Ini]::GetPrivateProfileIntW('ServerTools','AllowCheats',7,$plain)
   Write-Host "INFO: GetPrivateProfileIntW first-line [ServerTools] AllowCheats: with UTF-8 BOM=$withBom, without BOM=$withoutBom"
+  # The shipped default INI starts with a comment line, so a BOM added by an
+  # editor cannot hide [ServerTools] from a server started without the launcher.
+  # Every integer key must read back through the API behind a BOM.
+  $default=[IO.File]::ReadAllText((Join-Path $root 'server-tools/KPCServerTools-default.ini'))
+  if($default -notmatch '^;'){throw 'KPCServerTools-default.ini must start with a ; comment line: a UTF-8 BOM hides a section header on line 1'}
+  $defaultBom=Join-Path $testDir 'default-bom.ini'
+  [IO.File]::WriteAllText($defaultBom,$default,$bom)
+  $section='';$readBack=0
+  foreach($line in ($default -split "`r?`n")){
+   if($line -match '^\[([^\]]+)\]'){$section=$Matches[1];continue}
+   if($section -and $line -match '^([A-Za-z0-9_]+)=(\d+)[ \t]*$'){
+    $seen=[KPCTest.Ini]::GetPrivateProfileIntW($section,$Matches[1],77777,$defaultBom)
+    if($seen -ne [uint32]$Matches[2]){throw "Default INI [$section] $($Matches[1]) is not readable behind a UTF-8 BOM: $seen"}
+    $readBack++
+   }
+  }
+  if($readBack -eq 0){throw 'No integer keys found in KPCServerTools-default.ini'}
+  Write-Host "PASS: default INI keeps $readBack integer keys readable behind a UTF-8 BOM"
  }
  # Without [ServerTools], throw rather than insert into the wrong section.
  [IO.File]::WriteAllText($iniPath,"[Coop]`nTraceCampaign=0`n",([Text.UTF8Encoding]::new($false)))

@@ -1,6 +1,8 @@
 """Asset-free tests for strict release manifest validation."""
 import unittest
-from package_release import manifest_entries, client_path, server_path, digest, validate_version, archive_filename
+from unittest import mock
+import package_release
+from package_release import manifest_entries, client_path, server_path, digest, validate_version, archive_filename, release_version
 
 H = 'a' * 64
 
@@ -35,8 +37,16 @@ class ManifestTests(unittest.TestCase):
         self.assertFalse(server_path('server-tools-source/tests/check_proxy.py'))
 
     def test_semver_archive_names(self):
-        self.assertEqual(archive_filename('client'), 'KPCFix-Windows-v1.1.4.zip')
-        self.assertEqual(archive_filename('server'), 'KPCFix-Server-Tools-v1.1.0.zip')
+        # The pin is faked, so a bump of release_versions.json needs no edit here.
+        pins = {'client': '2.3.4', 'server': '5.6.7'}
+        with mock.patch.object(package_release, 'release_version', pins.__getitem__):
+            self.assertEqual(archive_filename('client'), 'KPCFix-Windows-v2.3.4.zip')
+            self.assertEqual(archive_filename('server'), 'KPCFix-Server-Tools-v5.6.7.zip')
+
+    def test_pinned_versions_are_stable_semver(self):
+        for component in ('client', 'server'):
+            with self.subTest(component=component):
+                self.assertEqual(validate_version(release_version(component)), release_version(component))
 
     def test_semver_rejects_bad_versions(self):
         for value in ('1.13-r5', '1.0.0-r3', '01.2.3', '1.2', 'v1.2.3',
